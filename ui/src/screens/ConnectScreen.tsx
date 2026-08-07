@@ -1,0 +1,341 @@
+// Connect — Strava OAuth → live attestation. The "real crypto happening live"
+// moment: staged status line (witnessing TLS → notarizing → on-chain).
+// Three modes: fixture (offline replay), live (demo sidecar :8200), wallet
+// (Lace DApp Connector — direct chain access + backup/resume of the private
+// state).
+
+import { useEffect, useRef, useState } from 'react';
+import { useDemo } from '../state/DemoStore';
+import { Button, Card, Chip, Notice, Stat } from '../components/bits';
+import { StatusLine } from '../components/StatusLine';
+import { ATHLETE_A, EMPLOYER } from '../domain/story';
+import { hexShort } from '../lib/format';
+import { hasStoredBackup, performRestore, shouldAutoResume, storeBackupPayload, walletBackupKey } from '../lib/wallet-restore';
+
+const SWITCH_LINK = (
+  <a href="?mode=fixture" style={{ color: 'inherit', fontWeight: 700 }}>
+    Switch to demo mode →
+  </a>
+);
+
+export const ConnectScreen = () => {
+  const {
+    mode,
+    session,
+    connecting,
+    connectError,
+    connect,
+    attest,
+    attestRunning,
+    attestOutcome,
+    credentials,
+    backupPrivateState,
+    restorePrivateState,
+  } = useDemo();
+  const [attestError, setAttestError] = useState<string | null>(null);
+  const [backupPassword, setBackupPassword] = useState('');
+  const [backupPayload, setBackupPayload] = useState<string | null>(null);
+  const [backupBusy, setBackupBusy] = useState(false);
+  const [backupNotice, setBackupNotice] = useState<string | null>(null);
+  const [restoreOpen, setRestoreOpen] = useState(false);
+  const [restoreMode, setRestoreMode] = useState<'restore' | 'resume'>('restore');
+  const [restorePassword, setRestorePassword] = useState('');
+  const [restoreBusy, setRestoreBusy] = useState(false);
+  const [restoreNotice, setRestoreNotice] = useState<string | null>(null);
+  const resumePrompted = useRef(false);
+
+  const isWallet = mode === 'wallet';
+  const isLive = mode === 'live';
+  const outcome = attestOutcome?.credential;
+
+  const handleAttest = async () => {
+    setAttestError(null);
+    try {
+      await attest();
+    } catch (err) {
+      setAttestError(err instanceof Error ? err.message : 'attestation failed');
+    }
+  };
+
+  const backupKey = session?.walletAddress ? walletBackupKey(session.walletAddress) : null;
+  const hasBackup = session?.walletAddress ? hasStoredBackup(session.walletAddress) : false;
+
+  const handleBackup = async () => {
+    if (!backupPrivateState || !backupPassword || backupKey === null) return;
+    setBackupBusy(true);
+    setBackupNotice(null);
+    try {
+      const payload = await backupPrivateState(backupPassword);
+      storeBackupPayload(session?.walletAddress ?? '', payload);
+      setBackupPayload(payload);
+      setBackupNotice('Private state backed up — the payload is stored in this browser and shown below.');
+    } catch (err) {
+      setBackupNotice(`Backup failed: ${err instanceof Error ? err.message : 'unknown error'}`);
+    } finally {
+      setBackupBusy(false);
+    }
+  };
+
+  const openRestorePrompt = (mode: 'restore' | 'resume') => {
+    setRestoreNotice(null);
+    setRestorePassword('');
+    setRestoreMode(mode);
+    setRestoreOpen(true);
+  };
+
+  const handleRestore = async () => {
+    if (!restorePrivateState || !restorePassword || restoreBusy) return;
+    if (!session?.walletAddress) return;
+    setRestoreBusy(true);
+    setRestoreNotice(null);
+    try {
+      await performRestore({
+        address: session.walletAddress,
+        password: restorePassword,
+        restorePrivateState,
+      });
+      setRestoreNotice('Private state restored — vault is back.');
+      setRestoreOpen(false);
+      setRestorePassword('');
+    } catch (err) {
+      // The stored backup is only ever read — a wrong password leaves it intact.
+      setRestoreNotice(`Restore failed: ${err instanceof Error ? err.message : 'unknown error'}`);
+    } finally {
+      setRestoreBusy(false);
+    }
+  };
+
+  // Auto-resume: on reload/connect, if a backup exists for this wallet and no
+  // live session is present, prompt for the password (never auto-restore).
+  useEffect(() => {
+    if (!isWallet || !session?.walletAddress) return;
+    const address = session.walletAddress;
+    if (
+      shouldAutoResume({
+        hasBackup: hasStoredBackup(address),
+        hasCredentials: credentials.length > 0,
+        alreadyPrompted: resumePrompted.current,
+      })
+    ) {
+      resumePrompted.current = true;
+      openRestorePrompt('resume');
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isWallet, session?.walletAddress, credentials.length]);
+
+  return (
+    <div className="screen">
+      <div className="screen-header">
+        <h1 className="screen-title">Connect — attest a real workout</h1>
+        <p className="screen-sub">
+          Your workout is witnessed over a real TLS session, proven with ZK, re-signed by{' '}
+          <strong>2 of 3 notaries</strong>, and vaulted on-chain. The chain stores a commitment —
+          it never sees a single number.
+        </p>
+      </div>
+
+      <div className="grid-2">
+        <Card title="Athlete identity" glow>
+          {session ? (
+            <div>
+              <div className="row" style={{ marginBottom: 12 }}>
+                <span style={{ fontWeight: 700, fontSize: 17 }}>{session.athlete.name}</span>
+                <Chip tone="provable">@{session.athlete.handle}</Chip>
+              </div>
+              <div className="stat-row" style={{ marginBottom: 14 }}>
+                <Stat label="Holder binding" value={session.athlete.holderBinding} />
+                <Stat
+                  label="Mode"
+                  value={isWallet ? 'wallet (Lace)' : isLive ? 'live (sidecar :8200)' : 'demo (fixture)'}
+                />
+                <Stat label="Backend" value={session.walletLabel} />
+              </div>
+              {session.walletAddress ? (
+                <div className="stat-row" style={{ marginBottom: 14 }}>
+                  <Stat label="Wallet address" value={<span className="hash">{hexShort(session.walletAddress, 10, 8)}</span>} />
+                  <Stat label="Network" value={session.networkId ?? '—'} />
+                </div>
+              ) : null}
+              <div className="divider" />
+              <div className="row-between">
+                <div>
+                  <Button tone="seal" onClick={() => void handleAttest()} disabled={attestRunning}>
+                    {attestRunning ? <span className="spin" /> : null}
+                    {attestRunning ? 'Attesting…' : 'Connect Strava & attest workout'}
+                  </Button>
+                </div>
+                <Chip tone="seal">private by default</Chip>
+              </div>
+              {attestError ? (
+                <div style={{ marginTop: 12 }}>
+                  <Notice tone="error">
+                    {attestError} {isLive || isWallet ? SWITCH_LINK : null}
+                  </Notice>
+                </div>
+              ) : null}
+
+              {isWallet && backupPrivateState ? (
+                <>
+                  <div className="divider" />
+                  <h3 className="card-title">Private-state backup &amp; resume</h3>
+                  <div className="row" style={{ gap: 8, flexWrap: 'wrap' }}>
+                    <input
+                      className="input"
+                      type="password"
+                      placeholder="Backup password"
+                      value={backupPassword}
+                      onChange={(e) => setBackupPassword(e.target.value)}
+                      style={{ flex: 1, minWidth: 160 }}
+                    />
+                    <Button tone="gold" size="sm" onClick={() => void handleBackup()} disabled={backupBusy || !backupPassword}>
+                      {backupBusy ? <span className="spin" /> : null} Back up
+                    </Button>
+                  </div>
+                  {backupNotice ? (
+                    <div style={{ marginTop: 8 }}>
+                      <Notice tone={backupNotice.startsWith('Backup failed') ? 'error' : 'success'}>
+                        {backupNotice}
+                      </Notice>
+                    </div>
+                  ) : null}
+                  {backupPayload ? (
+                    <div style={{ marginTop: 8 }}>
+                      <div className="faint" style={{ fontSize: 12, marginBottom: 4 }}>
+                        payload (encrypted) — {backupPayload.length} chars
+                      </div>
+                      <div className="hash" style={{ fontSize: 10.5, lineHeight: 1.4, wordBreak: 'break-all' }}>
+                        {backupPayload.slice(0, 180)}…
+                      </div>
+                    </div>
+                  ) : null}
+                  <div style={{ marginTop: 10 }}>
+                    <Button
+                      tone="ghost"
+                      size="sm"
+                      block
+                      disabled={!hasBackup || restoreBusy}
+                      title={hasBackup ? 'Restore the private state from this browser\u2019s stored backup' : 'no backup stored for this wallet'}
+                      onClick={() => openRestorePrompt('restore')}
+                    >
+                      Restore backup{!hasBackup ? ' — no backup stored for this wallet' : ''}
+                    </Button>
+                  </div>
+                  {restoreOpen ? (
+                    <div style={{ marginTop: 12, border: '1px solid var(--hairline-2)', borderRadius: 10, padding: 12 }}>
+                      <div className="field">
+                        <label>{restoreMode === 'resume' ? 'Enter password to resume' : 'Enter backup password'}</label>
+                        <input
+                          className="input"
+                          type="password"
+                          autoFocus
+                          value={restorePassword}
+                          onChange={(e) => setRestorePassword(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter' && restorePassword && !restoreBusy) void handleRestore();
+                          }}
+                        />
+                      </div>
+                      <div className="row">
+                        <Button
+                          tone="primary"
+                          size="sm"
+                          disabled={!restorePassword || restoreBusy}
+                          onClick={() => void handleRestore()}
+                        >
+                          {restoreBusy ? <span className="spin" /> : null}
+                          {restoreMode === 'resume' ? 'Resume' : 'Restore'}
+                        </Button>
+                        <Button tone="ghost" size="sm" disabled={restoreBusy} onClick={() => setRestoreOpen(false)}>
+                          Cancel
+                        </Button>
+                      </div>
+                      {restoreNotice ? (
+                        <div style={{ marginTop: 8 }}>
+                          <Notice tone={restoreNotice.startsWith('Restore failed') ? 'error' : 'success'}>{restoreNotice}</Notice>
+                        </div>
+                      ) : null}
+                    </div>
+                  ) : null}
+                </>
+              ) : null}
+            </div>
+          ) : (
+            <div>
+              <p className="hero muted">
+                {mode === 'fixture'
+                  ? 'Demo mode: you take the role of ' + ATHLETE_A.name + ' (' + ATHLETE_A.handle + '). No wallet, no chain, no network — the attested-session replay runs locally.'
+                  : isLive
+                    ? 'Live mode talks to the demo sidecar (packages/api on :8200), which runs the full pipeline: notary collection (2-of-3) → contract submit → vault. No browser wallet required.'
+                    : 'Wallet mode connects Lace (DApp Connector) straight to the contract: your wallet authorizes every transaction, and the private state (holder secret, attestations) is backed up encrypted on this browser.'}
+              </p>
+              <Button tone="primary" block onClick={() => void connect()} disabled={connecting}>
+                {connecting ? <span className="spin" /> : null}
+                {mode === 'fixture'
+                  ? 'Enter as ' + ATHLETE_A.name
+                  : isLive
+                    ? 'Connect to demo service'
+                    : 'Connect Lace wallet'}
+              </Button>
+              {connectError ? (
+                <div style={{ marginTop: 12 }}>
+                  <Notice tone="error">
+                    {connectError} {isLive || isWallet ? SWITCH_LINK : null}
+                  </Notice>
+                </div>
+              ) : null}
+            </div>
+          )}
+        </Card>
+
+        <Card title="Attestation pipeline">
+          {attestRunning || attestOutcome ? (
+            <StatusLine stages={attestOutcome?.stages ?? runningStages()} />
+          ) : (
+            <div className="empty-state">
+              The pipeline lights up here when an attestation runs: TLS witness → ZK proof →
+              notary signing (2-of-3) → on-chain vaulting.
+            </div>
+          )}
+          {outcome ? (
+            <div style={{ marginTop: 12 }}>
+              <Notice tone="success">
+                Credential vaulted — <strong>{outcome.provableChips.join(' · ')}</strong>.
+                {attestOutcome?.replayed ? ' Session replayed from the attested log (identical crypto path).' : ''}
+              </Notice>
+              <div className="divider" />
+              <div className="stat-row" style={{ gap: 20 }}>
+                <Stat label="Commitment (vault key)" value={<span className="hash">{hexShort(outcome.commitment, 12, 10)}</span>} />
+                {outcome.txHash ? (
+                  <Stat label="Transaction" value={<span className="hash">{hexShort(outcome.txHash, 12, 10)}</span>} />
+                ) : null}
+              </div>
+            </div>
+          ) : null}
+          {credentials.length > 0 && !attestOutcome ? (
+            <div style={{ marginTop: 12 }}>
+              <Notice tone="info">
+                {credentials.length} credential{credentials.length > 1 ? 's' : ''} already vaulted —
+                see the Vault tab.
+              </Notice>
+            </div>
+          ) : null}
+        </Card>
+      </div>
+
+      <div style={{ marginTop: 18 }}>
+        <Notice tone="info">
+          <strong>Who is the employer?</strong> Later, a third party ({EMPLOYER.name}) verifies your
+          feats via <code className="mono">proveBadge</code> — the streak data stays sealed. That is
+          the Streaks &amp; Badges tab.
+        </Notice>
+      </div>
+    </div>
+  );
+};
+
+const runningStages = () => [
+  { id: 'tls', label: 'Witnessing TLS session', detail: 'attestor-core tunnels to www.strava.com', state: 'active' as const },
+  { id: 'proof', label: 'ZK proof generated', detail: 'extracted parameters committed', state: 'pending' as const },
+  { id: 'notarize', label: 'Notarizing — 2 of 3 keys', detail: 'independent verification + Schnorr signing', state: 'pending' as const },
+  { id: 'chain', label: 'Vaulting on-chain', detail: 'persistentCommit stored', state: 'pending' as const },
+];

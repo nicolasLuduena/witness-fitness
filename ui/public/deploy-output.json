@@ -1,0 +1,48 @@
+{
+  "contractAddress": "cf80ad421b2b85f6ca1b3c0ccfd140ae5f6fc0d5871426d7750df4d42944cbaf",
+  "notaryPublicKeys": [
+    {
+      "x": "0x3862022a87a469108254b4530e1455cb016835894834b8c05b181cdf35de5b4f",
+      "y": "0x43c040874581a4434744453744aca7c2fac2d04ff9340aa9cfe3f3268b26b365"
+    },
+    {
+      "x": "0x58da03745fe50613212d2f2ef4f07b5983260f978018d3a308bcc3316e932194",
+      "y": "0x6633c8b80640f2b5f3c7d38017af3008a93ce39b190c4025df5d772b9b4a7958"
+    },
+    {
+      "x": "0x6b58aa88e9c81548a41bad567257e2eeb3cb2b81b2b48082c655f093998b8a59",
+      "y": "0x19b59ef0dbf4b2a503d493ec7c29439384b3b38cfb29f0eed8e7ad5388d7747"
+    }
+  ],
+  "deployedAt": "2026-08-07T21:25:02.658Z",
+  "notaryInstances": [
+    {
+      "id": "notary-1",
+      "publicKey": {
+        "x": "0x3862022a87a469108254b4530e1455cb016835894834b8c05b181cdf35de5b4f",
+        "y": "0x43c040874581a4434744453744aca7c2fac2d04ff9340aa9cfe3f3268b26b365"
+      },
+      "port": 8101,
+      "slot": 0
+    },
+    {
+      "id": "notary-2",
+      "publicKey": {
+        "x": "0x58da03745fe50613212d2f2ef4f07b5983260f978018d3a308bcc3316e932194",
+        "y": "0x6633c8b80640f2b5f3c7d38017af3008a93ce39b190c4025df5d772b9b4a7958"
+      },
+      "port": 8102,
+      "slot": 1
+    },
+    {
+      "id": "notary-3",
+      "publicKey": {
+        "x": "0x6b58aa88e9c81548a41bad567257e2eeb3cb2b81b2b48082c655f093998b8a59",
+        "y": "0x19b59ef0dbf4b2a503d493ec7c29439384b3b38cfb29f0eed8e7ad5388d7747"
+      },
+      "port": 8103,
+      "slot": 2
+    }
+  ],
+  "registryRotatedAt": "2026-08-07T21:28:55.984Z"
+}
