@@ -1,0 +1,14 @@
+# Self-hosted Reclaim attestor stack.
+# Fill in the details per docs/ATTESTATION.md — either build attestor-core
+# from source (clone into ./attestor-core) or use the upstream image if one
+# is published. Port 8001 exposed, WebSocket endpoint wss://localhost:8001/ws.
+
+services:
+  attestor:
+    build:
+      context: ./attestor-core
+      dockerfile: attestor.dockerfile
+    container_name: 'attestor'
+    env_file: .env
+    ports:
+      - '8001:8001'
