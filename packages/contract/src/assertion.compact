@@ -1,0 +1,77 @@
+// Versioned assertion schema + frozen field encoding (CONTRACT.md §2).
+// Field order below is contract law: every notary signature commits to
+// encodeAssertion(assertion) as Vector<22, Field>. The notary MUST use the
+// compiled pureCircuits.encodeAssertion / pureCircuits.schnorrChallenge,
+// never a hand-rolled encoding.
+pragma language_version >= 0.22;
+
+module assertion {
+    import CompactStandardLibrary;
+
+    export struct Claim {
+        metricId: Uint<8>;
+        value: Uint<64>;
+    }
+
+    export struct Assertion {
+        version: Uint<8>;
+        provider: Uint<8>;
+        claims: Vector<8, Claim>;
+        claimCount: Uint<8>;
+        timestamp: Uint<32>;
+        nonce: Bytes<32>;
+        reclaimProofHash: Bytes<32>;
+    }
+
+    struct SchnorrHashInput22 {
+        ann_x: Field;
+        ann_y: Field;
+        pk_x: Field;
+        pk_y: Field;
+        msg: Vector<22, Field>;
+    }
+
+    export pure circuit encodeAssertion(assertion: Assertion): Vector<22, Field> {
+        return [
+            assertion.version as Field,
+            assertion.provider as Field,
+            assertion.claims[0].metricId as Field,
+            assertion.claims[0].value as Field,
+            assertion.claims[1].metricId as Field,
+            assertion.claims[1].value as Field,
+            assertion.claims[2].metricId as Field,
+            assertion.claims[2].value as Field,
+            assertion.claims[3].metricId as Field,
+            assertion.claims[3].value as Field,
+            assertion.claims[4].metricId as Field,
+            assertion.claims[4].value as Field,
+            assertion.claims[5].metricId as Field,
+            assertion.claims[5].value as Field,
+            assertion.claims[6].metricId as Field,
+            assertion.claims[6].value as Field,
+            assertion.claims[7].metricId as Field,
+            assertion.claims[7].value as Field,
+            assertion.claimCount as Field,
+            assertion.timestamp as Field,
+            degradeToTransient(assertion.nonce),
+            degradeToTransient(assertion.reclaimProofHash)
+        ];
+    }
+
+    export pure circuit schnorrChallenge(
+        ann_x: Field,
+        ann_y: Field,
+        pk_x: Field,
+        pk_y: Field,
+        msg: Vector<22, Field>
+    ): Field {
+        return transientHash<SchnorrHashInput22>(
+            SchnorrHashInput22 {
+                ann_x: ann_x,
+                ann_y: ann_y,
+                pk_x: pk_x,
+                pk_y: pk_y,
+                msg: msg
+            });
+    }
+}

@@ -1,0 +1,510 @@
+// WitnessFitness main contract: notary registry + verifyAttestation + vault +
+// wager / streak / badge mechanics over sealed, attested credentials.
+pragma language_version >= 0.22;
+
+import CompactStandardLibrary;
+import "assertion" prefix A_;
+import "schnorr" prefix Schnorr_;
+
+export { A_Assertion, A_Claim };
+export { Schnorr_SchnorrSignature };
+
+export struct VaultEntry {
+    holderBinding: Field;
+    timestamp: Uint<32>;
+}
+
+export struct Wager {
+    challenger: Field;
+    opponent: Field;
+    metricId: Uint<8>;
+    stake: Uint<64>;
+    deadlineBlock: Uint<64>;
+    accepted: Boolean;
+    challengerSubmission: Maybe<Field>;
+    opponentSubmission: Maybe<Field>;
+    settled: Boolean;
+    // Real-money payout routing, fixed at create/accept (contract law: settle
+    // pays ONLY these stored values — no caller-supplied payout args).
+    // 32-byte UserAddress payloads (encodeUserAddress of the wallet's
+    // unshielded address) — NOT bech32m (96-byte) strings: the kernel's
+    // sendUnshielded requires a UserAddress struct, which cannot be decoded
+    // from bech32m in-circuit.
+    challengerPayout: Bytes<32>;
+    opponentPayout: Bytes<32>;
+    challengerCoinKey: ZswapCoinPublicKey; // shielded NFT recipient (winner's coin key)
+    opponentCoinKey: ZswapCoinPublicKey;
+}
+
+export struct Streak {
+    count: Uint<16>;
+    lastDay: Uint<32>;
+}
+
+export ledger registry: Vector<3, JubjubPoint>;
+export ledger adminSecret: Field;
+export ledger vault: Map<Bytes<32>, VaultEntry>;
+export ledger nullifiers: Set<Bytes<32>>;
+export ledger wagers: Map<Uint<64>, Wager>;
+export ledger nextWagerId: Uint<64>;
+export ledger streaks: Map<Field, Streak>;
+export ledger badges: Map<Field, Set<Uint<8>>>;
+export ledger nftCounter: Counter;
+export ledger nftNonce: Bytes<32>;
+
+witness adminSecretKey(): Bytes<32>;
+witness getHolderSecret(): Bytes<32>;
+witness getAttestationWitness(): [A_Assertion, Vector<3, Schnorr_SchnorrSignature>, Bytes<32>];
+witness getSubmissionRand(): Field;
+witness getWagerOpenings(): [Field, Field, Field, Field];
+
+circuit deriveAdminBinding(secret: Bytes<32>): Field {
+    return jubjubPointX(hashToCurve<Vector<2, Bytes<32>>>([
+        pad(32, "witnessfitness:admin:v1"), secret
+    ]));
+}
+
+circuit deriveHolderBinding(secret: Bytes<32>): Field {
+    return jubjubPointX(hashToCurve<Vector<2, Bytes<32>>>([
+        pad(32, "witnessfitness:holder:v1"), secret
+    ]));
+}
+
+// Attestation freshness window (seconds): 30 days — demo build decision
+// (AGENTS.md §8): fixture proofs must survive the demo without regeneration
+// pressure; 7 days was too tight for replayed fixtures.
+circuit freshnessWindow(): Uint<64> {
+    return 2592000;
+}
+
+circuit settleGrace(): Uint<64> {
+    return 60;
+}
+
+circuit isAdmin(): Boolean {
+    return adminSecret != 0 && adminSecret == disclose(deriveAdminBinding(adminSecretKey()));
+}
+
+// Day of a Unix timestamp without division: day*86400 <= ts < (day+1)*86400.
+circuit dayOfTimestamp(ts: Uint<32>, day: Uint<32>): Boolean {
+    return (day as Uint<64>) * 86400 <= (ts as Uint<64>)
+        && (ts as Uint<64>) < ((day + 1) as Uint<64>) * 86400;
+}
+
+circuit verifySlot(
+    msg: Vector<22, Field>,
+    sig: Schnorr_SchnorrSignature,
+    pk: JubjubPoint,
+    slotEmpty: Boolean
+): Boolean {
+    if (slotEmpty) {
+        return false;
+    }
+    return Schnorr_schnorrVerifyOk<22>(msg, sig, pk);
+}
+
+circuit countValidSignatures(
+    msg: Vector<22, Field>,
+    sigs: Vector<3, Schnorr_SchnorrSignature>
+): Uint<64> {
+    const c0 = verifySlot(msg, sigs[0], registry[0], registry[0] == default<JubjubPoint>) ? 1 : 0;
+    const c1 = verifySlot(msg, sigs[1], registry[1], registry[1] == default<JubjubPoint>) ? 1 : 0;
+    const c2 = verifySlot(msg, sigs[2], registry[2], registry[2] == default<JubjubPoint>) ? 1 : 0;
+    return (c0 + c1 + c2) as Uint<64>;
+}
+
+circuit claimValueFor(assertion: A_Assertion, metricId: Uint<8>): Uint<64> {
+    const v0 = assertion.claims[0].metricId == metricId ? assertion.claims[0].value : 0;
+    const v1 = assertion.claims[1].metricId == metricId ? assertion.claims[1].value : v0;
+    const v2 = assertion.claims[2].metricId == metricId ? assertion.claims[2].value : v1;
+    const v3 = assertion.claims[3].metricId == metricId ? assertion.claims[3].value : v2;
+    const v4 = assertion.claims[4].metricId == metricId ? assertion.claims[4].value : v3;
+    const v5 = assertion.claims[5].metricId == metricId ? assertion.claims[5].value : v4;
+    const v6 = assertion.claims[6].metricId == metricId ? assertion.claims[6].value : v5;
+    const v7 = assertion.claims[7].metricId == metricId ? assertion.claims[7].value : v6;
+    return v7;
+}
+
+circuit hasClaim(assertion: A_Assertion, metricId: Uint<8>): Boolean {
+    return assertion.claims[0].metricId == metricId
+        || assertion.claims[1].metricId == metricId
+        || assertion.claims[2].metricId == metricId
+        || assertion.claims[3].metricId == metricId
+        || assertion.claims[4].metricId == metricId
+        || assertion.claims[5].metricId == metricId
+        || assertion.claims[6].metricId == metricId
+        || assertion.claims[7].metricId == metricId;
+}
+
+circuit markSettled(wager: Wager): Wager {
+    return Wager {
+        challenger: wager.challenger,
+        opponent: wager.opponent,
+        metricId: wager.metricId,
+        stake: wager.stake,
+        deadlineBlock: wager.deadlineBlock,
+        accepted: wager.accepted,
+        challengerSubmission: wager.challengerSubmission,
+        opponentSubmission: wager.opponentSubmission,
+        settled: true,
+        challengerPayout: wager.challengerPayout,
+        opponentPayout: wager.opponentPayout,
+        challengerCoinKey: wager.challengerCoinKey,
+        opponentCoinKey: wager.opponentCoinKey
+    };
+}
+
+// The wager NFT's token type: contract-scoped color derived from the domain
+// separator + this contract's address (unique per deployment).
+circuit nftTokenType(): Bytes<32> {
+    return tokenType(pad(32, "witnessfitness:nft:v1"), disclose(kernel.self()));
+}
+
+// Mint one winner NFT (shielded coin, value 1) to the winner's coin public
+// key. Nonce management mirrors the tbtc example: a Counter + evolving nonce.
+circuit mintWinnerNft(winnerCoinKey: ZswapCoinPublicKey): [] {
+    nftCounter.increment(1);
+    const newNonce = evolveNonce(nftCounter, nftNonce);
+    mintShieldedToken(
+        nftTokenType(),
+        1,
+        newNonce,
+        left<ZswapCoinPublicKey, ContractAddress>(disclose(winnerCoinKey))
+    );
+    nftNonce = newNonce;
+}
+
+// Send unshielded NIGHT out of the contract's escrowed pot to a user address.
+circuit sendPayout(amount: Uint<64>, to: Bytes<32>): [] {
+    sendUnshielded(
+        nativeToken(),
+        disclose(amount) as Uint<128>,
+        right<ContractAddress, UserAddress>(UserAddress { bytes: disclose(to) })
+    );
+}
+
+// Winner takes the whole pot (2 * stake) + the winner NFT.
+circuit payWinnerPot(payout: Bytes<32>, coinKey: ZswapCoinPublicKey, stake: Uint<64>): [] {
+    sendPayout((2 * stake) as Uint<64>, payout);
+    mintWinnerNft(coinKey);
+}
+
+circuit refundPlayer(payout: Bytes<32>, stake: Uint<64>): [] {
+    sendPayout(stake, payout);
+}
+
+// First call pins the admin identity; later calls assert the caller holds it.
+export circuit registerAdmin(): [] {
+    if (adminSecret == 0) {
+        adminSecret = disclose(deriveAdminBinding(adminSecretKey()));
+    } else {
+        assert(isAdmin(), "Not the admin");
+    }
+}
+
+export circuit registerNotary(pk: JubjubPoint, index: Uint<8>): [] {
+    assert(isAdmin(), "Not the admin");
+    const idx = disclose(index);
+    assert(idx < 3, "Index out of range");
+    const p0 = idx == 0 ? pk : registry[0];
+    const p1 = idx == 1 ? pk : registry[1];
+    const p2 = idx == 2 ? pk : registry[2];
+    registry = disclose([p0, p1, p2]);
+}
+
+export circuit rotateNotary(index: Uint<8>, newPk: JubjubPoint): [] {
+    assert(isAdmin(), "Not the admin");
+    const idx = disclose(index);
+    assert(idx < 3, "Index out of range");
+    const p0 = idx == 0 ? newPk : registry[0];
+    const p1 = idx == 1 ? newPk : registry[1];
+    const p2 = idx == 2 ? newPk : registry[2];
+    registry = disclose([p0, p1, p2]);
+}
+
+export circuit blacklistNotary(index: Uint<8>): [] {
+    assert(isAdmin(), "Not the admin");
+    const idx = disclose(index);
+    assert(idx < 3, "Index out of range");
+    const empty = default<JubjubPoint>;
+    const p0 = idx == 0 ? empty : registry[0];
+    const p1 = idx == 1 ? empty : registry[1];
+    const p2 = idx == 2 ? empty : registry[2];
+    registry = disclose([p0, p1, p2]);
+}
+
+// Real-money wager pot: the caller's wallet spends unshielded NIGHT UTXOs
+// into this contract (receiveUnshielded claims the stake; the transaction's
+// well-formedness rules require the wallet to fund the corresponding output).
+export circuit createWager(
+    opponentBinding: Field,
+    metricId: Uint<8>,
+    stake: Uint<64>,
+    deadlineBlock: Uint<64>,
+    payout: Bytes<32>,
+    coinKey: ZswapCoinPublicKey
+): [] {
+    const caller = deriveHolderBinding(getHolderSecret());
+    const binding = disclose(caller);
+    receiveUnshielded(nativeToken(), disclose(stake) as Uint<128>);
+    wagers.insert(disclose(nextWagerId), Wager {
+        challenger: binding,
+        opponent: disclose(opponentBinding),
+        metricId: disclose(metricId),
+        stake: disclose(stake),
+        deadlineBlock: disclose(deadlineBlock),
+        accepted: false,
+        challengerSubmission: none<Field>(),
+        opponentSubmission: none<Field>(),
+        settled: false,
+        challengerPayout: disclose(payout),
+        opponentPayout: default<Bytes<32>>,
+        challengerCoinKey: disclose(coinKey),
+        opponentCoinKey: default<ZswapCoinPublicKey>
+    });
+    nextWagerId = (nextWagerId + 1) as Uint<64>;
+}
+
+export circuit acceptWager(id: Uint<64>, payout: Bytes<32>, coinKey: ZswapCoinPublicKey): [] {
+    const caller = deriveHolderBinding(getHolderSecret());
+    const binding = disclose(caller);
+    const wid = disclose(id);
+    assert(wagers.member(wid), "No such wager");
+    const wager = wagers.lookup(wid);
+    assert(!wager.settled, "Wager settled");
+    assert(!wager.accepted, "Wager already accepted");
+    assert(wager.opponent == binding, "Not the opponent");
+    receiveUnshielded(nativeToken(), disclose(wager.stake) as Uint<128>);
+    wagers.insert(wid, Wager {
+        challenger: wager.challenger,
+        opponent: wager.opponent,
+        metricId: wager.metricId,
+        stake: wager.stake,
+        deadlineBlock: wager.deadlineBlock,
+        accepted: true,
+        challengerSubmission: wager.challengerSubmission,
+        opponentSubmission: wager.opponentSubmission,
+        settled: false,
+        challengerPayout: wager.challengerPayout,
+        opponentPayout: disclose(payout),
+        challengerCoinKey: wager.challengerCoinKey,
+        opponentCoinKey: disclose(coinKey)
+    });
+}
+
+// Refund the challenger's escrowed stake (real NIGHT) if the opponent never
+// accepted. Refunds go to the payout address pinned at create.
+export circuit cancelWager(id: Uint<64>): [] {
+    const caller = deriveHolderBinding(getHolderSecret());
+    const binding = disclose(caller);
+    const wid = disclose(id);
+    assert(wagers.member(wid), "No such wager");
+    const wager = wagers.lookup(wid);
+    assert(wager.challenger == binding, "Not the challenger");
+    assert(!wager.accepted, "Wager already accepted");
+    assert(!wager.settled, "Wager settled");
+    wagers.remove(wid);
+    sendPayout(wager.stake, wager.challengerPayout);
+}
+
+export circuit verifyAttestation(): [] {
+    const [assertion, sigs, rand] = getAttestationWitness();
+    assert(assertion.version == 1, "Unsupported assertion version");
+    assert(assertion.provider == 1, "Unsupported provider");
+    assert(assertion.claimCount <= 8, "Too many claims");
+    assert(countValidSignatures(encodeAssertion(assertion), sigs) >= 2,
+           "Insufficient valid signatures");
+    assert(blockTimeGte(disclose(assertion.timestamp as Uint<64>)),
+           "Timestamp in the future");
+    assert(blockTimeLt(disclose((assertion.timestamp + freshnessWindow()) as Uint<64>)),
+           "Timestamp too old");
+    const nullifier = persistentHash<Vector<2, Bytes<32>>>([
+        pad(32, "witnessfitness:nonce:"), assertion.nonce
+    ]);
+    assert(!nullifiers.member(disclose(nullifier)), "Nonce replay");
+    nullifiers.insert(disclose(nullifier));
+    const vaultKey = persistentCommit<A_Assertion>(assertion, rand);
+    assert(!vault.member(vaultKey), "Credential already vaulted");
+    const holderBinding = deriveHolderBinding(getHolderSecret());
+    vault.insert(vaultKey, VaultEntry {
+        holderBinding: disclose(holderBinding),
+        timestamp: disclose(assertion.timestamp)
+    });
+}
+
+export circuit submitWorkout(wagerId: Uint<64>, vaultKey: Bytes<32>, value: Uint<64>): [] {
+    const [assertion, , commitRand] = getAttestationWitness();
+    const caller = deriveHolderBinding(getHolderSecret());
+    const binding = disclose(caller);
+    const wid = disclose(wagerId);
+    const key = disclose(vaultKey);
+    assert(wagers.member(wid), "No such wager");
+    const wager = wagers.lookup(wid);
+    assert(!wager.settled, "Wager settled");
+    assert(wager.accepted, "Wager not accepted");
+    assert(vault.member(key), "Unknown credential");
+    const entry = vault.lookup(key);
+    assert(entry.holderBinding == binding, "Credential not bound to caller");
+    assert(persistentCommit<A_Assertion>(assertion, commitRand) == key,
+           "Credential does not open to this assertion");
+    assert(hasClaim(assertion, wager.metricId), "No claim for wager metric");
+    assert(claimValueFor(assertion, wager.metricId) == value, "Claim value mismatch");
+    const wagerNullifier = persistentHash<Vector<3, Bytes<32>>>([
+        pad(32, "witnessfitness:wager:"),
+        key,
+        (wagerId as Field) as Bytes<32>
+    ]);
+    assert(!nullifiers.member(disclose(wagerNullifier)), "Workout already counted in this wager");
+    nullifiers.insert(disclose(wagerNullifier));
+    const sealedValue = transientCommit<Field>(value, getSubmissionRand());
+    const updated = wager.challenger == binding
+        ? Wager {
+            challenger: wager.challenger,
+            opponent: wager.opponent,
+            metricId: wager.metricId,
+            stake: wager.stake,
+            deadlineBlock: wager.deadlineBlock,
+            accepted: wager.accepted,
+            challengerSubmission: some<Field>(sealedValue),
+            opponentSubmission: wager.opponentSubmission,
+            settled: false,
+            challengerPayout: wager.challengerPayout,
+            opponentPayout: wager.opponentPayout,
+            challengerCoinKey: wager.challengerCoinKey,
+            opponentCoinKey: wager.opponentCoinKey
+        }
+        : Wager {
+            challenger: wager.challenger,
+            opponent: wager.opponent,
+            metricId: wager.metricId,
+            stake: wager.stake,
+            deadlineBlock: wager.deadlineBlock,
+            accepted: wager.accepted,
+            challengerSubmission: wager.challengerSubmission,
+            opponentSubmission: some<Field>(sealedValue),
+            settled: false,
+            challengerPayout: wager.challengerPayout,
+            opponentPayout: wager.opponentPayout,
+            challengerCoinKey: wager.challengerCoinKey,
+            opponentCoinKey: wager.opponentCoinKey
+        };
+    wagers.insert(wid, updated);
+}
+
+// Settle pays the stored payouts ONLY (no caller-supplied payout args — the
+// routing pinned at create/accept cannot be tampered with at settle). Winner
+// takes 2 * stake + the winner NFT; tie/none refund both; forfeit pays the
+// single submitter. The VM enforces that the escrowed pot covers the sends.
+export circuit settleWager(id: Uint<64>): [] {
+    const wid = disclose(id);
+    assert(wagers.member(wid), "No such wager");
+    const wager = wagers.lookup(wid);
+    assert(!wager.settled, "Wager settled");
+    assert(blockTimeGte((wager.deadlineBlock + settleGrace()) as Uint<64>),
+           "Deadline not reached");
+    const [v1, r1, v2, r2] = getWagerOpenings();
+    if (wager.challengerSubmission.is_some && wager.opponentSubmission.is_some) {
+        assert(transientCommit<Field>(v1, r1) == wager.challengerSubmission.value,
+               "Bad challenger opening");
+        assert(transientCommit<Field>(v2, r2) == wager.opponentSubmission.value,
+               "Bad opponent opening");
+        if ((disclose(v1) as Uint<64>) > (disclose(v2) as Uint<64>)) {
+            payWinnerPot(wager.challengerPayout, wager.challengerCoinKey, wager.stake);
+        } else if ((disclose(v2) as Uint<64>) > (disclose(v1) as Uint<64>)) {
+            payWinnerPot(wager.opponentPayout, wager.opponentCoinKey, wager.stake);
+        } else {
+            refundPlayer(wager.challengerPayout, wager.stake);
+            refundPlayer(wager.opponentPayout, wager.stake);
+        }
+    } else if (wager.challengerSubmission.is_some) {
+        payWinnerPot(wager.challengerPayout, wager.challengerCoinKey, wager.stake);
+    } else if (wager.opponentSubmission.is_some) {
+        payWinnerPot(wager.opponentPayout, wager.opponentCoinKey, wager.stake);
+    } else {
+        refundPlayer(wager.challengerPayout, wager.stake);
+        refundPlayer(wager.opponentPayout, wager.stake);
+    }
+    wagers.insert(wid, markSettled(wager));
+}
+
+export circuit advanceStreak(vaultKey: Bytes<32>, day: Uint<32>, commitRand: Bytes<32>): [] {
+    const key = disclose(vaultKey);
+    const caller = deriveHolderBinding(getHolderSecret());
+    const binding = disclose(caller);
+    assert(vault.member(key), "Unknown credential");
+    const entry = vault.lookup(key);
+    assert(entry.holderBinding == binding, "Credential not bound to caller");
+    const [assertion, , rand] = getAttestationWitness();
+    assert(persistentCommit<A_Assertion>(assertion, rand) == key,
+           "Credential does not open to this assertion");
+    const d = disclose(day);
+    assert(dayOfTimestamp(assertion.timestamp, d), "Day does not match workout");
+    const existing = streaks.member(binding)
+        ? streaks.lookup(binding)
+        : Streak { count: 0, lastDay: 0 };
+    const count = d == (existing.lastDay + 1) as Uint<32>
+        ? (existing.count + 1) as Uint<16>
+        : 1;
+    streaks.insert(binding, Streak { count: count, lastDay: d });
+}
+
+export circuit mintBadge(badgeId: Uint<8>, vaultKey: Bytes<32>, commitRand: Bytes<32>): [] {
+    const key = disclose(vaultKey);
+    const caller = deriveHolderBinding(getHolderSecret());
+    const binding = disclose(caller);
+    const bid = disclose(badgeId);
+    const [assertion, , rand] = getAttestationWitness();
+    assert(vault.member(key), "Unknown credential");
+    const entry = vault.lookup(key);
+    assert(entry.holderBinding == binding, "Credential not bound to caller");
+    if (bid == 1) {
+        assert(streaks.member(binding) && streaks.lookup(binding).count >= 3,
+               "Streak too short");
+    } else if (bid == 2) {
+        assert(persistentCommit<A_Assertion>(assertion, rand) == key,
+               "Credential does not open to this assertion");
+        assert(hasClaim(assertion, 1), "No distance claim");
+        assert(claimValueFor(assertion, 1) >= 10000, "Distance below threshold");
+    } else {
+        assert(false, "Unknown badge");
+    }
+    if (!badges.member(binding)) {
+        badges.insert(binding, default<Set<Uint<8>>>);
+    }
+    badges.lookup(binding).insert(bid);
+}
+
+// Prove badge ownership to a third party. The ledger learns (badgeId,
+// verifierBinding); the holder binding stays private.
+export circuit proveBadge(badgeId: Uint<8>, verifierBinding: Field): [Field] {
+    const caller = deriveHolderBinding(getHolderSecret());
+    const binding = disclose(caller);
+    const bid = disclose(badgeId);
+    assert(badges.member(binding), "No badges");
+    assert(badges.lookup(binding).member(bid), "Not a badge holder");
+    return [disclose(verifierBinding)];
+}
+
+export pure circuit encodeAssertion(assertion: A_Assertion): Vector<22, Field> {
+    return A_encodeAssertion(assertion);
+}
+
+export pure circuit schnorrChallenge(
+    ann_x: Field,
+    ann_y: Field,
+    pk_x: Field,
+    pk_y: Field,
+    msg: Vector<22, Field>
+): Field {
+    return A_schnorrChallenge(ann_x, ann_y, pk_x, pk_y, msg);
+}
+
+export pure circuit computeVaultKey(assertion: A_Assertion, rand: Bytes<32>): Bytes<32> {
+    return persistentCommit<A_Assertion>(assertion, rand);
+}
+
+export pure circuit holderBinding(secret: Bytes<32>): Field {
+    return jubjubPointX(hashToCurve<Vector<2, Bytes<32>>>([
+        pad(32, "witnessfitness:holder:v1"), secret
+    ]));
+}
