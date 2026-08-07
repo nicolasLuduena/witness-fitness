@@ -1,0 +1,30 @@
+node_modules/
+dist/
+
+.env
+.env.*
+!.env.sample
+
+managed/
+
+.turbo/
+
+tsconfig.tsbuildinfo
+
+logs/
+*.sqlite
+
+**/midnight-level-db/
+**/*-midnight/
+
+# ESLint
+.eslintcache
+
+# Prettier
+.prettiercache
+
+# attestor-core source clone (nested git repo, installed deps)
+attestor/attestor-core/
+
+# Admin identity for contract admin circuits (written by scripts/deploy.ts)
+admin-secret.local

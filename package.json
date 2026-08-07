@@ -1,0 +1,36 @@
+{
+  "name": "witnessfitness",
+  "version": "0.1.0",
+  "private": true,
+  "description": "On-chain Strava — provably-private fitness challenges on Midnight",
+  "packageManager": "pnpm@10.29.3",
+  "scripts": {
+    "dev:contract": "pnpm --filter @witnessfitness/contract dev",
+    "dev:notary": "pnpm --filter @witnessfitness/notary dev",
+    "dev:client": "pnpm --filter @witnessfitness/client dev",
+    "dev:attestor": "bash attestor/run.sh",
+    "dev:ui": "pnpm --filter ui dev",
+    "devnet:up": "bash devnet/up.sh",
+    "devnet:down": "bash devnet/down.sh",
+    "test": "pnpm -r test"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "prettier": "^3.8.1",
+    "typescript": "^5.9.3"
+  },
+  "pnpm": {
+    "overrides": {
+      "@midnight-ntwrk/ledger-v8": "8.0.3"
+    },
+    "onlyBuiltDependencies": [
+      "@swc/core",
+      "cbor-extract",
+      "classic-level",
+      "esbuild",
+      "koffi",
+      "msgpackr-extract",
+      "re2"
+    ]
+  }
+}
