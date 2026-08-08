@@ -173,8 +173,16 @@ export const metricsFromAssertion = (assertion: A_Assertion): Metric[] =>
 
 export const dayOfTimestamp = (timestamp: bigint): bigint => timestamp / 86400n;
 
-export const submissionRandFor = (wagerId: bigint, athlete: Athlete): bigint =>
-  BigInt('0x' + sha256Hex(`witnessfitness:wager-submission:${wagerId}:${athlete}`)) % (1n << 248n);
+// Deterministic per (wager, athlete) — Bytes<32> since the sealed submission
+// commitment is persistentCommit (audit L1).
+export const submissionRandFor = (wagerId: bigint, athlete: Athlete): Uint8Array => {
+  const hex = sha256Hex(`witnessfitness:wager-submission:${wagerId}:${athlete}`);
+  const out = new Uint8Array(32);
+  for (let i = 0; i < 32; i += 1) {
+    out[i] = Number.parseInt(hex.slice(i * 2, i * 2 + 2), 16);
+  }
+  return out;
+};
 
 export interface StoredCredential {
   vaultKey: Uint8Array;
@@ -223,7 +231,9 @@ export class DemoVault {
 
 export interface WagerSubmissionRecord {
   value: bigint;
-  rand: bigint;
+  // Bytes<32> — the sealed submission commitment is persistentCommit
+  // (audit L1).
+  rand: Uint8Array;
 }
 
 export interface WagerRecord {
@@ -883,9 +893,10 @@ export const createDemoSidecarWithDeps = (
     }
     const subA = record.submissions.A;
     const subB = record.submissions.B;
-    if (subA === undefined || subB === undefined) {
-      return { status: 400, json: { error: 'both submissions required before settle' } };
-    }
+    // 0 or 1 submissions are VALID settlement states: neither → refund both;
+    // one → forfeit pays the single submitter (the contract decides). The
+    // openings are only staged when both submissions exist.
+    const bothSubmitted = subA !== undefined && subB !== undefined;
     const { flows, readState, shieldedBalances } = requireReady();
     const state = await withTimeout(readState(), config.txTimeoutMs, 'readState');
     const onChain = state.wagers.member(id) ? state.wagers.lookup(id) : null;
@@ -897,19 +908,31 @@ export const createDemoSidecarWithDeps = (
       return { status: 400, json: { error: 'deadline not reached (deadline + 60s grace)' } };
     }
     // Openings order is contract law: [challengerValue, challengerRand,
-    // opponentValue, opponentRand] (stride.compact settleWager).
-    const openings: [bigint, bigint, bigint, bigint] =
-      record.challenger === 'A'
-        ? [subA.value, subA.rand, subB.value, subB.rand]
-        : [subB.value, subB.rand, subA.value, subA.rand];
+    // opponentValue, opponentRand] (stride.compact settleWager). With fewer
+    // than two submissions the contract ignores them — stage zeros.
+    const both = [subA, subB] as const;
+    const openings: [bigint, Uint8Array, bigint, Uint8Array] = bothSubmitted
+      ? record.challenger === 'A'
+        ? [subA!.value, subA!.rand, subB!.value, subB!.rand]
+        : [subB!.value, subB!.rand, subA!.value, subA!.rand]
+      : [0n, new Uint8Array(32), 0n, new Uint8Array(32)];
     await withTimeout(
       requireReady().stagePrivateState(athlete, { wagerOpenings: openings }),
       config.txTimeoutMs,
       'stage openings'
     );
-    const winner: 'A' | 'B' | 'tie' =
-      subA.value > subB.value ? 'A' : subB.value > subA.value ? 'B' : 'tie';
-    const nftWinner: Athlete | null = winner === 'tie' ? null : winner;
+    const winner: 'A' | 'B' | 'tie' | null = bothSubmitted
+      ? subA!.value > subB!.value
+        ? 'A'
+        : subB!.value > subA!.value
+          ? 'B'
+          : 'tie'
+      : subA !== undefined
+        ? 'A'
+        : subB !== undefined
+          ? 'B'
+          : null;
+    const nftWinner: Athlete | null = winner === 'tie' || winner === null ? null : winner;
     const before = nftWinner === null ? null : await shieldedBalances(nftWinner);
     const tx = await withTimeout(flows.settleWager(athlete, id), config.txTimeoutMs, 'settleWager');
     const txHash = txHashOf(tx);

@@ -416,12 +416,20 @@ export const attestWorkout = async (
     commitRand
   );
   const tx = await ctx.contract.verifyAttestation();
-  const state = await ctx.contract.readState();
   const vaultKey = pureCircuits.computeVaultKey(attestation.assertion, commitRand);
-  if (!state.vault.member(vaultKey)) {
-    throw new Error('credential not found in vault after verifyAttestation');
+  // The indexer lags finalization — a single readState right after submit is
+  // racy and rejected VALID attestations ("credential not found in vault").
+  // Poll like the UI's post-create read-back (10 × 1s).
+  for (let attempt = 0; attempt < 10; attempt += 1) {
+    const state = await ctx.contract.readState();
+    if (state.vault.member(vaultKey)) {
+      return { vaultKey, tx };
+    }
+    await new Promise((resolve) => setTimeout(resolve, 1_000));
   }
-  return { vaultKey, tx };
+  throw new Error(
+    'credential vaulted on-chain but not yet indexed — refresh the Vault tab shortly'
+  );
 };
 
 export const createWagerFlow = (

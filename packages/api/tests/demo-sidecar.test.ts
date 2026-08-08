@@ -542,9 +542,9 @@ describe('demo sidecar wire contract', () => {
         expect(submissionStages).toHaveLength(2);
         const randA = submissionStages.find((s) => s.athlete === 'A')!.fields.submissionRand;
         const randB = submissionStages.find((s) => s.athlete === 'B')!.fields.submissionRand;
-        expect(randA).toBe(submissionRandFor(0n, 'A'));
-        expect(randB).toBe(submissionRandFor(0n, 'B'));
-        expect(randA).not.toBe(randB);
+        expect(randA).toEqual(submissionRandFor(0n, 'A'));
+        expect(randB).toEqual(submissionRandFor(0n, 'B'));
+        expect(randA).not.toEqual(randB);
 
         await postTo('/wager/settle', { id: '0x0' });
         const openingsStage = deps.staged.find((s) => s.fields.wagerOpenings !== undefined)!;
@@ -555,6 +555,60 @@ describe('demo sidecar wire contract', () => {
           54321n,
           submissionRandFor(0n, 'B'),
         ]);
+      } finally {
+        await close();
+      }
+    });
+    it('settles a both-gave-up wager as a refund (winner null, no NFT)', async () => {
+      const { postTo, deps, close } = await freshSidecar();
+      try {
+        await postTo('/wager/create', {
+          athlete: 'A',
+          opponent: 'B',
+          metricId: '0x1',
+          stake: stakeOf(10),
+          deadlineBlock: pastDeadline(),
+        });
+        await postTo('/wager/accept', { athlete: 'B', id: '0x0' });
+        // neither side submits — settle must refund both (winner null)
+        const settled = await postTo('/wager/settle', { id: '0x0' });
+        expect(settled.status).toBe(200);
+        const body = (await settled.json()) as Record<string, unknown>;
+        expect(body.winner).toBeNull();
+        expect(body.nft).toBeNull();
+        expect(body.disclosed).toEqual({ A: null, B: null });
+        const openingsStage = deps.staged.find((s) => s.fields.wagerOpenings !== undefined);
+        // the refund branch ignores openings — zeros staged
+        expect(openingsStage?.fields.wagerOpenings).toEqual([
+          0n,
+          new Uint8Array(32),
+          0n,
+          new Uint8Array(32),
+        ]);
+      } finally {
+        await close();
+      }
+    });
+
+    it('settles a one-sided wager as a forfeit to the submitter', async () => {
+      const { postTo, close } = await freshSidecar();
+      try {
+        await postTo('/wager/create', {
+          athlete: 'A',
+          opponent: 'B',
+          metricId: '0x1',
+          stake: stakeOf(10),
+          deadlineBlock: pastDeadline(),
+        });
+        await postTo('/wager/accept', { athlete: 'B', id: '0x0' });
+        await postTo('/attest', { artifacts: { identifier: 'fixture-A' } });
+        await postTo('/wager/submit', { athlete: 'A', id: '0x0' });
+        const settled = await postTo('/wager/settle', { id: '0x0' });
+        expect(settled.status).toBe(200);
+        const body = (await settled.json()) as Record<string, unknown>;
+        expect(body.winner).toBe('A');
+        expect(body.nft).not.toBeNull();
+        expect(body.disclosed).toEqual({ A: expect.any(String), B: null });
       } finally {
         await close();
       }
@@ -597,7 +651,7 @@ describe('demo sidecar wire contract', () => {
         });
         const early = await postTo('/wager/settle', { id: '0x0' });
         expect(early.status).toBe(400);
-        expect(((await early.json()) as Record<string, unknown>).error).toMatch(/both submissions/);
+        expect(((await early.json()) as Record<string, unknown>).error).toMatch(/deadline not reached/);
 
         await postTo('/wager/accept', { athlete: 'B', id: '0x0' });
         await postTo('/attest', { artifacts: { identifier: 'fixture-A' } });

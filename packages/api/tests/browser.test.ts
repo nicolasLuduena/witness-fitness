@@ -80,8 +80,8 @@ const realisticPrivateState = (): PrivateState => ({
     { announcement: { x: 0n, y: 1n }, response: 0n },
   ],
   commitRand: new Uint8Array(32).fill(0x11),
-  submissionRand: 42n,
-  wagerOpenings: [1n, 2n, 3n, 4n],
+  submissionRand: new Uint8Array(32).fill(0x22),
+  wagerOpenings: [1n, new Uint8Array(32).fill(2), 3n, new Uint8Array(32).fill(4)],
 });
 
 describe('browser provider stack', () => {
