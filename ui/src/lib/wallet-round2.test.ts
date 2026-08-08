@@ -32,7 +32,6 @@ import { createStubWalletBridge, type WalletBridge } from './wallet-bridge';
 import { StravaFlowError, WalletClient } from './wallet-client';
 import { attestStrava } from './attest/attest-browser';
 import { localStorageTokenStore } from './attest/strava';
-import { OPENING_RELAY_TIMEOUT } from './wager-relay';
 
 // A REAL bech32m unshielded address for the 'undeployed' network (32 bytes of
 // 0x07 — precomputed with UnshieldedAddress.codec.encode; hardcoded because
@@ -44,6 +43,21 @@ vi.mock('./attest/attest-browser', async (importOriginal) => {
   const mod = (await importOriginal()) as typeof import('./attest/attest-browser');
   return { ...mod, attestStrava: vi.fn() };
 });
+
+// loadDeployInfo now fails LOUD when /deploy-output.json is missing (no
+// silent FALLBACK constants) — wallet tests stub it with a fixed deployment.
+vi.mock('./deploy-info', () => ({
+  loadDeployInfo: vi.fn(async () => ({
+    contractAddress: '0x' + 'cf80ad42'.padEnd(64, '0'),
+    network: 'local-devnet',
+    notaryKeys: [
+      { id: 'notary-1', x: '0x3862', y: '0x43c0' },
+      { id: 'notary-2', x: '0x58da', y: '0x6633' },
+      { id: 'notary-3', x: '0x6b58', y: '0x19b5' },
+    ],
+  })),
+  shortContract: (address: string) => address,
+}));
 
 const attestStravaMock = vi.mocked(attestStrava);
 
@@ -273,15 +287,32 @@ describe('two-browser wager flow (create → accept → submit → relay → set
         return jsonResponse([{ id: 1, distance: 1000 }]);
       }
       if (u.endsWith('/wager-openings') && init?.method === 'POST') {
+        // Strict-fake relay: mirror the sidecar's /wager-openings validation
+        // (demo-sidecar.ts handleOpeningsDeposit) so a wire-shape drift like
+        // the numeric-wagerId bug fails the duel test loudly.
         const body = JSON.parse(String(init.body)) as {
-          wagerId: number;
+          wagerId: unknown;
           who: string;
           value: string;
           rand: string;
         };
-        const list = relayOpenings.get(body.wagerId) ?? [];
+        if (
+          typeof body.wagerId !== 'string' ||
+          body.wagerId === '' ||
+          (body.who !== 'A' && body.who !== 'B') ||
+          typeof body.value !== 'string' ||
+          typeof body.rand !== 'string' ||
+          !/^0x[0-9a-f]+$/i.test(body.value) ||
+          !/^0x[0-9a-f]+$/i.test(body.rand)
+        ) {
+          return jsonResponse(
+            { error: 'body must be { wagerId, who: "A"|"B", value: 0x-hex, rand: 0x-hex }' },
+            400
+          );
+        }
+        const list = relayOpenings.get(Number(body.wagerId)) ?? [];
         list.push({ who: body.who, value: body.value, rand: body.rand });
-        relayOpenings.set(body.wagerId, list);
+        relayOpenings.set(Number(body.wagerId), list);
         return jsonResponse({ stored: true });
       }
       const match = u.match(/\/wager-openings\/(\d+)$/);
@@ -392,16 +423,113 @@ describe('two-browser wager flow (create → accept → submit → relay → set
     expect(settled.result?.disclosed).toBe(true);
     expect(settled.result?.summary).toContain('wins 20 NIGHT');
 
-    // the losing side sees the same reveal from their own wallet — with the
-    // winner's identity SEALED (privacy: opponents see synthetic athletes)
+    // The losing side's browser did NOT settle (only the settler stages the
+    // openings), and the ledger stores only sealed commitments — so their
+    // view reports the settlement WITHOUT values or a winner (audit P1-F:
+    // never present commitments as values). Winner identity stays sealed.
     const bView = (await clientB.listWagers()).find((w) => w.id === wagerId);
-    expect(bView?.result?.winner?.holderBinding).toBe(sessionA.athlete.holderBinding);
-    expect(bView?.result?.winner?.name).toMatch(/^Athlete 0x/);
-    expect(bView?.result?.challengerValue).toBe(3900);
-    expect(bView?.result?.opponentValue).toBe(2426);
+    expect(bView?.result?.disclosed).toBe(false);
+    expect(bView?.result?.winner).toBeUndefined();
+    expect(bView?.result?.challengerValue).toBeUndefined();
+    expect(bView?.result?.opponentValue).toBeUndefined();
+    expect(bView?.result?.summary).toContain('both sealed submissions counted');
   });
 
-  it('settle fails with a clear error when the opponent never relayed', async () => {
+  it('settles from a fresh client (page reload) by recovering my opening from the relay', async () => {
+    setupRelay();
+    localStorageTokenStore.save(stravaTokens('A', 'One', 1));
+    const { client: clientA, session: sessionA } = await connectClient('alice');
+    localStorageTokenStore.save(stravaTokens('B', 'Two', 2));
+    const { client: clientB, session: sessionB } = await connectClient('bob');
+    await attestBoth(clientA, clientB);
+    const created = await clientA.createWager({
+      opponent: {
+        name: 'opponent',
+        handle: 'opponent',
+        role: 'opponent',
+        holderBinding: sessionB.athlete.holderBinding,
+      },
+      metricId: 1n,
+      stake: 5,
+      deadlineBlock: BigInt(Math.floor(Date.now() / 1000) + 90),
+    });
+    const wagerId = created.id;
+    await clientB.acceptWager(wagerId);
+    await clientA.submitWorkout(wagerId, (await clientA.vault())[0].id);
+    await clientB.submitWorkout(wagerId, (await clientB.vault())[0].id);
+
+    // Simulate a reload: a NEW WalletClient for the same wallet/bridge —
+    // its session-only `openings` map is empty, so settle must recover
+    // A's opening from the relay (both sides posted at submit time).
+    const { client: freshA } = await connectClient('alice');
+    const result = await freshA.settleWager(wagerId);
+    expect(result.reveal.comparison).toEqual({ challengerValue: 3900, opponentValue: 2426 });
+    expect(result.wager.status).toBe('settled');
+    // The winner is the challenger (A) — the fresh client sees itself as the
+    // challenger (same holder binding); the shared test localStorage carries
+    // B's Strava tokens, so assert by binding, not by name.
+    expect(result.wager.result?.winner?.holderBinding).toBe(sessionA.athlete.holderBinding);
+  });
+
+  it('settles a both-gave-up wager as a refund (no openings needed)', async () => {
+    setupRelay();
+    localStorageTokenStore.save(stravaTokens('A', 'One', 1));
+    const { client: clientA, session: sessionA } = await connectClient('alice');
+    localStorageTokenStore.save(stravaTokens('B', 'Two', 2));
+    const { client: clientB, session: sessionB } = await connectClient('bob');
+    const created = await clientA.createWager({
+      opponent: {
+        name: 'opponent',
+        handle: 'opponent',
+        role: 'opponent',
+        holderBinding: sessionB.athlete.holderBinding,
+      },
+      metricId: 1n,
+      stake: 5,
+      deadlineBlock: BigInt(Math.floor(Date.now() / 1000) + 90),
+    });
+    void sessionA;
+    await clientB.acceptWager(created.id);
+    // neither side submits — either side can settle for the refund
+    const result = await clientA.settleWager(created.id);
+    expect(result.wager.status).toBe('settled');
+    expect(result.wager.result?.forfeit).toBe(false);
+    expect(result.wager.result?.winner).toBeUndefined();
+    expect(result.wager.result?.summary).toContain('Neither submitted — both stakes refunded');
+    expect(result.reveal.comparison).toBeUndefined();
+  });
+
+  it('settles a one-sided wager as a forfeit to the submitter (opponent browser settles)', async () => {
+    setupRelay();
+    localStorageTokenStore.save(stravaTokens('A', 'One', 1));
+    const { client: clientA, session: sessionA } = await connectClient('alice');
+    localStorageTokenStore.save(stravaTokens('B', 'Two', 2));
+    const { client: clientB, session: sessionB } = await connectClient('bob');
+    await attestBoth(clientA, clientB);
+    const created = await clientA.createWager({
+      opponent: {
+        name: 'opponent',
+        handle: 'opponent',
+        role: 'opponent',
+        holderBinding: sessionB.athlete.holderBinding,
+      },
+      metricId: 1n,
+      stake: 5,
+      deadlineBlock: BigInt(Math.floor(Date.now() / 1000) + 90),
+    });
+    const wagerId = created.id;
+    await clientB.acceptWager(wagerId);
+    // only A submits — B (no local opening) settles → forfeit to A
+    await clientA.submitWorkout(wagerId, (await clientA.vault())[0].id);
+    const result = await clientB.settleWager(wagerId);
+    expect(result.wager.status).toBe('settled');
+    expect(result.wager.result?.forfeit).toBe(true);
+    expect(result.wager.result?.winner?.holderBinding).toBe(sessionA.athlete.holderBinding);
+    expect(result.wager.result?.summary).toContain('by forfeit');
+    expect(result.reveal.comparison).toBeUndefined();
+  });
+
+  it('settles as a forfeit when the opponent never submits (their opening never relays)', async () => {
     setupRelay();
     localStorageTokenStore.save(stravaTokens('A', 'One', 1));
     const { client: clientA, session: sessionA } = await connectClient('alice');
@@ -421,15 +549,16 @@ describe('two-browser wager flow (create → accept → submit → relay → set
       stake: 1,
       deadlineBlock: BigInt(Math.floor(Date.now() / 1000) + 90),
     });
-    await clientB.acceptWager(created.id);
+    const wagerId = created.id;
+    await clientB.acceptWager(wagerId);
     // only A submits — B never seals, so only A's opening is relayed
-    await clientA.submitWorkout(created.id, (await clientA.vault())[0].id);
-    OPENING_RELAY_TIMEOUT.ms = 400;
-    try {
-      await expect(clientA.settleWager(created.id)).rejects.toThrow(/never reached the relay|opponent/);
-    } finally {
-      OPENING_RELAY_TIMEOUT.ms = 60_000;
-    }
+    await clientA.submitWorkout(wagerId, (await clientA.vault())[0].id);
+    // one-sided wagers settle by forfeit — the relay wait is skipped entirely
+    const result = await clientA.settleWager(wagerId);
+    expect(result.wager.status).toBe('settled');
+    expect(result.wager.result?.forfeit).toBe(true);
+    expect(result.wager.result?.winner?.holderBinding).toBe(sessionA.athlete.holderBinding);
+    expect(relayOpenings.get(wagerId)?.map((o) => o.who)).toEqual(['A']);
   });
 });
 
@@ -448,10 +577,29 @@ describe('settle edge cases (tie)', () => {
     (globalThis as { fetch?: unknown }).fetch = vi.fn(async (url: unknown, init?: RequestInit) => {
       const u = String(url);
       if (u.endsWith('/wager-openings') && init?.method === 'POST') {
-        const body = JSON.parse(String(init.body)) as { wagerId: number };
-        const list = relayOpenings.get(body.wagerId) ?? [];
-        list.push(JSON.parse(String(init.body)));
-        relayOpenings.set(body.wagerId, list);
+        const body = JSON.parse(String(init.body)) as {
+          wagerId: unknown;
+          who: string;
+          value: string;
+          rand: string;
+        };
+        if (
+          typeof body.wagerId !== 'string' ||
+          body.wagerId === '' ||
+          (body.who !== 'A' && body.who !== 'B') ||
+          typeof body.value !== 'string' ||
+          typeof body.rand !== 'string' ||
+          !/^0x[0-9a-f]+$/i.test(body.value) ||
+          !/^0x[0-9a-f]+$/i.test(body.rand)
+        ) {
+          return jsonResponse(
+            { error: 'body must be { wagerId, who: "A"|"B", value: 0x-hex, rand: 0x-hex }' },
+            400
+          );
+        }
+        const list = relayOpenings.get(Number(body.wagerId)) ?? [];
+        list.push({ who: body.who, value: body.value, rand: body.rand });
+        relayOpenings.set(Number(body.wagerId), list);
         return jsonResponse({ stored: true });
       }
       const match = u.match(/\/wager-openings\/(\d+)$/);

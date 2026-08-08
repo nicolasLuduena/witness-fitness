@@ -61,6 +61,7 @@ import {
 } from './attest/strava';
 import {
   OPENING_RELAY_TIMEOUT,
+  getWagerOpenings,
   hexOf as hexOfBigint,
   postWagerOpening,
   waitForBothOpenings,
@@ -89,19 +90,17 @@ const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 export const walletStoreName = (coinPublicKey: string): string =>
   `wf-wallet-${coinPublicKey.replace(/[^a-zA-Z0-9]/g, '').slice(-24)}`;
 
-const bytesToBigInt = (bytes: Uint8Array): bigint => {
-  let value = 0n;
-  for (const b of bytes) {
-    value = (value << 8n) | BigInt(b);
-  }
-  return value;
-};
-
-const hexOf = (bytes: Uint8Array): string =>
+const bytesToHex = (bytes: Uint8Array): string =>
   '0x' + Array.from(bytes).map((b) => b.toString(16).padStart(2, '0')).join('');
 
-// The contract's Field is ~253 bits; keep the rand well inside it.
-const FIELD_SAFE_MASK = (1n << 248n) - 1n;
+const hexToBytes = (hex: string): Uint8Array => {
+  const bare = hex.replace(/^0x/, '');
+  const out = new Uint8Array(bare.length / 2);
+  for (let i = 0; i * 2 < bare.length; i += 1) {
+    out[i] = Number.parseInt(bare.slice(i * 2, i * 2 + 2), 16);
+  }
+  return out;
+};
 
 const parseHolderBinding = (input: string): bigint => {
   const hex = input.trim().replace(/^0x/, '');
@@ -134,7 +133,6 @@ export class WalletClient implements WfClient {
   private connection: WalletConnection | null = null;
   private session: WalletStrideSession | null = null;
   private stravaIdentity: AthleteIdentity | null = null;
-  private lastVaultKey: Uint8Array | null = null;
 
   // Per-credential notarized attestations (needed to re-stage at submit time
   // — the private state holds only the LATEST assertion).
@@ -143,8 +141,8 @@ export class WalletClient implements WfClient {
 
   // My remembered (value, rand) opening per wager + the last settle's
   // openings (for the reveal). Session-only — NOT part of the backup.
-  private openings = new Map<number, { value: bigint; rand: bigint }>();
-  private lastOpenings = new Map<number, { challenger: { value: bigint; rand: bigint }; opponent: { value: bigint; rand: bigint } }>();
+  private openings = new Map<number, { value: bigint; rand: Uint8Array }>();
+  private lastOpenings = new Map<number, { challenger: { value: bigint; rand: Uint8Array }; opponent: { value: bigint; rand: Uint8Array } }>();
 
   private storeName(): string {
     if (!this.connection) throw new Error('wallet not connected');
@@ -283,14 +281,13 @@ export class WalletClient implements WfClient {
     mark('chain', 'active');
     await delay(180);
     mark('chain', 'done');
-    this.lastVaultKey = attested.vaultKey;
     this.rememberAttestation(attested);
 
     return { credential: this.credentialFrom(attested), stages, replayed: false };
   }
 
   private rememberAttestation(attested: WalletAttestResult): void {
-    const key = hexOf(attested.vaultKey);
+    const key = bytesToHex(attested.vaultKey);
     const shortId = hexShort(key, 12, 8);
     this.attestations.set(key, { attestation: attested.attestation, metrics: attested.metrics, txHash: attested.txHash });
     this.shortIdIndex.set(shortId, key);
@@ -304,7 +301,7 @@ export class WalletClient implements WfClient {
   }
 
   private credentialFrom(attested: WalletAttestResult): AttestedCredential {
-    const key = hexOf(attested.vaultKey);
+    const key = bytesToHex(attested.vaultKey);
     const base = credentialFromVaultEntry(key, attested.txHash, Date.now(), attested.metrics);
     return {
       ...base,
@@ -334,6 +331,9 @@ export class WalletClient implements WfClient {
       );
       result.push({ ...credential, athlete: mine, source: 'live-session' });
     }
+    // Newest first — the ledger Map's iteration order is NOT insertion order,
+    // and screens rely on credentials[0] being the LATEST attested workout.
+    result.sort((a, b) => b.timestamp - a.timestamp);
     return result;
   }
 
@@ -390,7 +390,9 @@ export class WalletClient implements WfClient {
     const session = this.requireSession();
     const record = this.attestationFor(credentialId);
     if (!record) {
-      throw new Error('credential not found — attest a workout first');
+      throw new Error(
+        'credential not found in this session — only workouts attested in this session can be sealed (re-attest the workout, then submit)'
+      );
     }
     const wagers = await session.listWagers();
     const wager = wagers.find((w) => Number(w.id) === id);
@@ -414,49 +416,88 @@ export class WalletClient implements WfClient {
     return view;
   }
 
-  // Settle: ensure MY opening is on the relay, poll until BOTH are present,
-  // stage [challenger, opponent] into private-state wagerOpenings (order is
-  // contract law: challenger first), then settleWager on-chain.
+  // Settle: when BOTH submissions exist, ensure MY opening is on the relay,
+  // poll until both are present, stage [challenger, opponent] into
+  // private-state wagerOpenings (order is contract law: challenger first),
+  // then settleWager on-chain. When fewer than two submissions exist
+  // (forfeit / both-gave-up), the contract ignores the openings — settle with
+  // the defaults so the refund path is reachable from any browser.
   async settleWager(id: number): Promise<WagerSettleResult> {
     const session = this.requireSession();
     const wagers = await session.listWagers();
     const wager = wagers.find((w) => Number(w.id) === id);
     if (!wager) throw new Error(`unknown wager ${id}`);
-    const myOpening = this.openings.get(id);
-    if (!myOpening) {
-      throw new Error('no recorded opening for this wager — submit your workout first');
-    }
-    const mySide = wager.challenger === BigInt(session.holderBinding) ? 'A' : 'B';
-    await postWagerOpening(id, mySide, myOpening.value, myOpening.rand);
+    const bothSubmitted = wager.challengerSubmission.is_some && wager.opponentSubmission.is_some;
 
-    const relayed = await waitForBothOpenings(id, { timeoutMs: OPENING_RELAY_TIMEOUT.ms });
-    const openings = {
-      challenger: { value: BigInt(relayed.challenger.value), rand: BigInt(relayed.challenger.rand) },
-      opponent: { value: BigInt(relayed.opponent.value), rand: BigInt(relayed.opponent.rand) },
+    let openings: {
+      challenger: { value: bigint; rand: Uint8Array };
+      opponent: { value: bigint; rand: Uint8Array };
     };
-    const mineRelayed =
-      (relayed.challenger.rand === hexOfBigint(myOpening.rand) &&
-        relayed.challenger.value === hexOfBigint(myOpening.value)) ||
-      (relayed.opponent.rand === hexOfBigint(myOpening.rand) &&
-        relayed.opponent.value === hexOfBigint(myOpening.value));
-    if (!mineRelayed) {
-      throw new Error('the relayed openings do not include your submission — retry settle');
+    if (bothSubmitted) {
+      const mySide = wager.challenger === BigInt(session.holderBinding) ? 'A' : 'B';
+      let myOpening: { value: bigint; rand: Uint8Array } | null = this.openings.get(id) ?? null;
+      if (!myOpening) {
+        // The (value, rand) pair is session-only — after a page reload the
+        // relay is the source of truth: BOTH sides posted at submit time
+        // (TTL 30 min), so my opening is recoverable from it.
+        myOpening = await this.relayOpeningFor(id, mySide);
+        if (!myOpening) {
+          throw new Error(
+            'no recorded opening for this wager and none on the relay for your side — your submission likely predates the relay fix or is older than the relay TTL (30 min). Attest a fresh workout, submit it to this wager, then settle.'
+          );
+        }
+      }
+      await postWagerOpening(id, mySide, myOpening.value, myOpening.rand);
+
+      const relayed = await waitForBothOpenings(id, { timeoutMs: OPENING_RELAY_TIMEOUT.ms });
+      openings = {
+        challenger: { value: BigInt(relayed.challenger.value), rand: hexToBytes(relayed.challenger.rand) },
+        opponent: { value: BigInt(relayed.opponent.value), rand: hexToBytes(relayed.opponent.rand) },
+      };
+      const mineRelayed =
+        (relayed.challenger.rand === bytesToHex(myOpening.rand) &&
+          relayed.challenger.value === hexOfBigint(myOpening.value)) ||
+        (relayed.opponent.rand === bytesToHex(myOpening.rand) &&
+          relayed.opponent.value === hexOfBigint(myOpening.value));
+      if (!mineRelayed) {
+        throw new Error('the relayed openings do not include your submission — retry settle');
+      }
+    } else {
+      openings = {
+        challenger: { value: 0n, rand: new Uint8Array(32) },
+        opponent: { value: 0n, rand: new Uint8Array(32) },
+      };
     }
 
     await session.settleWager(BigInt(id), openings);
-    this.lastOpenings.set(id, openings);
+    if (bothSubmitted) {
+      this.lastOpenings.set(id, openings);
+    }
     const view = (await this.listWagers()).find((w) => w.id === id);
     if (!view) throw new Error(`wager ${id} not found`);
     return {
       wager: view,
       reveal: {
         sealedForRoom: true,
-        comparison: {
-          challengerValue: Number(openings.challenger.value),
-          opponentValue: Number(openings.opponent.value),
-        },
+        ...(bothSubmitted
+          ? {
+              comparison: {
+                challengerValue: Number(openings.challenger.value),
+                opponentValue: Number(openings.opponent.value),
+              },
+            }
+          : {}),
       },
     };
+  }
+
+  // Recover MY opening from the relay after a page reload (both sides post
+  // at submit time; TTL 30 min). Returns null when my side never relayed —
+  // the caller errors loudly then.
+  private async relayOpeningFor(id: number, mySide: 'A' | 'B'): Promise<{ value: bigint; rand: Uint8Array } | null> {
+    const openings = await getWagerOpenings(id);
+    const mine = openings.find((o) => o.who === mySide);
+    return mine ? { value: BigInt(mine.value), rand: hexToBytes(mine.rand) } : null;
   }
 
   private claimValueFor(record: AttestationRecord, metricId: bigint): bigint {
@@ -470,8 +511,9 @@ export class WalletClient implements WfClient {
     return claim.value;
   }
 
-  private freshSubmissionRand(): bigint {
-    return bytesToBigInt(crypto.getRandomValues(new Uint8Array(32))) & FIELD_SAFE_MASK;
+  // 32 random bytes — the persistentCommit rand (audit L1). No field mask.
+  private freshSubmissionRand(): Uint8Array {
+    return crypto.getRandomValues(new Uint8Array(32));
   }
 
   private async myRouting(): Promise<WalletWagerRouting> {
@@ -538,14 +580,14 @@ export class WalletClient implements WfClient {
       submissions.push({
         athlete: challenger,
         sealed: true,
-        commitment: hexShort(bigintToHex(w.challengerSubmission.value), 10, 8),
+        commitment: hexShort(bytesToHex(w.challengerSubmission.value), 10, 8),
       });
     }
     if (w.opponentSubmission.is_some) {
       submissions.push({
         athlete: opponent,
         sealed: true,
-        commitment: hexShort(bigintToHex(w.opponentSubmission.value), 10, 8),
+        commitment: hexShort(bytesToHex(w.opponentSubmission.value), 10, 8),
       });
     }
 
@@ -577,41 +619,84 @@ export class WalletClient implements WfClient {
     stakeNIGHT: number
   ): WagerResult {
     const openings = this.lastOpenings.get(Number(w.id));
-    const challengerValue = openings
-      ? Number(openings.challenger.value)
-      : w.challengerSubmission.is_some
-        ? Number(w.challengerSubmission.value)
-        : undefined;
-    const opponentValue = openings
-      ? Number(openings.opponent.value)
-      : w.opponentSubmission.is_some
-        ? Number(w.opponentSubmission.value)
-        : undefined;
     const pot = stakeNIGHT * 2;
-    const forfeit = !(challengerValue !== undefined && opponentValue !== undefined);
-    const tie = !forfeit && challengerValue === opponentValue;
-    let winner: Athlete | undefined;
-    if (forfeit) {
-      winner = challengerValue !== undefined ? challenger : opponentValue !== undefined ? opponent : undefined;
-    } else if (!tie) {
-      winner = (challengerValue ?? 0) > (opponentValue ?? 0) ? challenger : opponent;
+    const challengerSubmitted = w.challengerSubmission.is_some;
+    const opponentSubmitted = w.opponentSubmission.is_some;
+    const forfeit = challengerSubmitted !== opponentSubmitted;
+
+    // Full disclosure only when THIS browser settled (it staged both
+    // openings). The ledger stores SEALED commitments — never present them
+    // as values (audit P1-F).
+    if (openings) {
+      const challengerValue = Number(openings.challenger.value);
+      const opponentValue = Number(openings.opponent.value);
+      const tie = !forfeit && challengerValue === opponentValue;
+      let winner: Athlete | undefined;
+      if (forfeit) {
+        winner = challengerSubmitted ? challenger : opponent;
+      } else if (!tie) {
+        winner = challengerValue > opponentValue ? challenger : opponent;
+      }
+      return {
+        winner,
+        tie,
+        forfeit,
+        pot,
+        currency: 'NIGHT',
+        disclosed: true,
+        challengerValue,
+        opponentValue,
+        nft: undefined, // the winner NFT mints to the winner's coin key — not observable from the wallet's contract view
+        summary: forfeit
+          ? `${winner?.name ?? 'The submitter'} wins ${pot} NIGHT by forfeit`
+          : tie
+            ? `Tie — both stakes refunded (${pot} NIGHT pot)`
+            : `${winner?.name} wins ${pot} NIGHT — sealed comparison revealed at settlement`,
+      };
     }
-    const disclosed = openings !== undefined;
+
+    // No local openings (opponent's browser, or after a reload): the winner
+    // is not recorded on-chain, so no values and no winner name are shown.
+    if (challengerSubmitted && opponentSubmitted) {
+      return {
+        winner: undefined,
+        tie: false,
+        forfeit: false,
+        pot,
+        currency: 'NIGHT',
+        disclosed: false,
+        challengerValue: undefined,
+        opponentValue: undefined,
+        nft: undefined,
+        summary: `Settled — both sealed submissions counted (${pot} NIGHT pot). The comparison was disclosed at settlement in the settling browser.`,
+      };
+    }
+    if (forfeit) {
+      const winner = challengerSubmitted ? challenger : opponent;
+      return {
+        winner,
+        tie: false,
+        forfeit: true,
+        pot,
+        currency: 'NIGHT',
+        disclosed: false,
+        challengerValue: undefined,
+        opponentValue: undefined,
+        nft: undefined,
+        summary: `${winner.name} wins ${pot} NIGHT by forfeit`,
+      };
+    }
     return {
-      winner,
-      tie,
-      forfeit,
+      winner: undefined,
+      tie: false,
+      forfeit: false,
       pot,
       currency: 'NIGHT',
-      disclosed,
-      challengerValue,
-      opponentValue,
-      nft: undefined, // the winner NFT mints to the winner's coin key — not observable from the wallet's contract view
-      summary: forfeit
-        ? `${winner?.name ?? 'The submitter'} wins ${pot} NIGHT by forfeit`
-        : tie
-          ? `Tie — both stakes refunded (${pot} NIGHT pot)`
-          : `${winner?.name} wins ${pot} NIGHT — sealed comparison disclosed`,
+      disclosed: false,
+      challengerValue: undefined,
+      opponentValue: undefined,
+      nft: undefined,
+      summary: `Neither submitted — both stakes refunded (${pot} NIGHT pot)`,
     };
   }
 
@@ -625,7 +710,7 @@ export class WalletClient implements WfClient {
 
   async advanceStreak(): Promise<StreakView> {
     const session = this.requireSession();
-    const vaultKey = await this.currentVaultKey(session);
+    const vaultKey = await this.stagedVaultKey(session);
     const result = await session.advanceStreak(vaultKey);
     return streakViewFrom(
       { streakCount: result.streakCount, lastDay: result.lastDay },
@@ -641,7 +726,7 @@ export class WalletClient implements WfClient {
 
   async mintBadge(badgeId: number): Promise<BadgeView> {
     const session = this.requireSession();
-    const vaultKey = await this.currentVaultKey(session);
+    const vaultKey = await this.stagedVaultKey(session);
     const result = await session.mintBadge(badgeId, vaultKey);
     const badge = BADGES.find((b) => b.id === badgeId);
     if (!badge) throw new Error(`unknown badge ${badgeId}`);
@@ -651,8 +736,10 @@ export class WalletClient implements WfClient {
 
   async proveBadge(badgeId: number, verifier: string): Promise<BadgeProof> {
     const session = this.requireSession();
-    const verifierBinding =
-      BigInt(verifier.replace(/0x|[^0-9a-fA-F]/g, '').slice(0, 8)) || 1n;
+    // The verifier must be a real holder binding (0x + 64 hex) — the circuit
+    // discloses it as the third party's identity. Handles/junk strings are
+    // rejected loudly instead of being hashed into a 32-bit guess (audit P2-H).
+    const verifierBinding = parseHolderBinding(verifier);
     const result = await session.proveBadge(badgeId, verifierBinding);
     if (!result.verified) throw new Error(`verification failed for badge ${badgeId}`);
     const badge = BADGES.find((b) => b.id === badgeId);
@@ -699,21 +786,14 @@ export class WalletClient implements WfClient {
     await bridge.resetPrivateState(this.storeName());
   }
 
-  private async currentVaultKey(session: WalletStrideSession): Promise<Uint8Array> {
-    if (this.lastVaultKey) return this.lastVaultKey;
-    const state = await session.readState();
-    const myBig = this.myBindingBig();
-    const mine = vaultEntriesOf(state.vault).find(
-      (entry) => myBig === null || entry.holderBinding === null || entry.holderBinding === myBig
-    );
-    if (!mine) throw new Error('no vaulted credential — attest a workout first');
-    const bytes = new Uint8Array(32);
-    const hex = mine.vaultKey.replace(/^0x/, '');
-    for (let i = 0; i < 32 && i * 2 < hex.length; i += 1) {
-      bytes[i] = Number.parseInt(hex.slice(i * 2, i * 2 + 2), 16) || 0;
-    }
-    this.lastVaultKey = bytes;
-    return bytes;
+  // The vault key the streak/badge circuits can actually open: the CURRENTLY
+  // STAGED attestation (the only one the private state holds). No
+  // vault-iteration guesses — those can pick a credential whose assertion is
+  // not staged and fail with "Credential does not open to this assertion".
+  private async stagedVaultKey(session: WalletStrideSession): Promise<Uint8Array> {
+    const key = await session.stagedVaultKey();
+    if (!key) throw new Error('no attestation staged — attest a workout first');
+    return key;
   }
 
   private myBindingBig(): bigint | null {

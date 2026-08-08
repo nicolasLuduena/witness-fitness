@@ -93,7 +93,9 @@ export interface WalletAttestation {
 
 export interface WalletWagerOpening {
   value: bigint;
-  rand: bigint;
+  // Bytes<32> — the sealed submission commitment is persistentCommit (audit
+  // L1), which takes a Bytes<32> rand.
+  rand: Uint8Array;
 }
 
 export interface WalletWagerRouting {
@@ -110,8 +112,10 @@ export interface WalletWagerView {
   deadlineBlock: bigint;
   accepted: boolean;
   settled: boolean;
-  challengerSubmission: { is_some: boolean; value: bigint };
-  opponentSubmission: { is_some: boolean; value: bigint };
+  // Sealed submissions: persistentCommit<Field>(value, rand) → Bytes<32>
+  // (audit L1) — the ledger stores bytes, never the plaintext value.
+  challengerSubmission: { is_some: boolean; value: Uint8Array };
+  opponentSubmission: { is_some: boolean; value: Uint8Array };
 }
 
 export interface WalletAttestResult {
@@ -148,7 +152,12 @@ export interface WalletStrideSession {
     id: bigint,
     openings: { challenger: WalletWagerOpening; opponent: WalletWagerOpening }
   ): Promise<{ txHash: string }>;
-  stageSubmissionRand(rand: bigint): Promise<void>;
+  stageSubmissionRand(rand: Uint8Array): Promise<void>;
+  // The vault key of the attestation CURRENTLY staged in the private state
+  // (pureCircuits.computeVaultKey(assertion, commitRand)) — the only key the
+  // streak/badge circuits can open (persistentCommit(assertion, rand) == key).
+  // null when nothing is staged. Never derived from vault iteration order.
+  stagedVaultKey(): Promise<Uint8Array | null>;
   advanceStreak(vaultKey: Uint8Array): Promise<{ streakCount: bigint; lastDay: bigint }>;
   mintBadge(badgeId: number, vaultKey: Uint8Array): Promise<{ minted: boolean }>;
   proveBadge(badgeId: number, verifierBinding: bigint): Promise<{ verified: boolean; verifierBinding: bigint }>;
@@ -200,6 +209,27 @@ interface StoredState {
 const hexOf = (bytes: Uint8Array): string =>
   '0x' + Array.from(bytes).map((b) => b.toString(16).padStart(2, '0')).join('');
 
+const bytesOf = (hex: string): Uint8Array => {
+  const bare = hex.replace(/^0x/, '');
+  const out = new Uint8Array(Math.ceil(bare.length / 2));
+  for (let i = 0; i * 2 < bare.length; i += 1) {
+    out[i] = Number.parseInt(bare.slice(i * 2, i * 2 + 2), 16) || 0;
+  }
+  return out;
+};
+
+// The stub's analogue of the contract's persistentCommit(value, rand): the
+// ledger stores a commitment, NEVER the plaintext value. The strict fake must
+// not leak values the real chain would keep sealed.
+const sealedCommit = (value: bigint, rand: Uint8Array): Uint8Array => {
+  const hex = sha256Hex(`wf-seal:${value.toString()}:${hexOf(rand)}`);
+  const out = new Uint8Array(32);
+  for (let i = 0; i < 32; i += 1) {
+    out[i] = Number.parseInt(hex.slice(i * 2, i * 2 + 2), 16);
+  }
+  return out;
+};
+
 export const createStubWalletBridge = (): WalletBridge => {
   // Module-level store keyed by storeName — survives page reloads within a
   // session; export/import is the durable path (localStorage in the UI).
@@ -232,7 +262,7 @@ export const createStubWalletBridge = (): WalletBridge => {
       return s;
     };
 
-    let stagedSubmissionRand = 1n;
+    let stagedSubmissionRand: Uint8Array = new Uint8Array(32).fill(1);
 
     return {
       contractAddress: lastContractAddress,
@@ -275,14 +305,21 @@ export const createStubWalletBridge = (): WalletBridge => {
           accepted: w.accepted,
           settled: w.settled,
           challengerSubmission: w.submissions.challenger
-            ? { is_some: true, value: w.submissions.challenger.value }
-            : { is_some: false, value: 0n },
+            ? { is_some: true, value: sealedCommit(w.submissions.challenger.value, w.submissions.challenger.rand) }
+            : { is_some: false, value: new Uint8Array(32) },
           opponentSubmission: w.submissions.opponent
-            ? { is_some: true, value: w.submissions.opponent.value }
-            : { is_some: false, value: 0n },
+            ? { is_some: true, value: sealedCommit(w.submissions.opponent.value, w.submissions.opponent.rand) }
+            : { is_some: false, value: new Uint8Array(32) },
         })),
       createWager: async ({ opponentBinding, metricId, stake, deadlineBlock, routing }) => {
-        void routing;
+        // Strict-fake contract: mirror the api flow's flat input requirement
+        // so client→bridge shape drift fails tests instead of silently
+        // passing undefined payout/coinKey to the real flow (audit P0-A).
+        if (!routing || !(routing.payout instanceof Uint8Array) || !routing.coinKey?.bytes) {
+          throw new Error(
+            'createWager requires routing { payout: Uint8Array, coinKey: { bytes } } — the real flow reads payout/coinKey flat'
+          );
+        }
         const id = nextWagerId;
         nextWagerId += 1n;
         wagers.set(id, {
@@ -305,9 +342,21 @@ export const createStubWalletBridge = (): WalletBridge => {
         return { txHash: '0x' + sha256Hex(`wf-accept:${id}`).slice(0, 64) };
       },
       submitWorkout: async (wagerId, attestation, value) => {
+        // Strict-fake contract: the real submitWorkoutFlow stages the full
+        // attestation into the private state (prepareAttestation reads
+        // .assertion/.signatures) — reject anything less loudly (audit P0-B).
+        if (
+          !attestation ||
+          typeof attestation.assertion !== 'object' ||
+          attestation.assertion === null ||
+          !Array.isArray(attestation.signatures)
+        ) {
+          throw new Error(
+            'submitWorkout requires the full attestation { assertion, signatures, commitRand, vaultKey } — the private state is staged from it'
+          );
+        }
         const w = wagers.get(wagerId);
         if (!w) throw new Error('unknown wager');
-        const s = state();
         const mine = BigInt('0x' + sha256Hex(storeName).slice(0, 64));
         const opening = { value, rand: stagedSubmissionRand };
         if (w.challenger === mine) {
@@ -317,27 +366,37 @@ export const createStubWalletBridge = (): WalletBridge => {
           if (w.submissions.opponent) throw new Error('already submitted');
           w.submissions.opponent = opening;
         }
-        void attestation;
-        void s;
         return { txHash: '0x' + sha256Hex(`wf-submit:${wagerId}:${mine}`).slice(0, 64) };
       },
       settleWager: async (id, openings) => {
         const w = wagers.get(id);
         if (!w) throw new Error('unknown wager');
         if (w.settled) throw new Error('wager settled');
-        const match = (expected: WalletWagerOpening | null, actual: WalletWagerOpening) =>
-          expected !== null && expected.value === actual.value && expected.rand === actual.rand;
-        if (!match(w.submissions.challenger, openings.challenger)) {
-          throw new Error('challenger opening does not match the sealed submission');
-        }
-        if (!match(w.submissions.opponent, openings.opponent)) {
-          throw new Error('opponent opening does not match the sealed submission');
+        // Faithful to the contract: the openings are only verified against
+        // the sealed commitments when BOTH submissions exist — the forfeit
+        // (one) and refund (none) branches ignore them entirely.
+        const both = w.submissions.challenger !== null && w.submissions.opponent !== null;
+        if (both) {
+          const match = (expected: WalletWagerOpening | null, actual: WalletWagerOpening) =>
+            expected !== null &&
+            keysEqual(sealedCommit(actual.value, actual.rand), sealedCommit(expected.value, expected.rand));
+          if (!match(w.submissions.challenger, openings.challenger)) {
+            throw new Error('challenger opening does not match the sealed submission');
+          }
+          if (!match(w.submissions.opponent, openings.opponent)) {
+            throw new Error('opponent opening does not match the sealed submission');
+          }
         }
         w.settled = true;
         return { txHash: '0x' + sha256Hex(`wf-settle:${id}`).slice(0, 64) };
       },
       stageSubmissionRand: async (rand) => {
         stagedSubmissionRand = rand;
+      },
+      stagedVaultKey: async () => {
+        const s = state();
+        const latest = s.attestations[s.attestations.length - 1];
+        return latest ? bytesOf(latest.vaultKeyHex) : null;
       },
       advanceStreak: async (vaultKey) => {
         const s = state();
@@ -424,6 +483,9 @@ const txHashOf = (tx: unknown): string => {
   return publicData && typeof publicData.txHash === 'string' ? publicData.txHash : '';
 };
 
+const keysEqual = (a: Uint8Array, b: Uint8Array): boolean =>
+  a.length === b.length && a.every((byte, index) => byte === b[index]);
+
 const claimsToMetrics = (claims: unknown): WalletMetric[] => {
   if (!Array.isArray(claims)) return [];
   return claims.map((raw) => {
@@ -436,8 +498,11 @@ const claimsToMetrics = (claims: unknown): WalletMetric[] => {
 };
 
 // Adapt the real StrideContract (api/browser) onto the session surface:
-// notary fan-out + the api demo flows + private-state staging.
-const adaptStrideSession = async (
+// notary fan-out + the api demo flows + private-state staging. Exported for
+// the adapter regression test (wallet-bridge-adapter.test.ts) — the stub
+// bridge voids the exact arguments that break the real path, so the real
+// adapter is tested against mocked api modules directly.
+export const adaptStrideSession = async (
   api: ConnectedAPI,
   contractAddress: string,
   privateStateId: string
@@ -503,7 +568,10 @@ const adaptStrideSession = async (
     proveBadgeFlow(ctx: unknown, badgeId: bigint, verifierBinding: bigint): Promise<unknown>;
   };
   const contractMod = (await import(/* @vite-ignore */ '@witnessfitness/contract')) as unknown as {
-    pureCircuits: { holderBinding(secret: Uint8Array): bigint };
+    pureCircuits: {
+      holderBinding(secret: Uint8Array): bigint;
+      computeVaultKey(assertion: unknown, commitRand: Uint8Array): Uint8Array;
+    };
   };
 
   const contract = await browserMod.joinStrideFromBrowser(api, contractAddress, privateStateId);
@@ -552,6 +620,15 @@ const adaptStrideSession = async (
     };
   };
 
+  const stagedVaultKey = async (): Promise<Uint8Array | null> => {
+    const ps = (await providers.privateStateProvider.get(privateStateId)) as
+      | { assertion?: unknown; commitRand?: Uint8Array }
+      | null
+      | undefined;
+    if (!ps?.assertion) return null;
+    return contractMod.pureCircuits.computeVaultKey(ps.assertion, ps.commitRand ?? new Uint8Array(32));
+  };
+
   return {
     contractAddress,
     holderBinding,
@@ -585,14 +662,24 @@ const adaptStrideSession = async (
           deadlineBlock: bigint;
           accepted: boolean;
           settled: boolean;
-          challengerSubmission: { is_some: boolean; value: bigint };
-          opponentSubmission: { is_some: boolean; value: bigint };
+          challengerSubmission: { is_some: boolean; value: Uint8Array };
+          opponentSubmission: { is_some: boolean; value: Uint8Array };
         };
         return { id, ...w };
       });
     },
     createWager: async (input) => {
-      const tx = await apiMod.createWagerFlow(ctx, input);
+      // The api flow's input is FLAT (payout/coinKey at top level); the
+      // session surface carries them nested under `routing`. Never pass the
+      // client input whole — undefined payout/coinKey breaks the escrow.
+      const tx = await apiMod.createWagerFlow(ctx, {
+        opponentBinding: input.opponentBinding,
+        metricId: input.metricId,
+        stake: input.stake,
+        deadlineBlock: input.deadlineBlock,
+        payout: input.routing.payout,
+        coinKey: input.routing.coinKey,
+      });
       return { txHash: txHashOf(tx) };
     },
     acceptWager: async (id, routing) => {
@@ -600,9 +687,12 @@ const adaptStrideSession = async (
       return { txHash: txHashOf(tx) };
     },
     submitWorkout: async (wagerId, attestation, value) => {
+      // submitWorkoutFlow expects the FULL notarized attestation (its
+      // prepareAttestation reads .assertion and .signatures from it) — never
+      // the bare assertion object, which would stage assertion: undefined.
       const tx = await apiMod.submitWorkoutFlow(
         ctx,
-        attestation.assertion,
+        attestation,
         attestation.commitRand,
         wagerId,
         attestation.vaultKey,
@@ -617,7 +707,7 @@ const adaptStrideSession = async (
           openings.challenger.rand,
           openings.opponent.value,
           openings.opponent.rand,
-        ] as [bigint, bigint, bigint, bigint],
+        ] as [bigint, Uint8Array, bigint, Uint8Array],
       });
       const tx = await apiMod.settleWagerFlow(ctx, id);
       return { txHash: txHashOf(tx) };
@@ -625,11 +715,20 @@ const adaptStrideSession = async (
     stageSubmissionRand: async (rand) => {
       await stage({ submissionRand: rand });
     },
+    stagedVaultKey,
     advanceStreak: async (vaultKey) => {
       const staged = await stagedAttestation();
       const ts = (staged.assertion as { timestamp?: bigint }).timestamp ?? 0n;
       const day = BigInt(Math.floor(Number(ts) / 86_400));
-      await apiMod.advanceStreakFlow(ctx, staged, staged.commitRand, vaultKey, day);
+      const stagedKey = contractMod.pureCircuits.computeVaultKey(staged.assertion, staged.commitRand);
+      // The contract opens ONLY persistentCommit(assertion, commitRand) — the
+      // caller's key must be that one, not a vault-iteration guess (audit P1).
+      if (!keysEqual(stagedKey, vaultKey)) {
+        throw new Error(
+          `credential ${hexOf(vaultKey)} is not the staged attestation (${hexOf(stagedKey)}) — use stagedVaultKey()`
+        );
+      }
+      await apiMod.advanceStreakFlow(ctx, staged, staged.commitRand, stagedKey, day);
       const state = await contract.readState();
       const binding = BigInt(holderBinding);
       const streak = state.streaks.member(binding)
@@ -639,7 +738,13 @@ const adaptStrideSession = async (
     },
     mintBadge: async (badgeId, vaultKey) => {
       const staged = await stagedAttestation();
-      await apiMod.mintBadgeFlow(ctx, staged, staged.commitRand, BigInt(badgeId), vaultKey);
+      const stagedKey = contractMod.pureCircuits.computeVaultKey(staged.assertion, staged.commitRand);
+      if (!keysEqual(stagedKey, vaultKey)) {
+        throw new Error(
+          `credential ${hexOf(vaultKey)} is not the staged attestation (${hexOf(stagedKey)}) — use stagedVaultKey()`
+        );
+      }
+      await apiMod.mintBadgeFlow(ctx, staged, staged.commitRand, BigInt(badgeId), stagedKey);
       return { minted: true };
     },
     proveBadge: async (badgeId, verifierBinding) => {

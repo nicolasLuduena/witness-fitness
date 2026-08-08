@@ -8,11 +8,26 @@
 // override) — vault/streak/badges/wagers must all map without throwing and
 // filter by holder binding.
 
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { ConnectedAPI, InitialAPI } from '@midnight-ntwrk/dapp-connector-api';
 import type { LedgerMapLike } from './state-mappers';
 import type { WalletBridge, WalletStrideSession, WalletWagerView } from './wallet-bridge';
 import { WalletClient } from './wallet-client';
+
+// loadDeployInfo now fails LOUD when /deploy-output.json is missing (no
+// silent FALLBACK constants) — wallet tests stub it with a fixed deployment.
+vi.mock('./deploy-info', () => ({
+  loadDeployInfo: vi.fn(async () => ({
+    contractAddress: '0x' + 'cf80ad42'.padEnd(64, '0'),
+    network: 'local-devnet',
+    notaryKeys: [
+      { id: 'notary-1', x: '0x3862', y: '0x43c0' },
+      { id: 'notary-2', x: '0x58da', y: '0x6633' },
+      { id: 'notary-3', x: '0x6b58', y: '0x19b5' },
+    ],
+  })),
+  shortContract: (address: string) => address,
+}));
 
 // ------------------------------------------------------------ shims --------
 
@@ -120,8 +135,8 @@ const stubSession = (): WalletStrideSession => ({
       deadlineBlock: NOW_UNIX + 90n,
       accepted: true,
       settled: false,
-      challengerSubmission: { is_some: true, value: 3545n },
-      opponentSubmission: { is_some: false, value: 0n },
+      challengerSubmission: { is_some: true, value: new Uint8Array(32).fill(7) },
+      opponentSubmission: { is_some: false, value: new Uint8Array(32) },
     },
   ],
   attest: async () => {
@@ -140,6 +155,9 @@ const stubSession = (): WalletStrideSession => ({
     throw new Error('not used in the Map-shape regression test');
   },
   stageSubmissionRand: async () => {
+    throw new Error('not used in the Map-shape regression test');
+  },
+  stagedVaultKey: async () => {
     throw new Error('not used in the Map-shape regression test');
   },
   advanceStreak: async () => {

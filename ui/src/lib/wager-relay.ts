@@ -26,19 +26,31 @@ export interface RelayOpening {
 
 export const hexOf = (value: bigint): string => '0x' + value.toString(16);
 
+export const bytesHexOf = (bytes: Uint8Array): string =>
+  '0x' + Array.from(bytes).map((b) => b.toString(16).padStart(2, '0')).join('');
+
 export const relaySideOf = (isChallenger: boolean): RelaySide => (isChallenger ? 'A' : 'B');
 
 export const postWagerOpening = async (
   wagerId: number,
   who: RelaySide,
   value: bigint,
-  rand: bigint,
+  rand: Uint8Array,
   serviceUrl: string = ATTEST_SERVICE_URL,
 ): Promise<void> => {
   const res = await fetch(`${serviceUrl}/wager-openings`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ wagerId, who, value: hexOf(value), rand: hexOf(rand) }),
+    // wagerId must be a STRING on the wire — the sidecar's /wager-openings
+    // validates typeof wagerId === 'string' and 400s numbers (audit: the
+    // curl-era tests used strings; the UI sent numbers and was never run
+    // against the real relay).
+    body: JSON.stringify({
+      wagerId: String(wagerId),
+      who,
+      value: hexOf(value),
+      rand: bytesHexOf(rand),
+    }),
   });
   if (!res.ok) {
     const body = (await res.json().catch((parseErr) => {
