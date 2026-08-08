@@ -8,8 +8,8 @@
 
 import type { DemoMode } from "../config";
 import type {
-  AttestedCredential,
   AttestationProgress,
+  AttestedCredential,
   AttestOutcome,
   BadgeProof,
   BadgeView,

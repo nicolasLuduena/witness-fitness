@@ -17,8 +17,8 @@ import {
 import type { DemoMode } from "../config";
 import { INITIAL_MODE } from "../config";
 import type {
-  AttestedCredential,
   AttestationStage,
+  AttestedCredential,
   AttestOutcome,
   BadgeProof,
   BadgeView,

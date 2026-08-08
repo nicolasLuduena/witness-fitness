@@ -64,7 +64,11 @@ export const TodayScreen = () => {
               creates a separate holder binding for challenges.
             </p>
           </div>
-          <button className="btn btn--primary journey-action" onClick={() => navigateTo("account")}>
+          <button
+            type="button"
+            className="btn btn--primary journey-action"
+            onClick={() => navigateTo("account")}
+          >
             Connect wallet <ArrowRight aria-hidden="true" />
           </button>
         </section>
@@ -80,7 +84,11 @@ export const TodayScreen = () => {
               chain receives a commitment, not the workout.
             </p>
           </div>
-          <button className="btn btn--primary journey-action" onClick={() => navigateTo("account")}>
+          <button
+            type="button"
+            className="btn btn--primary journey-action"
+            onClick={() => navigateTo("account")}
+          >
             Attest workout <ArrowRight aria-hidden="true" />
           </button>
         </section>
@@ -108,7 +116,11 @@ export const TodayScreen = () => {
               </div>
             ) : null}
           </div>
-          <button className="btn btn--primary journey-action" onClick={() => navigateTo("wagers")}>
+          <button
+            type="button"
+            className="btn btn--primary journey-action"
+            onClick={() => navigateTo("wagers")}
+          >
             {activeWager ? "Open wager" : "Create private wager"} <ArrowRight aria-hidden="true" />
           </button>
         </section>
@@ -129,7 +141,7 @@ export const TodayScreen = () => {
               : "Link consecutive attested days, then mint the achievement without publishing the activities."}
           </p>
         </div>
-        <button className="text-action" onClick={() => navigateTo("streak")}>
+        <button type="button" className="text-action" onClick={() => navigateTo("streak")}>
           View progress <ArrowRight aria-hidden="true" />
         </button>
       </section>
