@@ -11,10 +11,14 @@ import type { AddressInfo } from 'node:net';
 import type { ConnectedAPI } from '@midnight-ntwrk/dapp-connector-api';
 import { createPrivateState, type PrivateState } from '@witnessfitness/contract';
 import {
+  browserPrivateStateProvider,
   deriveBrowserHolderSecret,
+  exportPrivateState,
+  importPrivateState,
   inMemoryPrivateStateProvider,
   initializeProviders,
   joinStrideFromBrowser,
+  resetPrivateState,
 } from '../src/browser.js';
 
 const API_DIR = dirname(fileURLToPath(import.meta.url));
@@ -273,3 +277,69 @@ const withTimeout = <T>(promise: Promise<T>, ms: number, what: string): Promise<
       setTimeout(() => reject(new Error(`${what} timed out after ${ms}ms`)), ms)
     ),
   ]);
+
+
+describe('P0-3 backup/restore module surface (browser entry)', () => {
+  let p0Stub: ConnectedAPI & { submitted: string[] };
+  let p0Window: unknown;
+
+  beforeAll(async () => {
+    // The main describe's afterAll already restored the globals — re-stub
+    // the minimal browser surface this describe needs.
+    p0Window = (globalThis as Record<string, unknown>).window;
+    (globalThis as Record<string, unknown>).window = {
+      location: { origin: 'http://127.0.0.1:9' },
+      crypto: globalThis.crypto,
+      navigator: { userAgent: 'vitest' },
+    };
+    p0Stub = stubConnectedAPI();
+  });
+
+  afterAll(() => {
+    if (p0Window === undefined) {
+      delete (globalThis as Record<string, unknown>).window;
+    } else {
+      (globalThis as Record<string, unknown>).window = p0Window;
+    }
+  });
+
+  it('exports exportPrivateState / importPrivateState / resetPrivateState (the exact P0-3 bug)', () => {
+    expect(typeof exportPrivateState).toBe('function');
+    expect(typeof importPrivateState).toBe('function');
+    expect(typeof resetPrivateState).toBe('function');
+  });
+
+  it('initializeProviders hands out the module singleton provider', async () => {
+    const providers = await initializeProviders(p0Stub);
+    expect(providers.privateStateProvider).toBe(browserPrivateStateProvider);
+  });
+
+  it('real path: set → export → reset → import → deep-equal restore; wrong password rejects', async () => {
+    // Seed the singleton via the REAL provider stack path (same map the
+    // wallet flow uses).
+    browserPrivateStateProvider.setContractAddress('0xabc');
+    const original = realisticPrivateState();
+    await browserPrivateStateProvider.set('wf-demo', original);
+
+    const payload = await exportPrivateState('correct-horse-battery', 'wf-demo-store');
+    expect(typeof payload).toBe('string');
+    const parsed = JSON.parse(payload) as Record<string, unknown>;
+    expect(Object.keys(parsed).sort()).toEqual(['data', 'iv', 'salt']);
+
+    await resetPrivateState('wf-demo-store');
+    expect(await browserPrivateStateProvider.get('wf-demo')).toBeNull();
+
+    await importPrivateState('correct-horse-battery', 'wf-demo-store', payload);
+    const restored = await browserPrivateStateProvider.get('wf-demo');
+    expect(restored).toEqual(original);
+
+    // Wrong password after a fresh export must reject (not wipe/restore).
+    await resetPrivateState('wf-demo-store');
+    await expect(importPrivateState('wrong-password-here', 'wf-demo-store', payload)).rejects.toThrow();
+    expect(await browserPrivateStateProvider.get('wf-demo')).toBeNull();
+  });
+
+  it('resetPrivateState resolves (bridge contract: Promise<void>)', async () => {
+    await expect(resetPrivateState('wf-demo-store')).resolves.toBeUndefined();
+  });
+});

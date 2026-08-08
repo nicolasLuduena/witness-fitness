@@ -10,7 +10,14 @@
 //   joinStrideFromBrowser(connectedAPI, contractAddress, privateStateId)
 //                                              → Promise<StrideContract>
 //   deriveBrowserHolderSecret()                → Uint8Array (32 random bytes)
-//   inMemoryPrivateStateProvider<PSI, PS>()    → provider + export/import/reset hooks
+//   inMemoryPrivateStateProvider<PSI, PS>()    → provider factory + export/import/reset hooks
+//   exportPrivateState(password, storeName)    → Promise<string> (encrypted payload)
+//   importPrivateState(password, storeName, payload) → Promise<void>
+//   resetPrivateState(storeName)               → Promise<void>
+//
+// The three persistence functions operate on the module-level singleton
+// provider — the SAME map initializeProviders/joinStrideFromBrowser use — so
+// a backup captured at any point covers whatever the wallet flow has stored.
 import { FetchZkConfigProvider } from '@midnight-ntwrk/midnight-js-fetch-zk-config-provider';
 import { httpClientProofProvider } from '@midnight-ntwrk/midnight-js-http-client-proof-provider';
 import { indexerPublicDataProvider } from '@midnight-ntwrk/midnight-js-indexer-public-data-provider';
@@ -32,16 +39,31 @@ import { StrideContract, type StrideProviders } from './index.js';
 
 export { inMemoryPrivateStateProvider } from './in-memory-private-state-provider.js';
 
+// Page-load singleton: one map for the provider stack AND the backup/restore
+// surface (P0-3). Do not create providers per call.
+export const browserPrivateStateProvider = inMemoryPrivateStateProvider<string, PrivateState>();
+
+export const exportPrivateState = (password: string, storeName: string): Promise<string> =>
+  browserPrivateStateProvider.exportPrivateState(password, storeName);
+
+export const importPrivateState = (
+  password: string,
+  storeName: string,
+  payload: string
+): Promise<void> => browserPrivateStateProvider.importPrivateState(password, storeName, payload);
+
+export const resetPrivateState = (storeName: string): Promise<void> =>
+  Promise.resolve(browserPrivateStateProvider.resetPrivateState(storeName));
+
 export const initializeProviders = async (connectedAPI: ConnectedAPI): Promise<StrideProviders> => {
   const zkConfigPath = `${window.location.origin}/managed/stride`;
   const keyMaterialProvider = new FetchZkConfigProvider<
     CompactContract.ProvableCircuitId<StrideContractType>
   >(zkConfigPath, fetch.bind(window));
   const config = await connectedAPI.getConfiguration();
-  const privateStateProvider = inMemoryPrivateStateProvider<string, PrivateState>();
   const shieldedAddresses = await connectedAPI.getShieldedAddresses();
   return {
-    privateStateProvider,
+    privateStateProvider: browserPrivateStateProvider,
     zkConfigProvider: keyMaterialProvider,
     proofProvider: httpClientProofProvider(config.proverServerUri!, keyMaterialProvider),
     publicDataProvider: indexerPublicDataProvider(config.indexerUri, config.indexerWsUri),
