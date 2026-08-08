@@ -67,6 +67,17 @@ const mapLike = <K, V>(entries: [K, V][]): LedgerMapLike<K, V> => {
   };
 };
 
+// The compiled `badges` ADT (Map<Field, Set<Uint8>>) exposes member/lookup
+// but NO outer Symbol.iterator (codegen quirk for nested ADTs) — the guard
+// must resolve it via member/lookup, never iteration.
+const nestedMapLike = <K, V>(entries: [K, V][]): LedgerMapLike<K, V> => {
+  const map = new Map(entries);
+  return {
+    member: (key) => map.has(key),
+    lookup: (key) => map.get(key) as V,
+  } as LedgerMapLike<K, V>;
+};
+
 const hexToBytes = (hex: string): Uint8Array => {
   const bare = hex.replace(/^0x/, '');
   const out = new Uint8Array(bare.length / 2);
@@ -197,6 +208,30 @@ describe('wallet ledger Map-like readState (P0-1 regression)', () => {
 
   it('badges() reads my binding\u2019s Set of badge ids', async () => {
     const client = await connect();
+    const badges = await client.badges();
+    expect(badges.find((b) => b.id === 1)?.minted).toBe(true);
+    expect(badges.find((b) => b.id === 2)?.minted).toBe(false);
+  });
+
+  it('badges() resolves the compiled nested-ADT shape (no outer iterator)', async () => {
+    const session = stubSession();
+    session.readState = async () => ({
+      ...(await stubSession().readState()),
+      badges: nestedMapLike<bigint, Iterable<bigint>>([[BigInt(MY_BINDING), new Set([1n])]]),
+    });
+    const bridge = stubBridge();
+    bridge.joinStrideFromBrowser = async () => session;
+    setWindowMidnight({
+      'com.test.wallet': {
+        rdns: 'com.test.wallet',
+        name: 'Test Wallet',
+        icon: 'data:image/png;base64,stub',
+        apiVersion: '4.0.1',
+        connect: async () => createConnectedStub('alice'),
+      } as InitialAPI,
+    });
+    const client = new WalletClient(bridge);
+    await client.connect();
     const badges = await client.badges();
     expect(badges.find((b) => b.id === 1)?.minted).toBe(true);
     expect(badges.find((b) => b.id === 2)?.minted).toBe(false);

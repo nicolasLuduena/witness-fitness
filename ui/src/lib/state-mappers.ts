@@ -48,8 +48,11 @@ export const isLedgerMapLike = <K, V>(value: unknown): value is LedgerMapLike<K,
   typeof value === 'object' &&
   value !== null &&
   typeof (value as { member?: unknown }).member === 'function' &&
-  typeof (value as { lookup?: unknown }).lookup === 'function' &&
-  Symbol.iterator in value;
+  typeof (value as { lookup?: unknown }).lookup === 'function';
+  // NOTE: deliberately does NOT require Symbol.iterator — the compiled
+  // badges ADT (Map<Field, Set<Uint8>>) exposes member/lookup but no outer
+  // iterator (codegen quirk for nested ADTs). The Map branch accesses via
+  // member/lookup only, so an outer iterator is never needed.
 
 const bytesToHex = (bytes: Uint8Array): string =>
   '0x' + Array.from(bytes).map((b) => b.toString(16).padStart(2, '0')).join('');
