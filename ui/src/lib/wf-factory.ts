@@ -85,6 +85,25 @@ class WalletClientProxy implements WfClient {
       return c.resetPrivateState();
     });
   }
+  // Strava surface (wallet mode). These are OPTIONAL interface members —
+  // `implements` does not enforce them, and without forwarding the Connect
+  // screen's `client.connectStrava?.()` silently no-oped (the proxy-drift
+  // bug: "Connect Strava — OAuth did absolutely nothing").
+  connectStrava(): void {
+    if (!this.inner?.connectStrava) throw new Error('wallet not connected');
+    this.inner.connectStrava();
+  }
+  handleStravaRedirect(): Promise<boolean> {
+    return this.real().then((c) => {
+      if (!c.handleStravaRedirect) throw new Error('strava redirect not supported in this mode');
+      return c.handleStravaRedirect();
+    });
+  }
+  // Synchronous by contract: delegates to the cached inner client (connect()
+  // initializes it before any Strava interaction). Before connect: not connected.
+  stravaStatus(): { connected: boolean; athleteName?: string; stravaId?: number } {
+    return this.inner?.stravaStatus?.() ?? { connected: false };
+  }
 }
 
 class LiveClientProxy implements WfClient {
@@ -140,5 +159,35 @@ class LiveClientProxy implements WfClient {
   }
   notaryStatus() {
     return this.real().then((c) => c.notaryStatus());
+  }
+  backupPrivateState(password: string) {
+    return this.real().then((c) => {
+      if (!c.backupPrivateState) throw new Error('backup not supported in this mode');
+      return c.backupPrivateState(password);
+    });
+  }
+  restorePrivateState(password: string, payload: string) {
+    return this.real().then((c) => {
+      if (!c.restorePrivateState) throw new Error('restore not supported in this mode');
+      return c.restorePrivateState(password, payload);
+    });
+  }
+  resetPrivateState() {
+    return this.real().then((c) => {
+      if (!c.resetPrivateState) throw new Error('reset not supported in this mode');
+      return c.resetPrivateState();
+    });
+  }
+  connectStrava(): void {
+    throw new Error('Strava connect is wallet-mode only');
+  }
+  handleStravaRedirect(): Promise<boolean> {
+    return this.real().then((c) => {
+      if (!c.handleStravaRedirect) throw new Error('strava redirect not supported in this mode');
+      return c.handleStravaRedirect();
+    });
+  }
+  stravaStatus(): { connected: boolean } {
+    return { connected: false };
   }
 }

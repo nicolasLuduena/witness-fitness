@@ -58,6 +58,21 @@ export const ConnectScreen = () => {
 
   const handleConnect = () => void connect(pickedRdns ?? undefined);
 
+  // A picker row connects that wallet immediately (no select-then-connect
+  // step); the primary button below still connects the selected/first wallet.
+  const handlePickWallet = (rdns: string) => {
+    setPickedRdns(rdns);
+    void connect(rdns);
+  };
+
+  const handleConnectStrava = () => {
+    try {
+      client.connectStrava?.();
+    } catch (err) {
+      setAttestError(err instanceof Error ? err.message : 'strava oauth failed');
+    }
+  };
+
   // Strava surface (wallet mode): process a /strava/callback redirect on
   // load, then show the live connect state from the token store.
   useEffect(() => {
@@ -208,7 +223,7 @@ export const ConnectScreen = () => {
                     ) : (
                       <Button
                         tone="seal"
-                        onClick={() => client.connectStrava?.()}
+                        onClick={() => handleConnectStrava()}
                         disabled={attestRunning}
                         block
                       >
@@ -337,7 +352,7 @@ export const ConnectScreen = () => {
                     <button
                       key={w.rdns}
                       className={pickedRdns === w.rdns ? 'wallet-pick selected' : 'wallet-pick'}
-                      onClick={() => setPickedRdns(w.rdns)}
+                      onClick={() => handlePickWallet(w.rdns)}
                       disabled={connecting}
                     >
                       <span className="wallet-pick-name">
@@ -359,6 +374,11 @@ export const ConnectScreen = () => {
                     ? 'Connect selected wallet'
                     : 'Connect wallet'}
               </Button>
+              {connecting ? (
+                <p className="muted" style={{ marginTop: 8, textAlign: 'center' }}>
+                  Waiting for wallet approval…
+                </p>
+              ) : null}
               {connectError ? (
                 <div style={{ marginTop: 12 }}>
                   <Notice tone="error">{connectError}</Notice>
