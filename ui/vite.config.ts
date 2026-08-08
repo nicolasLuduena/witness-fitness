@@ -21,6 +21,24 @@ export default defineConfig({
         __dirname,
         './node_modules/vite-plugin-node-polyfills/shims/global/dist/index.js'
       ),
+      // Round 1C browser-attestation aliases (validated in /tmp/opencode/
+      // browser-test): attestor-core's bundle statically imports Node-only
+      // chains that cannot be browser-bundled. koffi/re2 load native .node
+      // binaries, fs/promises is the file-fetch path (snarkjs/gnark only),
+      // and the published `./stwo` entry uses createRequire + fs at module
+      // scope. The stwo alias points at the vendored wasm-bindgen WEB build
+      // (same circuit set, browser-safe — see ui/src/lib/attest/stwo-browser.ts).
+      koffi: path.resolve(__dirname, './src/lib/attest/stubs/koffi.ts'),
+      re2: path.resolve(__dirname, './src/lib/attest/stubs/re2.ts'),
+      'fs/promises': path.resolve(__dirname, './src/lib/attest/stubs/fs-promises.ts'),
+      '@reclaimprotocol/zk-symmetric-crypto/gnark': path.resolve(
+        __dirname,
+        './src/lib/attest/stubs/gnark.ts'
+      ),
+      '@reclaimprotocol/zk-symmetric-crypto/stwo': path.resolve(
+        __dirname,
+        './src/lib/attest/stwo-browser.ts'
+      ),
     },
     extensions: ['.mjs', '.js', '.ts', '.jsx', '.tsx', '.json', '.wasm'],
     mainFields: ['browser', 'module', 'main'],

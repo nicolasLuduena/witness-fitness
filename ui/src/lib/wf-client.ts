@@ -56,4 +56,11 @@ export interface WfClient {
   backupPrivateState?(password: string): Promise<string>;
   restorePrivateState?(password: string, payload: string): Promise<void>;
   resetPrivateState?(): Promise<void>;
+
+  // Wallet mode only (Round 2D): browser Strava OAuth + identity. The
+  // Strava client secret never exists in the browser — the stateless service
+  // (:8200) performs the token exchange/refresh.
+  stravaStatus?(): { connected: boolean; athleteName?: string; stravaId?: number };
+  connectStrava?(): void; // opens the Strava authorize URL (same tab)
+  handleStravaRedirect?(): Promise<boolean>; // process ?code= on /strava/callback; true when handled
 }

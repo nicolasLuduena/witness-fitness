@@ -1,5 +1,6 @@
-// App shell: brand header, mode pill, tab navigation, screens, and the
-// always-visible notary trust strip.
+// App shell: brand header, mode pill (informational — mode is decided at
+// startup: wallet by default, ?mode=live for maintainer debugging), tab
+// navigation, screens, and the always-visible notary trust strip.
 
 import { useState } from 'react';
 import { DemoProvider, useDemo } from './state/DemoStore';
@@ -24,13 +25,6 @@ const Shell = () => {
   const { mode, credentials, wagers, proofs } = useDemo();
   const [tab, setTab] = useState<Tab>('connect');
 
-  const switchMode = (next: 'fixture' | 'live' | 'wallet') => {
-    const url = new URL(window.location.href);
-    if (next === 'fixture') url.searchParams.delete('mode');
-    else url.searchParams.set('mode', next);
-    window.location.href = url.toString();
-  };
-
   return (
     <div className="app-shell">
       <header className="app-header">
@@ -45,38 +39,14 @@ const Shell = () => {
           <div
             className="mode-pill"
             title={
-              mode === 'fixture'
-                ? 'Demo mode — offline, deterministic'
-                : mode === 'live'
-                  ? 'Live mode — notary API + devnet chain via the sidecar'
-                  : 'Wallet mode — Lace DApp Connector, direct chain access'
+              mode === 'live'
+                ? 'Live mode — maintainer debug via the identity sidecar (?mode=live)'
+                : 'Wallet mode — Lace DApp Connector, direct chain access'
             }
           >
-            <span className={`dot ${mode === 'fixture' ? 'dot--amber' : 'dot--green'}`} />
-            {mode === 'fixture' ? 'demo mode' : mode === 'live' ? 'live mode' : 'wallet mode'}
+            <span className="dot dot--green" />
+            {mode === 'live' ? 'live mode' : 'wallet mode'}
           </div>
-          <button
-            className="btn btn--ghost btn--sm"
-            onClick={() => switchMode(mode === 'fixture' ? 'live' : 'fixture')}
-            title={
-              mode === 'fixture'
-                ? 'Switch to live: notary API + contract'
-                : mode === 'wallet'
-                  ? 'Switch to offline demo mode'
-                  : 'Switch to offline demo mode'
-            }
-          >
-            {mode === 'fixture' ? '→ live' : '→ demo'}
-          </button>
-          {mode !== 'wallet' ? (
-            <button
-              className="btn btn--ghost btn--sm"
-              onClick={() => switchMode('wallet')}
-              title="Wallet mode: connect Lace and sign transactions directly"
-            >
-              → wallet
-            </button>
-          ) : null}
         </div>
       </header>
 

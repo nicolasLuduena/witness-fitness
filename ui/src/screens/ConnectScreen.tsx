@@ -1,22 +1,15 @@
 // Connect — Strava OAuth → live attestation. The "real crypto happening live"
 // moment: staged status line (witnessing TLS → notarizing → on-chain).
-// Three modes: fixture (offline replay), live (demo sidecar :8200), wallet
-// (Lace DApp Connector — direct chain access + backup/resume of the private
-// state).
+// Two modes: wallet (Lace DApp Connector — the default) and live (demo
+// sidecar :8200, maintainer debug via ?mode=live).
 
 import { useEffect, useRef, useState } from 'react';
 import { useDemo } from '../state/DemoStore';
 import { Button, Card, Chip, Notice, Stat } from '../components/bits';
 import { StatusLine } from '../components/StatusLine';
-import { ATHLETE_A, EMPLOYER } from '../domain/story';
+import { EMPLOYER } from '../domain/story';
 import { hexShort } from '../lib/format';
 import { hasStoredBackup, performRestore, shouldAutoResume, storeBackupPayload, walletBackupKey } from '../lib/wallet-restore';
-
-const SWITCH_LINK = (
-  <a href="?mode=fixture" style={{ color: 'inherit', fontWeight: 700 }}>
-    Switch to demo mode →
-  </a>
-);
 
 export const ConnectScreen = () => {
   const {
@@ -25,6 +18,7 @@ export const ConnectScreen = () => {
     connecting,
     connectError,
     connect,
+    client,
     attest,
     attestRunning,
     attestOutcome,
@@ -33,6 +27,7 @@ export const ConnectScreen = () => {
     restorePrivateState,
   } = useDemo();
   const [attestError, setAttestError] = useState<string | null>(null);
+  const [strava, setStrava] = useState<{ connected: boolean; athleteName?: string } | null>(null);
   const [backupPassword, setBackupPassword] = useState('');
   const [backupPayload, setBackupPayload] = useState<string | null>(null);
   const [backupBusy, setBackupBusy] = useState(false);
@@ -48,10 +43,33 @@ export const ConnectScreen = () => {
   const isLive = mode === 'live';
   const outcome = attestOutcome?.credential;
 
+  // Strava surface (wallet mode): process a /strava/callback redirect on
+  // load, then show the live connect state from the token store.
+  useEffect(() => {
+    if (!isWallet || !session || !client.handleStravaRedirect) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const handled = await client.handleStravaRedirect?.();
+        if (!cancelled && handled) {
+          setStrava(client.stravaStatus?.() ?? null);
+        }
+      } catch (err) {
+        setAttestError(err instanceof Error ? err.message : 'strava oauth failed');
+      }
+    })();
+    setStrava(client.stravaStatus?.() ?? null);
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isWallet, session?.walletAddress]);
+
   const handleAttest = async () => {
     setAttestError(null);
     try {
       await attest();
+      setStrava(client.stravaStatus?.() ?? null);
     } catch (err) {
       setAttestError(err instanceof Error ? err.message : 'attestation failed');
     }
@@ -139,14 +157,21 @@ export const ConnectScreen = () => {
           {session ? (
             <div>
               <div className="row" style={{ marginBottom: 12 }}>
-                <span style={{ fontWeight: 700, fontSize: 17 }}>{session.athlete.name}</span>
-                <Chip tone="provable">@{session.athlete.handle}</Chip>
+                <span style={{ fontWeight: 700, fontSize: 17 }}>
+                  {isWallet && strava?.athleteName ? strava.athleteName : session.athlete.name}
+                </span>
+                <Chip tone="provable">
+                  @{isWallet && strava?.connected ? 'strava-attested' : session.athlete.handle}
+                </Chip>
               </div>
               <div className="stat-row" style={{ marginBottom: 14 }}>
-                <Stat label="Holder binding" value={session.athlete.holderBinding} />
+                <Stat
+                  label="Holder binding (challenge ID)"
+                  value={<span className="hash">{hexShort(session.athlete.holderBinding, 12, 10)}</span>}
+                />
                 <Stat
                   label="Mode"
-                  value={isWallet ? 'wallet (Lace)' : isLive ? 'live (sidecar :8200)' : 'demo (fixture)'}
+                  value={isWallet ? 'wallet (Lace)' : 'live (sidecar :8200)'}
                 />
                 <Stat label="Backend" value={session.walletLabel} />
               </div>
@@ -158,19 +183,44 @@ export const ConnectScreen = () => {
               ) : null}
               <div className="divider" />
               <div className="row-between">
-                <div>
-                  <Button tone="seal" onClick={() => void handleAttest()} disabled={attestRunning}>
-                    {attestRunning ? <span className="spin" /> : null}
-                    {attestRunning ? 'Attesting…' : 'Connect Strava & attest workout'}
-                  </Button>
+                <div style={{ flex: 1 }}>
+                  {isWallet ? (
+                    strava?.connected ? (
+                      <Button tone="seal" onClick={() => void handleAttest()} disabled={attestRunning} block>
+                        {attestRunning ? <span className="spin" /> : null}
+                        {attestRunning ? 'Attesting…' : 'Attest workout'}
+                      </Button>
+                    ) : (
+                      <Button
+                        tone="seal"
+                        onClick={() => client.connectStrava?.()}
+                        disabled={attestRunning}
+                        block
+                      >
+                        Connect Strava — OAuth
+                      </Button>
+                    )
+                  ) : (
+                    <Button tone="seal" onClick={() => void handleAttest()} disabled={attestRunning}>
+                      {attestRunning ? <span className="spin" /> : null}
+                      {attestRunning ? 'Attesting…' : 'Connect Strava & attest workout'}
+                    </Button>
+                  )}
                 </div>
                 <Chip tone="seal">private by default</Chip>
               </div>
+              {isWallet && !strava?.connected ? (
+                <div style={{ marginTop: 8 }}>
+                  <Notice tone="info">
+                    Attestation needs a Strava account: authorize with Strava (the client secret
+                    never touches this browser — the stateless service on :8200 exchanges the
+                    code), then attest a real workout.
+                  </Notice>
+                </div>
+              ) : null}
               {attestError ? (
                 <div style={{ marginTop: 12 }}>
-                  <Notice tone="error">
-                    {attestError} {isLive || isWallet ? SWITCH_LINK : null}
-                  </Notice>
+                  <Notice tone="error">{attestError}</Notice>
                 </div>
               ) : null}
 
@@ -262,25 +312,17 @@ export const ConnectScreen = () => {
           ) : (
             <div>
               <p className="hero muted">
-                {mode === 'fixture'
-                  ? 'Demo mode: you take the role of ' + ATHLETE_A.name + ' (' + ATHLETE_A.handle + '). No wallet, no chain, no network — the attested-session replay runs locally.'
-                  : isLive
-                    ? 'Live mode talks to the demo sidecar (packages/api on :8200), which runs the full pipeline: notary collection (2-of-3) → contract submit → vault. No browser wallet required.'
-                    : 'Wallet mode connects Lace (DApp Connector) straight to the contract: your wallet authorizes every transaction, and the private state (holder secret, attestations) is backed up encrypted on this browser.'}
+                {isLive
+                  ? 'Live mode talks to the demo sidecar (packages/api on :8200), which runs the full pipeline: notary collection (2-of-3) → contract submit → vault. No browser wallet required.'
+                  : 'Wallet mode connects Lace (DApp Connector) straight to the contract: your wallet authorizes every transaction, and the private state (holder secret, attestations) is backed up encrypted on this browser.'}
               </p>
               <Button tone="primary" block onClick={() => void connect()} disabled={connecting}>
                 {connecting ? <span className="spin" /> : null}
-                {mode === 'fixture'
-                  ? 'Enter as ' + ATHLETE_A.name
-                  : isLive
-                    ? 'Connect to demo service'
-                    : 'Connect Lace wallet'}
+                {isLive ? 'Connect to demo service' : 'Connect Lace wallet'}
               </Button>
               {connectError ? (
                 <div style={{ marginTop: 12 }}>
-                  <Notice tone="error">
-                    {connectError} {isLive || isWallet ? SWITCH_LINK : null}
-                  </Notice>
+                  <Notice tone="error">{connectError}</Notice>
                 </div>
               ) : null}
             </div>
@@ -334,8 +376,9 @@ export const ConnectScreen = () => {
 };
 
 const runningStages = () => [
-  { id: 'tls', label: 'Witnessing TLS session', detail: 'attestor-core tunnels to www.strava.com', state: 'active' as const },
-  { id: 'proof', label: 'ZK proof generated', detail: 'extracted parameters committed', state: 'pending' as const },
+  { id: 'guard', label: 'Strava account check', detail: 'real API check — no fabricated data', state: 'active' as const },
+  { id: 'tls', label: 'Witnessing TLS session', detail: 'attestor-core tunnels to www.strava.com', state: 'pending' as const },
+  { id: 'proof', label: 'ZK proof generated', detail: 'extracted parameters committed (stwo)', state: 'pending' as const },
   { id: 'notarize', label: 'Notarizing — 2 of 3 keys', detail: 'independent verification + Schnorr signing', state: 'pending' as const },
   { id: 'chain', label: 'Vaulting on-chain', detail: 'persistentCommit stored', state: 'pending' as const },
 ];

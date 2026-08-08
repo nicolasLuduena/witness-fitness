@@ -80,7 +80,12 @@ export class LiveClient implements WfClient {
       for (const s of stages) if (s.id === id) s.state = state;
     };
 
+    // Round 1B: no pre-recorded proof artifacts live in the UI anymore — the
+    // attest workstream's flow (ui/src/lib/attest/*) replaces this replay.
     const logEntry = ATTESTATION_LOG[this.attestCount % ATTESTATION_LOG.length];
+    if (!logEntry) {
+      throw new Error('attestation log is empty — live attestations come from the attest flow');
+    }
     const fixture = logEntry.fixture as unknown as {
       claim: unknown;
       signatureHex: string;
@@ -371,7 +376,7 @@ export class LiveClient implements WfClient {
   private requireSidecar(): SidecarHandle {
     if (!this.sidecar) {
       throw new Error(
-        `demo service offline (${SIDECAR_URL}) — connect first, or switch to demo mode`
+        `demo service offline (${SIDECAR_URL}) — connect first, or check the sidecar`
       );
     }
     return this.sidecar;

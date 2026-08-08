@@ -109,15 +109,11 @@ export const DemoProvider = ({ children }: { children: ReactNode }) => {
   useEffect(() => {
     void refresh();
     void refreshNotaries();
-    if (mode === 'fixture') {
-      notaryTimer.current = window.setInterval(() => void refreshNotaries(), 5_000);
-    } else {
-      notaryTimer.current = window.setInterval(() => void refreshNotaries(), 3_000);
-    }
+    notaryTimer.current = window.setInterval(() => void refreshNotaries(), 3_000);
     return () => {
       if (notaryTimer.current !== undefined) window.clearInterval(notaryTimer.current);
     };
-  }, [mode, refresh, refreshNotaries]);
+  }, [refresh, refreshNotaries]);
 
   const connect = useCallback(async () => {
     setConnecting(true);

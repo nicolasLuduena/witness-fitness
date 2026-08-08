@@ -1,22 +1,15 @@
-// WfClient factory — the single FLAG between demo and live modes.
-// Mode is chosen once at app start (URL ?mode=live or VITE_WF_MODE) and
-// displayed prominently; the live client is lazy-imported so fixture mode
-// never pays for the chain stack.
+// WfClient factory — mode is decided once at startup (config default = wallet,
+// ?mode=live for maintainer debugging with the identity sidecar). The live
+// client is lazy-imported so the default wallet mode never pays for it.
 
 import type { DemoMode } from '../config';
-import { FixtureClient } from './fixture-client';
 import type { WfClient } from './wf-client';
 
 let cached: WfClient | null = null;
 
 export const createWfClient = (mode: DemoMode): WfClient => {
   if (cached?.mode === mode) return cached;
-  cached =
-    mode === 'live'
-      ? new LiveClientProxy()
-      : mode === 'wallet'
-        ? new WalletClientProxy()
-        : new FixtureClient();
+  cached = mode === 'live' ? new LiveClientProxy() : new WalletClientProxy();
   return cached;
 };
 

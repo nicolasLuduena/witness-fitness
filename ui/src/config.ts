@@ -16,7 +16,9 @@ export const INDEXER_WS_URL =
 
 export const PROOF_SERVER_URL = import.meta.env.VITE_WF_PROOF_SERVER_URL ?? 'http://127.0.0.1:6300';
 
-export type DemoMode = 'fixture' | 'live' | 'wallet';
+// The demo is LIVE-ONLY (Round 1B): browser wallet by default, with ?mode=live
+// kept purely for maintainer debugging (the identity sidecar).
+export type DemoMode = 'live' | 'wallet';
 
 // Network id the devnet + Lace connect with (reference app convention).
 export const NETWORK_ID = 'undeployed';
@@ -25,13 +27,12 @@ export const NETWORK_ID = 'undeployed';
 export const MIN_WALLET_API_VERSION = '3.0.0';
 
 const DEFAULT_MODE: DemoMode =
-  (import.meta.env.VITE_WF_MODE as DemoMode | undefined) === 'live' ? 'live' : 'fixture';
+  (import.meta.env.VITE_WF_MODE as DemoMode | undefined) === 'live' ? 'live' : 'wallet';
 
 export const INITIAL_MODE: DemoMode =
   typeof window !== 'undefined' &&
-  (new URLSearchParams(window.location.search).get('mode') === 'live' ||
-    new URLSearchParams(window.location.search).get('mode') === 'wallet')
-    ? (new URLSearchParams(window.location.search).get('mode') as DemoMode)
+  new URLSearchParams(window.location.search).get('mode') === 'live'
+    ? 'live'
     : DEFAULT_MODE;
 
 // per-request timeout for sidecar calls (ms). Submit beats (attest,
