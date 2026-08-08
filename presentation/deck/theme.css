@@ -1,0 +1,1113 @@
+/* WitnessFitness — deck theme.
+   Dark default + intentional light mode. Atmosphere variants via data-atmosphere.
+   All assets local: fonts come from vendor/reveal/dist/theme/fonts. */
+
+/* ---------- color themes ---------- */
+
+html,
+html[data-theme="dark"] {
+  --bg: #0a0d12;
+  --bg-raise: #12171f;
+  --fg: #eef2f7;
+  --fg-dim: #c3ccd8;
+  --muted: #8492a5;
+  --accent: #f2b03c;
+  --loss: #d68a7c;
+  --rule: rgba(255, 255, 255, 0.11);
+  --rule-strong: rgba(255, 255, 255, 0.22);
+  --code-bg: rgba(255, 255, 255, 0.05);
+  --progress-track: rgba(255, 255, 255, 0.08);
+  --shot-missing-bg: rgba(255, 255, 255, 0.02);
+  --selection-fg: #0a0d12;
+  --atmosphere-glow: rgba(242, 176, 60, 0.07);
+  --atmosphere-glow-2: rgba(120, 160, 200, 0.05);
+  --atmosphere-line: rgba(255, 255, 255, 0.045);
+  --atmosphere-line-strong: rgba(242, 176, 60, 0.09);
+  --atmosphere-dot: rgba(255, 255, 255, 0.035);
+  --grain-opacity: 0.045;
+  color-scheme: dark;
+}
+
+html[data-theme="light"] {
+  --bg: #f3f5f8;
+  --bg-raise: #ffffff;
+  --fg: #12171f;
+  --fg-dim: #2f3a48;
+  --muted: #5c6b7c;
+  --accent: #b87a12;
+  --loss: #a85a4e;
+  --rule: rgba(18, 23, 31, 0.12);
+  --rule-strong: rgba(18, 23, 31, 0.22);
+  --code-bg: rgba(18, 23, 31, 0.05);
+  --progress-track: rgba(18, 23, 31, 0.1);
+  --shot-missing-bg: rgba(18, 23, 31, 0.03);
+  --selection-fg: #ffffff;
+  --atmosphere-glow: rgba(184, 122, 18, 0.1);
+  --atmosphere-glow-2: rgba(70, 110, 150, 0.07);
+  --atmosphere-line: rgba(18, 23, 31, 0.055);
+  --atmosphere-line-strong: rgba(184, 122, 18, 0.14);
+  --atmosphere-dot: rgba(18, 23, 31, 0.05);
+  --grain-opacity: 0.035;
+  color-scheme: light;
+}
+
+:root {
+  --mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+  --sans: "Source Sans Pro", -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+}
+
+/* ---------- atmospheres (CSS-only; flip data-atmosphere on <html>) ----------
+   Options:
+   1. track  — DEFAULT. Soft lane lines + warm/cool dual glow (fitness + seal).
+   2. seal   — Concentric commitment rings (privacy / vault).
+   3. grain  — Fine grain over a quiet horizon wash.
+   Switch: press G, or set data-atmosphere / localStorage key wf-deck-atmosphere.
+*/
+
+html,
+body,
+.reveal-viewport {
+  background-color: var(--bg);
+}
+
+html::before,
+html::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* Base wash shared by all atmospheres */
+html::before {
+  background:
+    radial-gradient(ellipse 80% 55% at 12% 18%, var(--atmosphere-glow), transparent 58%),
+    radial-gradient(ellipse 70% 50% at 88% 82%, var(--atmosphere-glow-2), transparent 55%),
+    linear-gradient(180deg, color-mix(in srgb, var(--bg) 88%, #1a2433) 0%, var(--bg) 48%, color-mix(in srgb, var(--bg) 92%, #000) 100%);
+}
+
+html[data-theme="light"]::before {
+  background:
+    radial-gradient(ellipse 80% 55% at 10% 12%, var(--atmosphere-glow), transparent 58%),
+    radial-gradient(ellipse 70% 50% at 92% 88%, var(--atmosphere-glow-2), transparent 55%),
+    linear-gradient(180deg, #f7f9fb 0%, var(--bg) 45%, #e8edf3 100%);
+}
+
+/* 1) track — athletic lanes */
+html[data-atmosphere="track"]::after {
+  background-image:
+    repeating-linear-gradient(
+      90deg,
+      transparent 0,
+      transparent 96px,
+      var(--atmosphere-line) 96px,
+      var(--atmosphere-line) 97px
+    ),
+    linear-gradient(
+      180deg,
+      transparent 0,
+      transparent calc(50% - 1px),
+      var(--atmosphere-line-strong) calc(50% - 1px),
+      var(--atmosphere-line-strong) calc(50% + 1px),
+      transparent calc(50% + 1px),
+      transparent 100%
+    );
+  opacity: 1;
+  mask-image: radial-gradient(ellipse 75% 70% at 50% 45%, #000 20%, transparent 78%);
+  -webkit-mask-image: radial-gradient(ellipse 75% 70% at 50% 45%, #000 20%, transparent 78%);
+}
+
+/* 2) seal — concentric rings (commitment / vault) */
+html[data-atmosphere="seal"]::after {
+  background-image:
+    radial-gradient(circle at 50% 48%, transparent 18%, var(--atmosphere-line) 18.5%, transparent 19%),
+    radial-gradient(circle at 50% 48%, transparent 32%, var(--atmosphere-line-strong) 32.5%, transparent 33.2%),
+    radial-gradient(circle at 50% 48%, transparent 48%, var(--atmosphere-line) 48.5%, transparent 49.2%),
+    radial-gradient(circle at 50% 48%, transparent 66%, var(--atmosphere-dot) 66.5%, transparent 67.2%);
+  opacity: 1;
+  mask-image: radial-gradient(circle at 50% 48%, #000 10%, transparent 72%);
+  -webkit-mask-image: radial-gradient(circle at 50% 48%, #000 10%, transparent 72%);
+}
+
+/* 3) grain — quiet horizon + fine noise */
+html[data-atmosphere="grain"]::before {
+  background:
+    radial-gradient(ellipse 90% 40% at 50% 0%, var(--atmosphere-glow), transparent 60%),
+    linear-gradient(180deg, color-mix(in srgb, var(--bg) 70%, #243044) 0%, var(--bg) 42%, color-mix(in srgb, var(--bg) 85%, #000) 100%);
+}
+
+html[data-theme="light"][data-atmosphere="grain"]::before {
+  background:
+    radial-gradient(ellipse 90% 40% at 50% 0%, var(--atmosphere-glow), transparent 60%),
+    linear-gradient(180deg, #fafbfc 0%, var(--bg) 40%, #e4eaf1 100%);
+}
+
+html[data-atmosphere="grain"]::after {
+  opacity: var(--grain-opacity);
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  background-size: 180px 180px;
+  mix-blend-mode: overlay;
+}
+
+.reveal,
+.deck-chrome {
+  position: relative;
+  z-index: 1;
+}
+
+.reveal *,
+.reveal *::before,
+.reveal *::after {
+  box-sizing: border-box;
+}
+
+.reveal {
+  font-family: var(--sans);
+  font-size: 30px;
+  font-weight: 400;
+  color: var(--fg);
+  -webkit-font-smoothing: antialiased;
+  background: transparent;
+}
+
+.reveal-viewport {
+  background: transparent;
+}
+
+.reveal ::selection {
+  background: var(--accent);
+  color: var(--selection-fg);
+}
+
+.reveal .slides {
+  text-align: left;
+}
+
+.reveal .slides section {
+  padding: 0;
+}
+
+/* Leaf slides are vertically centred flex columns. `display: flex` itself comes
+   from the reveal config (it is applied inline, so a rule here cannot win). */
+.reveal .slides > section:not(.stack),
+.reveal .slides > section.stack > section {
+  flex-direction: column;
+  justify-content: center;
+  align-items: stretch;
+  height: 100%;
+}
+
+/* ---------- presenter chrome: theme toggle ---------- */
+
+.deck-chrome {
+  position: fixed;
+  top: 14px;
+  left: 16px;
+  z-index: 40;
+  display: flex;
+  gap: 8px;
+}
+
+.deck-toggle {
+  appearance: none;
+  border: 1px solid var(--rule-strong);
+  background: color-mix(in srgb, var(--bg-raise) 88%, transparent);
+  color: var(--muted);
+  font-family: var(--sans);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  padding: 0.45em 0.75em;
+  border-radius: 999px;
+  cursor: pointer;
+  backdrop-filter: blur(8px);
+  transition: color 120ms ease, border-color 120ms ease, background 120ms ease;
+}
+
+.deck-toggle:hover,
+.deck-toggle:focus-visible {
+  color: var(--fg);
+  border-color: var(--accent);
+  outline: none;
+}
+
+.deck-toggle__label {
+  display: none;
+}
+
+html[data-theme="dark"] .deck-toggle__label[data-when="dark"],
+html[data-theme="light"] .deck-toggle__label[data-when="light"] {
+  display: inline;
+}
+
+/* ---------- headings & type scale ---------- */
+
+.reveal h1,
+.reveal h2,
+.reveal h3 {
+  font-family: var(--sans);
+  color: var(--fg);
+  text-transform: none;
+  letter-spacing: -0.015em;
+  line-height: 1.12;
+  margin: 0;
+  text-shadow: none;
+}
+
+.reveal h2 {
+  font-size: 1.62em;
+  font-weight: 600;
+  margin-bottom: 0.5em;
+  max-width: 30ch;
+}
+
+.reveal h2 em {
+  font-style: normal;
+  color: var(--accent);
+}
+
+.reveal h3 {
+  font-size: 0.86em;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--fg);
+  margin-bottom: 0.45em;
+}
+
+.reveal p {
+  margin: 0 0 0.55em;
+  line-height: 1.4;
+}
+
+.reveal b,
+.reveal strong {
+  font-weight: 600;
+  color: var(--fg);
+}
+
+.reveal em {
+  font-style: italic;
+}
+
+.reveal code {
+  font-family: var(--mono);
+  font-size: 0.88em;
+  color: var(--fg-dim);
+  background: var(--code-bg);
+  padding: 0.06em 0.28em;
+  border-radius: 3px;
+}
+
+.reveal .hash {
+  color: var(--accent);
+  background: none;
+  padding: 0;
+  letter-spacing: 0.01em;
+}
+
+.accent,
+.reveal b.accent {
+  color: var(--accent);
+}
+
+/* ---------- chrome: kicker, cue, brandmark ---------- */
+
+/* Numbered section prompts above the h2 answer — room-readable, not microcopy.
+   ~62% of h2 (1.62em); distinct via uppercase, tracking, and dimmer color. */
+.kicker {
+  font-size: 1em;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  line-height: 1.25;
+  text-transform: uppercase;
+  color: var(--fg-dim);
+  margin-bottom: 0.5em;
+  max-width: 100%;
+  flex: 0 0 auto;
+}
+
+.cue {
+  position: absolute;
+  top: 0;
+  right: 0;
+  font-family: var(--mono);
+  font-size: 0.42em;
+  color: var(--muted);
+  opacity: 0.55;
+  letter-spacing: 0.06em;
+}
+
+.brandmark {
+  position: absolute;
+  bottom: 14px;
+  left: 20px;
+  z-index: 30;
+  font-family: var(--sans);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.26em;
+  color: var(--muted);
+  opacity: 0.38;
+  pointer-events: none;
+}
+
+/* ---------- cover slides (1, 15) ---------- */
+
+.slide-cover {
+  justify-content: center !important;
+  align-items: center !important;
+  text-align: center;
+}
+
+.wordmark {
+  font-size: 2.6em;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  text-transform: none;
+}
+
+.wordmark span {
+  color: var(--accent);
+}
+
+.reveal .tagline {
+  margin-top: 0.7em;
+  font-size: 1.05em;
+  color: var(--fg-dim);
+  letter-spacing: 0.02em;
+}
+
+.reveal .tagline--close {
+  font-size: 1.5em;
+  color: var(--fg);
+  font-weight: 600;
+}
+
+.reveal .repo {
+  margin-top: 0.4em;
+  font-size: 0.72em;
+}
+
+.reveal .repo code {
+  background: none;
+  color: var(--muted);
+  font-size: 1em;
+}
+
+/* ---------- lists ---------- */
+
+.reveal ul,
+.reveal ol {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  width: 100%;
+}
+
+.reveal .lead li {
+  position: relative;
+  padding-left: 1.1em;
+  margin-bottom: 0.5em;
+  font-size: 0.82em;
+  line-height: 1.35;
+  color: var(--fg-dim);
+}
+
+.lead li::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0.55em;
+  width: 0.42em;
+  height: 2px;
+  background: var(--rule-strong);
+}
+
+.reveal .lead li.accent,
+.reveal .lead li.accent b {
+  color: var(--accent);
+}
+
+.reveal .lead--lg li {
+  font-size: 0.92em;
+  margin-bottom: 0.62em;
+}
+
+.reveal .lead-p {
+  font-size: 0.82em;
+  color: var(--fg-dim);
+  max-width: 58ch;
+}
+
+.numbered {
+  counter-reset: n;
+  display: grid;
+  gap: 0.65em;
+}
+
+.reveal .numbered li {
+  counter-increment: n;
+  position: relative;
+  padding-left: 2.1em;
+  font-size: 0.78em;
+  line-height: 1.38;
+  color: var(--fg-dim);
+}
+
+.numbered li::before {
+  content: counter(n);
+  position: absolute;
+  left: 0;
+  top: -0.05em;
+  font-family: var(--mono);
+  font-size: 1.35em;
+  font-weight: 600;
+  color: var(--accent);
+  opacity: 0.85;
+}
+
+.reveal .limits li {
+  position: relative;
+  padding-left: 1.2em;
+  margin-bottom: 0.55em;
+  font-size: 0.88em;
+  line-height: 1.3;
+  color: var(--fg-dim);
+}
+
+.limits li::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0.55em;
+  width: 0.5em;
+  height: 2px;
+  background: var(--loss);
+  opacity: 0.7;
+}
+
+.reveal .limits li.accent,
+.reveal .limits li.accent b {
+  color: var(--accent);
+}
+
+.limits li.accent::before {
+  background: var(--accent);
+}
+
+.reveal .foot {
+  margin-top: 0.7em;
+  font-size: 0.6em;
+  line-height: 1.35;
+  color: var(--muted);
+  max-width: 62ch;
+}
+
+/* ---------- big-number blocks ---------- */
+
+.stats {
+  display: flex;
+  gap: 1.4em;
+  align-items: flex-start;
+  margin: 0.3em 0 0.2em;
+}
+
+.stats--stack {
+  flex-direction: column;
+  gap: 0.55em;
+  margin-bottom: 0.6em;
+}
+
+.stat {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 0;
+}
+
+.stats--stack .stat {
+  flex-direction: row;
+  align-items: baseline;
+  gap: 0.5em;
+}
+
+.stat .num {
+  font-size: 1.9em;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  color: var(--accent);
+  line-height: 1;
+}
+
+.stat .num .plus {
+  font-size: 0.6em;
+  color: var(--fg-dim);
+}
+
+.stat .lbl {
+  margin-top: 0.4em;
+  font-size: 0.56em;
+  line-height: 1.3;
+  color: var(--muted);
+}
+
+.stats--stack .stat .lbl {
+  margin-top: 0;
+  font-size: 0.7em;
+  color: var(--fg-dim);
+}
+
+.reveal .big-line {
+  font-size: 0.95em;
+  font-weight: 600;
+  margin-top: 0.5em;
+}
+
+.reveal .punch {
+  margin-top: 0.85em;
+  padding-top: 0.7em;
+  border-top: 1px solid var(--rule);
+  font-size: 0.86em;
+  font-weight: 600;
+  line-height: 1.35;
+  color: var(--fg);
+}
+
+.reveal .punch--sm {
+  font-size: 0.66em;
+  font-weight: 400;
+  color: var(--fg-dim);
+}
+
+/* ---------- slide 3: evidence ---------- */
+
+.evidence {
+  display: flex;
+  gap: 1.3em;
+}
+
+.ev {
+  flex: 1 1 0;
+  display: flex;
+  flex-direction: column;
+  border-top: 2px solid var(--rule-strong);
+  padding-top: 0.55em;
+}
+
+.ev .num {
+  font-size: 1.85em;
+  font-weight: 600;
+  color: var(--accent);
+  line-height: 1;
+  letter-spacing: -0.02em;
+}
+
+.ev .lbl {
+  margin-top: 0.35em;
+  font-size: 0.62em;
+  font-weight: 600;
+  color: var(--fg);
+  line-height: 1.25;
+}
+
+.ev .cite {
+  margin-top: 0.6em;
+  font-size: 0.53em;
+  line-height: 1.4;
+  color: var(--muted);
+}
+
+.ev .cite b {
+  color: var(--fg-dim);
+}
+
+/* ---------- cards / two columns ---------- */
+
+.two-col {
+  display: flex;
+  gap: 1.1em;
+  align-items: stretch;
+}
+
+.card {
+  flex: 1 1 0;
+  background: var(--bg-raise);
+  border: 1px solid var(--rule);
+  border-radius: 6px;
+  padding: 0.75em 0.85em;
+}
+
+.card p {
+  font-size: 0.66em;
+  line-height: 1.4;
+  color: var(--fg-dim);
+}
+
+.card p:last-child {
+  margin-bottom: 0;
+}
+
+.card p.tight {
+  font-size: 0.58em;
+  color: var(--muted);
+}
+
+.card .why {
+  font-size: 0.56em;
+  color: var(--muted);
+  margin-top: -0.3em;
+}
+
+.card--unshielded {
+  border-left: 3px solid var(--accent);
+}
+
+.card--shielded {
+  border-left: 3px solid var(--rule-strong);
+}
+
+/* ---------- code ---------- */
+
+.reveal pre.code {
+  width: 100%;
+  margin: 0.3em 0 0.55em;
+  box-shadow: none;
+  background: var(--bg-raise);
+  border: 1px solid var(--rule);
+  border-radius: 5px;
+  padding: 0.6em 0.75em;
+  font-size: 0.46em;
+  line-height: 1.5;
+}
+
+.reveal pre.code code {
+  background: none;
+  padding: 0;
+  color: var(--fg-dim);
+  white-space: pre;
+  display: block;
+  max-height: none;
+  font-size: 1em;
+}
+
+.reveal pre.code code b {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.reveal .path {
+  font-size: 0.62em;
+  color: var(--muted);
+  margin-bottom: 0.7em;
+}
+
+.reveal .path code {
+  background: none;
+  color: var(--fg-dim);
+  padding: 0;
+}
+
+/* ---------- slide 7: receipts ---------- */
+
+.receipts {
+  display: flex;
+  gap: 1.1em;
+  align-items: stretch;
+}
+
+.receipt {
+  flex: 1 1 0;
+  background: var(--bg-raise);
+  border: 1px solid var(--rule);
+  border-radius: 6px;
+  padding: 0.8em 0.9em;
+}
+
+.receipt--primary {
+  flex: 1.25 1 0;
+  border-color: color-mix(in srgb, var(--accent) 45%, transparent);
+}
+
+.receipt h3 {
+  font-size: 0.62em;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 0.7em;
+}
+
+.reveal .rline {
+  font-size: 0.6em;
+  line-height: 1.4;
+  color: var(--fg-dim);
+  margin-bottom: 0.35em;
+}
+
+.reveal .rline.denial {
+  margin-top: 0.7em;
+  padding-top: 0.55em;
+  border-top: 1px solid var(--rule);
+}
+
+.reveal .rline.denial b {
+  font-family: var(--mono);
+  font-size: 0.94em;
+  color: var(--loss);
+}
+
+.reveal .rfoot {
+  font-size: 0.44em;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin: 0.25em 0 0.8em;
+}
+
+.deltas {
+  display: flex;
+  gap: 1.2em;
+  margin: 0.6em 0 0;
+}
+
+.delta {
+  display: flex;
+  align-items: baseline;
+  gap: 0.4em;
+}
+
+.delta .who {
+  font-size: 0.62em;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.delta .val {
+  font-size: 1.35em;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  line-height: 1;
+}
+
+.delta--win .val {
+  color: var(--accent);
+}
+
+.delta--lose .val {
+  color: var(--loss);
+}
+
+/* ---------- slide 8a / 14a: definition lists ---------- */
+
+.prims {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  column-gap: 1em;
+  row-gap: 0.3em;
+  align-items: baseline;
+  width: 100%;
+}
+
+.prims dt {
+  font-size: 0.6em;
+  font-weight: 600;
+  color: var(--fg);
+  white-space: nowrap;
+}
+
+.prims dt code {
+  background: none;
+  padding: 0;
+  color: var(--accent);
+  font-size: 1em;
+}
+
+.prims dd {
+  margin: 0;
+  font-size: 0.58em;
+  line-height: 1.35;
+  color: var(--muted);
+}
+
+.prims dd b {
+  color: var(--fg-dim);
+}
+
+.prims .tag {
+  font-family: var(--mono);
+  font-size: 0.78em;
+  font-weight: 400;
+  color: var(--muted);
+}
+
+.prims--clauses dt {
+  font-family: var(--mono);
+  color: var(--accent);
+  font-size: 0.64em;
+}
+
+.prims--clauses dd {
+  font-size: 0.62em;
+  color: var(--fg-dim);
+}
+
+/* ---------- slide 8d: debug trail ---------- */
+
+.debug {
+  border-left: 2px solid var(--rule-strong);
+  padding-left: 0.9em;
+}
+
+.reveal .dline {
+  font-size: 0.6em;
+  line-height: 1.4;
+  color: var(--fg-dim);
+  margin-bottom: 0.45em;
+}
+
+.reveal .dline code {
+  font-size: 0.92em;
+}
+
+/* ---------- slide 9: boundary ---------- */
+
+.boundary {
+  display: flex;
+  gap: 1.1em;
+  margin-top: 0.7em;
+}
+
+.bcol {
+  flex: 1 1 0;
+  padding: 0.7em 0.85em;
+  border-radius: 6px;
+  background: var(--bg-raise);
+  border: 1px solid var(--rule);
+}
+
+.bcol h3 {
+  font-size: 0.6em;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 0.5em;
+}
+
+.bcol p {
+  font-size: 0.64em;
+  line-height: 1.45;
+  color: var(--fg-dim);
+  margin: 0;
+}
+
+.bcol--on {
+  border-left: 3px solid var(--accent);
+}
+
+.bcol--never {
+  border-left: 3px solid var(--rule-strong);
+}
+
+.bcol--never p {
+  color: var(--muted);
+}
+
+/* ---------- slide 11: predicates ---------- */
+
+.preds {
+  display: flex;
+  gap: 1.1em;
+  margin-top: 0.6em;
+}
+
+.pred {
+  flex: 1 1 0;
+  border-top: 2px solid var(--rule-strong);
+  padding-top: 0.5em;
+  display: flex;
+  flex-direction: column;
+}
+
+.pred .pname {
+  font-family: var(--mono);
+  font-size: 1em;
+  font-weight: 600;
+  color: var(--accent);
+}
+
+.pred .pdesc {
+  margin-top: 0.25em;
+  font-size: 0.6em;
+  color: var(--muted);
+  line-height: 1.3;
+}
+
+/* ---------- slide 12: roadmap ---------- */
+
+.road {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  column-gap: 1.4em;
+  row-gap: 0.7em;
+  align-items: baseline;
+}
+
+.stage {
+  display: contents;
+}
+
+.stage .when {
+  font-size: 0.78em;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+  text-align: right;
+  white-space: nowrap;
+}
+
+.stage .what {
+  font-size: 0.78em;
+  line-height: 1.35;
+  color: var(--fg-dim);
+  padding-bottom: 0.55em;
+  border-bottom: 1px solid var(--rule);
+}
+
+.stage--now .when {
+  color: var(--accent);
+}
+
+.stage--now .what {
+  color: var(--fg);
+}
+
+/* ---------- screenshots / placeholders ---------- */
+
+.split {
+  display: flex;
+  gap: 1.4em;
+  align-items: center;
+}
+
+.split > div {
+  flex: 1 1 0;
+}
+
+.split .shot {
+  flex: 0 0 38%;
+}
+
+.reveal .shot {
+  margin: 0;
+  display: block;
+}
+
+.reveal .shot img {
+  display: block;
+  width: 100%;
+  height: auto;
+  border: 1px solid var(--rule);
+  border-radius: 5px;
+  box-shadow: none;
+  background: var(--bg-raise);
+}
+
+.reveal .shot figcaption {
+  display: none;
+}
+
+.reveal .shot--missing img {
+  display: none;
+}
+
+.reveal .shot--missing figcaption {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  gap: 0.3em;
+  min-height: 5em;
+  padding: 1.2em;
+  border: 1px dashed var(--rule-strong);
+  border-radius: 5px;
+  font-family: var(--mono);
+  font-size: 0.42em;
+  line-height: 1.6;
+  text-align: center;
+  color: var(--muted);
+  background: var(--shot-missing-bg);
+}
+
+.reveal .shot--missing figcaption span {
+  font-family: var(--sans);
+  color: var(--fg-dim);
+}
+
+.shot--full {
+  flex: 0 0 auto;
+  width: 100%;
+}
+
+.shot--full img {
+  max-height: 470px;
+  width: auto;
+  max-width: 100%;
+  margin: 0 auto;
+}
+
+.shot--full.shot--missing figcaption {
+  min-height: 11em;
+}
+
+.slide-handoff {
+  justify-content: center !important;
+  text-align: center;
+}
+
+.reveal .handoff-line {
+  margin-top: 0.7em;
+  font-size: 1.5em;
+  font-weight: 600;
+  max-width: none;
+  text-align: center;
+}
+
+.shot--qr {
+  margin-top: 1em;
+  width: 8em;
+}
+
+.shot--qr img {
+  padding: 0.4em;
+  background: #fff;
+}
+
+/* ---------- reveal chrome tuning ---------- */
+
+.reveal .controls {
+  color: var(--muted);
+  opacity: 0.6;
+}
+
+.reveal .progress {
+  height: 3px;
+  color: var(--accent);
+  background: var(--progress-track);
+}
+
+/* Kept clear of the controls in the bottom-right corner. */
+.reveal .slide-number {
+  background: none;
+  color: var(--muted);
+  opacity: 0.45;
+  font-family: var(--mono);
+  font-size: 13px;
+  right: auto;
+  left: 210px;
+  bottom: 13px;
+}
+
+.reveal .slide-number a {
+  color: inherit;
+}
