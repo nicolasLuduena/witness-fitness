@@ -62,6 +62,41 @@ Rules:
 - Nullifiers are scoped: a credential can be used across challenges, but the same workout cannot be double-counted in the same challenge (nullifier = hash(credential, challengeId)).
 - Fields not disclosed stay private witness data — the circuit proves predicates, never values.
 
+## 5b. Points treasury (Phase A v3 — no unshielded tokens)
+
+Wagers are **internal points** (`balances` Map keyed by holder binding);
+NIGHT enters/leaves only through shielded on/off-ramps:
+
+- `depositPoints` receives the caller's shielded NIGHT coin and passes it
+  straight through to the admin `treasuryKey` in the SAME transaction
+  (`sendImmediateShielded` — the contract never holds value across txs, so
+  the committed-coin path (`sendShielded` + `mt_index` from the indexer)
+  never appears). The caller's points are credited; the payout key is
+  registered.
+- `withdrawPoints` is **admin-initiated**: the admin wallet offers a
+  treasury coin, the contract debits the user's points and routes the NIGHT
+  to the user's registered payout key (pinned — the admin can stall, never
+  redirect). Largest-coin selection + change-back keeps the admin wallet
+  free of exact-value coin management.
+- Platform fee: 2% of stake at create/accept, credited to the admin binding
+  — a pure balance credit, invisible on-chain.
+
+Privacy ledger (honest): deposits/withdrawals hide amounts and wallet
+linkage (Zswap); the wager record (stake, pseudonymous bindings, sealed
+submissions) stays public as before; `balances` values are public per
+pseudonym (hidden balances are the ShieldedERC20 tier — archived by
+OpenZeppelin as "DO NOT USE IN PRODUCTION"; internal accounts keep the
+contract as the spend-enforcement authority instead).
+
+**Scale-up path (documented, not built):** the admin-initiated withdrawal
+is a custodial workaround pending contract-held-value tooling maturity.
+`txpipe-shop/midnight-reference-app#49` ("Improved contract design",
+draft) is the known-good route: a sponsor-service operator with indexer
+integration + `protocol-verification` experiments (multi-call txs,
+guaranteed/fallible partitioning, tx-merge) enabling user-initiated
+withdrawals (user builds the call tx; the admin's coin-offer tx merges in)
+and, further out, a trustless contract-held treasury.
+
 ## 6. Mechanical specifics (all decided)
 
 | Item | Decision |
@@ -71,6 +106,6 @@ Rules:
 | Notary threshold | 3 registered keys, ≥2 signatures required |
 | Signature scheme | Jubjub-Schnorr (stdlib `jubjubSchnorrVerify` if available in compact 0.4.0, else zk-loan polyfill) |
 | Assertion hashing | `transientHash` (Poseidon) for challenges; `persistentCommit` (SHA-256) for on-chain storage |
-| Stakes | Contract-escrowed ledger balances per participant (shielded sends in prod; ledger balances in the demo contract) |
+| Stakes | Internal points (`balances` per holder binding); shielded NIGHT on/off-ramp via deposit/withdraw (treasury passthrough) |
 | Deadline | `blockTimeGte` + grace window for forfeit |
 | Demo data source | Real Strava API via OAuth; fixture proofs as fallback |

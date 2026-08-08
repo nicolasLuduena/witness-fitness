@@ -14,6 +14,14 @@ const COIN_PK = "0".repeat(64);
 export class StrideSim {
   private state: Contract["initialState"] extends never ? never : any;
   private lastEffects: Effects | null = null;
+  private lastZswap:
+    | {
+        outputs: {
+          coinInfo: { nonce: Uint8Array; color: Uint8Array; value: bigint };
+          recipient: { is_left: boolean; left: Uint8Array; right: Uint8Array };
+        }[];
+      }
+    | null = null;
 
   // Block-time override (seconds). Leave null to use the runtime default;
   // set it forward to test deadline gates (audit H1 deadline tests).
@@ -42,6 +50,7 @@ export class StrideSim {
     const res = circuit(ctx, ...args);
     this.state = res.context.currentQueryContext.state;
     this.lastEffects = res.context.currentQueryContext.effects;
+    this.lastZswap = res.context.currentZswapLocalState;
     return res.result;
   }
 
@@ -75,6 +84,18 @@ export class StrideSim {
   // Winner-NFT mints in the last call (map: hex domain separator -> value).
   shieldedMints(): Map<string, bigint> {
     return this.effects().shieldedMints;
+  }
+
+  // Shielded outputs produced by the last call (receiveShielded records the
+  // receipt commitment; sendImmediateShielded appends the sent/change coins).
+  zswapOutputs(): {
+    coinInfo: { nonce: Uint8Array; color: Uint8Array; value: bigint };
+    recipient: { is_left: boolean; left: Uint8Array; right: Uint8Array };
+  }[] {
+    if (!this.lastZswap) {
+      throw new Error("no circuit call executed yet");
+    }
+    return this.lastZswap.outputs;
   }
 
   ledgerView(): Ledger {

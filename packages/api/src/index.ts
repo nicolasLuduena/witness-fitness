@@ -1,10 +1,9 @@
 // Stride contract wrapper (mirrors midnight-reference-app's SentinelContract)
 // + notary client glue (NOTARY.md §5): collect ≥2 notary signatures over a
 // proof artifact and package the verifyAttestation transaction. Demo flows
-// (attest → wager → settle; streak → badge → proveBadge) are exposed as
-// callable functions for the UI agent.
+// (attest → deposit → wager → settle → withdraw; streak → badge → proveBadge)
+// are exposed as callable functions for the UI agent.
 
-import { encodeUserAddress } from "@midnight-ntwrk/compact-runtime";
 import {
   type ContractProviders,
   deployContract,
@@ -285,7 +284,6 @@ export class StrideContract {
     metricId: bigint,
     stake: bigint,
     deadlineBlock: bigint,
-    payout: Uint8Array,
     coinKey: { bytes: Uint8Array },
   ): ReturnType<FoundContract<StrideContractType>["callTx"]["createWager"]> {
     return this.requireDeployed().callTx.createWager(
@@ -293,7 +291,6 @@ export class StrideContract {
       metricId,
       stake,
       deadlineBlock,
-      payout,
       coinKey,
     );
   }
@@ -306,10 +303,30 @@ export class StrideContract {
 
   acceptWager(
     id: bigint,
-    payout: Uint8Array,
     coinKey: { bytes: Uint8Array },
   ): ReturnType<FoundContract<StrideContractType>["callTx"]["acceptWager"]> {
-    return this.requireDeployed().callTx.acceptWager(id, payout, coinKey);
+    return this.requireDeployed().callTx.acceptWager(id, coinKey);
+  }
+
+  setTreasuryKey(
+    key: { bytes: Uint8Array },
+  ): ReturnType<FoundContract<StrideContractType>["callTx"]["setTreasuryKey"]> {
+    return this.requireDeployed().callTx.setTreasuryKey(key);
+  }
+
+  depositPoints(
+    amount: bigint,
+    coin: ShieldedCoin,
+  ): ReturnType<FoundContract<StrideContractType>["callTx"]["depositPoints"]> {
+    return this.requireDeployed().callTx.depositPoints(amount, coin);
+  }
+
+  withdrawPoints(
+    binding: bigint,
+    amount: bigint,
+    coin: ShieldedCoin,
+  ): ReturnType<FoundContract<StrideContractType>["callTx"]["withdrawPoints"]> {
+    return this.requireDeployed().callTx.withdrawPoints(binding, amount, coin);
   }
 
   cancelWager(id: bigint): ReturnType<FoundContract<StrideContractType>["callTx"]["cancelWager"]> {
@@ -393,22 +410,46 @@ export interface WorkoutContext {
   holderSecret: Uint8Array;
 }
 
-// Wager routing for real-token wagers (Phase A v2 — FROZEN interface, see
-// packages/contract/README.md "Wager interface (v2)"):
-//   payout  = 32-byte UserAddress payload of the participant's unshielded
-//             NIGHT address (encodeUserAddress of the address hex string).
-//   coinKey = the participant's shielded ZswapCoinPublicKey, recipient of the
-//             winner NFT on settle.
-export interface WagerPayoutRouting {
-  payout: Uint8Array;
+// A shielded coin as the contract circuits see it (nonce/color/value — the
+// wallet SDK supplies the mt_index when offering the spend). Native NIGHT
+// coins have the zero color.
+export interface ShieldedCoin {
+  nonce: Uint8Array;
+  color: Uint8Array;
+  value: bigint;
+}
+
+// Wager coin routing (Phase A v3 — points era): only the winner-NFT
+// recipient's shielded coin key, pinned at create/accept. Real-money payout
+// addresses no longer exist — wagers settle in points.
+export interface WagerCoinRouting {
   coinKey: { bytes: Uint8Array };
 }
 
-// Convert a runtime UserAddress (64-hex-char string of the 32 address bytes)
-// to the 32-byte payload the contract stores/pays. Wallet bech32m addresses
-// must first be converted: UnshieldedAddress.codec.decode(networkId, str)
-// → .hexString (wallet-sdk-address-format).
-export const userAddressBytes = (addressHex: string): Uint8Array => encodeUserAddress(addressHex);
+// Pick the smallest native NIGHT coin with value >= minValue from a wallet
+// state's shielded coin set (the reference app's exact-value selection,
+// relaxed to "any coin big enough" — the contract returns change to the
+// caller, so exact matches are unnecessary). null when the wallet lacks a
+// usable coin.
+export const selectNightCoin = (state: unknown, minValue: bigint): ShieldedCoin | null => {
+  const coins =
+    (
+      state as {
+        shielded?: { state?: { state?: { coins?: { nonce?: Uint8Array; color?: Uint8Array; value?: bigint }[] } } };
+      }
+    )?.shielded?.state?.state?.coins ?? [];
+  const candidates = coins
+    .filter(
+      (coin): coin is ShieldedCoin =>
+        coin.nonce !== undefined &&
+        coin.color !== undefined &&
+        coin.value !== undefined &&
+        coin.value >= minValue &&
+        coin.color.every((byte) => byte === 0),
+    )
+    .sort((a, b) => (a.value < b.value ? -1 : a.value > b.value ? 1 : 0));
+  return candidates.length > 0 ? candidates[0] : null;
+};
 
 export const attestWorkout = async (
   ctx: WorkoutContext,
@@ -447,7 +488,6 @@ export const createWagerFlow = (
     metricId: bigint;
     stake: bigint;
     deadlineBlock: bigint;
-    payout: Uint8Array;
     coinKey: { bytes: Uint8Array };
   },
 ): ReturnType<StrideContract["createWager"]> =>
@@ -456,16 +496,28 @@ export const createWagerFlow = (
     input.metricId,
     input.stake,
     input.deadlineBlock,
-    input.payout,
     input.coinKey,
   );
 
 export const acceptWagerFlow = (
   ctx: WorkoutContext,
   id: bigint,
-  routing: WagerPayoutRouting,
-): ReturnType<StrideContract["acceptWager"]> =>
-  ctx.contract.acceptWager(id, routing.payout, routing.coinKey);
+  coinKey: { bytes: Uint8Array },
+): ReturnType<StrideContract["acceptWager"]> => ctx.contract.acceptWager(id, coinKey);
+
+export const depositPointsFlow = (
+  ctx: WorkoutContext,
+  amount: bigint,
+  coin: ShieldedCoin,
+): ReturnType<StrideContract["depositPoints"]> => ctx.contract.depositPoints(amount, coin);
+
+export const withdrawPointsFlow = (
+  ctx: WorkoutContext,
+  binding: bigint,
+  amount: bigint,
+  coin: ShieldedCoin,
+): ReturnType<StrideContract["withdrawPoints"]> =>
+  ctx.contract.withdrawPoints(binding, amount, coin);
 
 export const cancelWagerFlow = (
   ctx: WorkoutContext,

@@ -119,55 +119,73 @@ rejected.
   `submissionRand`/`wagerOpenings` fields) — the wrapper pattern mirrors
   `SentinelContract` in the reference app (`packages/api` owns it).
 - Ledger view (via `ledger(state)` or the indexer): `registry`, `vault`,
-  `nullifiers`, `wagers`, `nextWagerId`, `streaks`, `badges`, `balances`.
+  `nullifiers`, `wagers`, `nextWagerId`, `streaks`, `badges`, `balances`,
+  `payoutKeys`, `treasuryKey`.
 - Helper pure circuits for the UI: `holderBinding(secret)` (compute a binding
   to show in a wager screen) and `computeVaultKey(assertion, rand)`.
 
-## Wager interface (v2) — FROZEN (real-token pot + winner NFT)
+## Wager interface (v3) — SHIELDED POINTS + treasury (current)
 
-The simulated `balances` map and `deposit` circuit are **deleted**. Wager pots
-are real unshielded NIGHT: create/accept escrow via `receiveUnshielded`
-(wallets spend NIGHT UTXOs into the contract), settle pays via
-`sendUnshielded` to the winner's unshielded address, and the winner gets a
-shielded NFT (`mintShieldedToken`, type `tokenType(pad(32,"witnessfitness:nft:v1"), contract)`).
+Wager pots are **internal points** (`balances: Map<Field, Uint<64>>` keyed by
+holder binding) — no tokens move in-game and nothing unshielded touches the
+chain. NIGHT enters/leaves only through the shielded on/off-ramps:
+
+- `depositPoints(amount, coin: ShieldedCoinInfo)` — the caller's wallet
+  offers a shielded NIGHT coin; the SAME transaction passes it straight
+  through to `treasuryKey` (`sendImmediateShielded` — the contract never
+  holds value across txs) and credits the caller's points. Oversized coins
+  return change to the caller. Registers `payoutKeys[binding]` (the
+  withdrawal recipient, pinned).
+- `withdrawPoints(binding, amount, coin)` — ADMIN-initiated: the admin
+  wallet offers a treasury coin; the contract debits the user's points and
+  routes the NIGHT to the user's registered payout key (change back to the
+  admin). The admin can stall a withdrawal but cannot redirect it.
+- `setTreasuryKey(key)` — admin-only; pins the deposit passthrough target.
+
+Trust model: the treasury is custodial by construction. Scale-up path to
+user-initiated/trustless withdrawal: `txpipe-shop/midnight-reference-app#49`
+(sponsor-service operator + indexer integration + tx-merge). Balance amounts
+are public per pseudonymous binding — hidden balances are the ShieldedERC20
+tier, which OpenZeppelin archived ("DO NOT USE IN PRODUCTION"); internal
+accounts keep the contract as the spend-enforcement authority instead.
 
 **Circuit signatures (contract law):**
 
 ```ts
 createWager(opponentBinding: bigint, metricId: bigint, stake: bigint,
-            deadlineBlock: bigint, payout: Uint8Array /*32*/,
-            coinKey: { bytes: Uint8Array } /*32*/): []
-acceptWager(id: bigint, payout: Uint8Array /*32*/, coinKey: { bytes: Uint8Array }): []
-cancelWager(id: bigint): []                                   // refunds challenger stake
+            deadlineBlock: bigint, coinKey: { bytes: Uint8Array } /*32*/): []
+acceptWager(id: bigint, coinKey: { bytes: Uint8Array }): []
+cancelWager(id: bigint): []              // refunds challenger stake in points
 submitWorkout(wagerId: bigint, vaultKey: Uint8Array, value: bigint): []
-settleWager(id: bigint): []   // NO payout args — pays the stored routing only
+settleWager(id: bigint): []              // NO payout args — points only
+depositPoints(amount: bigint, coin: { nonce, color, value }): []
+withdrawPoints(binding: bigint, amount: bigint, coin: { nonce, color, value }): []
+setTreasuryKey(key: { bytes: Uint8Array }): []
 ```
 
-- `payout` = the 32-byte `UserAddress` payload (`encodeUserAddress` of the
-  address hex string; wallet bech32m → `UnshieldedAddress.codec.decode(...).hexString`
-  first). Stored on the wager at create/accept; settle pays ONLY stored values.
-- `coinKey` = the winner's shielded coin public key (NFT recipient).
-- Escrow: the contract records `receiveUnshielded(nativeToken(), stake)` — the
-  wallet must fund the corresponding unshielded output (transaction
-  well-formedness enforces it; there is no in-circuit balance check — the
-  simulator probe proved `unshieldedBalance` reads are construction-time and
-  the VM enforces sufficiency at apply time).
-- Settle: both-submit → winner gets `2*stake` + NFT, tie refunds both (no
-  NFT); forfeit → single submitter gets `2*stake` + NFT; neither → refunds.
+- Platform fee: `entryFee(stake) = stake / 50` (2%), debited at create AND
+  accept, credited to the admin binding (`adminSecret`). Never refunded
+  (cancel/tie return only the stake).
+- Wager accounting: create/accept debit `stake + fee` from the caller's
+  points; settle credits the winner `2*stake` + the winner NFT; tie/none
+  refund both stakes; forfeit pays the single submitter.
+- `coinKey` = the winner's shielded coin public key (NFT recipient), pinned
+  at create/accept.
+- The winner NFT mint is observable in tx effects (`shieldedMints`, value 1);
+  deposit/withdraw coin movements are observable in the zswap outputs
+  (`StrideSim.zswapOutputs` — treasury passthrough vs change).
 
-**Api flow signatures (packages/api, frozen for the sidecar agent):**
+**Api flow signatures (packages/api, current):**
 
 ```ts
 createWagerFlow(ctx, { opponentBinding, metricId, stake, deadlineBlock,
-                       payout: Uint8Array, coinKey: { bytes } })
-acceptWagerFlow(ctx, id, { payout, coinKey })
-settleWagerFlow(ctx, id)          // returns the callTx result
-userAddressBytes(addressHex: string): Uint8Array   // helper (encodeUserAddress)
+                       coinKey: { bytes } })
+acceptWagerFlow(ctx, id, coinKey: { bytes })
+settleWagerFlow(ctx, id)                  // returns the callTx result
+depositPointsFlow(ctx, amount, coin: ShieldedCoin)
+withdrawPointsFlow(ctx, binding, amount, coin: ShieldedCoin)
+selectNightCoin(state, minValue): ShieldedCoin | null   // smallest usable NIGHT coin
 ```
-
-The winner NFT mint is observable in tx effects (`shieldedMints`, value 1).
-Simulator tests assert escrow/payout/NFT via effects
-(`StrideSim.unshieldedInputSum/unshieldedOutputSum/shieldedMints`).
 
 ## Admin secret
 

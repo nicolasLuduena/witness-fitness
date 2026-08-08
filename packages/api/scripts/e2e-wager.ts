@@ -1,21 +1,19 @@
-// LIVE WAGER E2E (Phase B gate — REAL unshielded NIGHT + shielded NFT):
-// fixture 3545 m → athlete A; fixture 2426 m → athlete B; A creates a wager
-// (stake 10 NIGHT, deadline ≈ now + 90s), B accepts, both submit, wait for
-// deadline + 60s grace, settle. Asserts: winner A, A's unshielded NIGHT up
-// ~20, NFT minted to A's shielded key (token detected by the sidecar + the
-// script's own wallet check).
+// LIVE WAGER E2E (Phase A v3 gate — SHIELDED points + treasury):
+// fixture 3545 m → athlete A; fixture 2426 m → athlete B. Both athletes
+// DEPOSIT shielded NIGHT (stake + 2% fee) through /points/deposit; A creates
+// a wager (stake 10 NIGHT, deadline ≈ now + 90s), B accepts, both submit,
+// wait for deadline + 60s grace, settle. Asserts: winner A, A's points up
+// 2 * stake, B's points drained, NFT minted to A's shielded key.
 //   pnpm --filter @witnessfitness/api run e2e:wager
-// Requires: devnet up, notaries on 8101-8103, sidecar on :8200 (ready).
+// Requires: devnet up (athlete + admin wallets funded with SHIELDED NIGHT —
+// the shielded-funding bootstrap, see devnet/README.md), notaries on
+// 8101-8103, sidecar on :8200 (ready).
 import { readFileSync } from "node:fs";
-import * as ledger from "@midnight-ntwrk/ledger-v8";
-import { UnshieldedAddress } from "@midnight-ntwrk/wallet-sdk-address-format";
-import { buildWallet } from "@witnessfitness/contract/wallet";
 
 const SIDECAR = process.env.SIDECAR_URL ?? "http://127.0.0.1:8200";
 const NIGHT = 10n ** 12n;
 const STAKE = 10n * NIGHT;
-const SEED_A = "0000000000000000000000000000000000000000000000000000000000000001";
-const SEED_B = "0000000000000000000000000000000000000000000000000000000000000002";
+const FEE = STAKE / 50n; // 2% platform fee (entryFee in stride.compact)
 
 const post = async (
   path: string,
@@ -39,22 +37,6 @@ const hexOf = (v: bigint): string => "0x" + v.toString(16);
 const loadFixture = (name: string): unknown =>
   JSON.parse(readFileSync(new URL(`../../client/fixtures/${name}`, import.meta.url), "utf-8"));
 
-const nightBalance = async (seed: string): Promise<bigint> => {
-  const ctx = await buildWallet(
-    {
-      indexer: process.env.INDEXER_URL ?? "http://127.0.0.1:8088/api/v3/graphql",
-      indexerWS: process.env.INDEXER_WS_URL ?? "ws://127.0.0.1:8088/api/v3/graphql/ws",
-      node: process.env.NODE_URL ?? "http://127.0.0.1:9944",
-      proofServer: process.env.PROOF_SERVER_URL ?? "http://127.0.0.1:6300",
-    },
-    seed,
-  );
-  const state = await new Promise((resolve) => ctx.wallet.state().subscribe(resolve));
-  const balance = state.unshielded.balances[ledger.unshieldedToken().raw] ?? 0n;
-  await ctx.wallet.terminate?.().catch(() => undefined);
-  return balance;
-};
-
 const expectStatus = (
   label: string,
   result: { status: number; body: Record<string, unknown> },
@@ -68,6 +50,12 @@ const expectStatus = (
   console.log(`  ${label}: HTTP ${result.status}`, JSON.stringify(result.body).slice(0, 240));
 };
 
+const pointsOf = async (athlete: "A" | "B"): Promise<bigint> => {
+  const state = await get(`/state?athlete=${athlete}`);
+  const raw = (state.points ?? "0x0") as string;
+  return BigInt(raw);
+};
+
 const main = async () => {
   const health = await get("/health");
   console.log("[e2e] sidecar health:", JSON.stringify(health));
@@ -75,11 +63,9 @@ const main = async () => {
     throw new Error("sidecar not ready");
   }
 
-  console.log("[e2e] baseline unshielded NIGHT balances...");
-  const beforeA = await nightBalance(SEED_A);
-  const beforeB = await nightBalance(SEED_B);
-  console.log(`  A: ${beforeA} (${Number(beforeA) / 1e12} NIGHT)`);
-  console.log(`  B: ${beforeB} (${Number(beforeB) / 1e12} NIGHT)`);
+  const beforeA = await pointsOf("A");
+  const beforeB = await pointsOf("B");
+  console.log(`[e2e] baseline points — A: ${beforeA}, B: ${beforeB}`);
 
   console.log("[e2e] attest A (3545 m fixture)...");
   const attA = await post("/attest", {
@@ -87,7 +73,6 @@ const main = async () => {
     artifacts: loadFixture("fixture-activity-19643821429-3545m.json"),
   });
   expectStatus("attest A", attA, 200);
-  const vaultKeyA = attA.body.vaultKey as string;
 
   console.log("[e2e] attest B (2426 m fixture)...");
   const attB = await post("/attest", {
@@ -95,11 +80,25 @@ const main = async () => {
     artifacts: loadFixture("fixture-activity-19643822226-2426m.json"),
   });
   expectStatus("attest B", attB, 200);
-  const vaultKeyB = attB.body.vaultKey as string;
+
+  // Shielded on-ramp: both sides deposit stake + 2% fee worth of points; the
+  // NIGHT passes through to the admin treasury in the same transactions.
+  console.log(`[e2e] deposit A (${STAKE + FEE} = stake + 2% fee)...`);
+  const depA = await post("/points/deposit", {
+    athlete: "A",
+    amount: hexOf(STAKE + FEE),
+  });
+  expectStatus("deposit A", depA, 200);
+  console.log(`[e2e] deposit B (${STAKE + FEE} = stake + 2% fee)...`);
+  const depB = await post("/points/deposit", {
+    athlete: "B",
+    amount: hexOf(STAKE + FEE),
+  });
+  expectStatus("deposit B", depB, 200);
 
   const deadline = BigInt(Math.floor(Date.now() / 1000)) + 90n;
   console.log(
-    `[e2e] create wager (A challenger, stake 10 NIGHT, deadline now+90s = ${deadline})...`,
+    `[e2e] create wager (A challenger, stake 10 NIGHT points, deadline now+90s = ${deadline})...`,
   );
   const created = await post("/wager/create", {
     athlete: "A",
@@ -140,25 +139,23 @@ const main = async () => {
     throw new Error(`expected winner A, got ${String(settleBody.winner)}`);
   }
   if (settleBody.potNIGHT !== hexOf(2n * STAKE)) {
-    throw new Error(`expected potNIGHT ${hexOf(2n * STAKE)}, got ${String(settleBody.potNIGHT)}`);
+    throw new Error(`expected pot ${hexOf(2n * STAKE)}, got ${String(settleBody.potNIGHT)}`);
   }
   const nft = settleBody.nft as { tokenType?: string } | null;
   if (nft === null || typeof nft.tokenType !== "string") {
     throw new Error(`expected a winner NFT, got ${JSON.stringify(nft)}`);
   }
 
-  console.log("[e2e] post-settle unshielded NIGHT balances...");
-  const afterA = await nightBalance(SEED_A);
-  const afterB = await nightBalance(SEED_B);
-  const deltaA = afterA - beforeA;
-  const deltaB = afterB - beforeB;
-  console.log(`  A: ${beforeA} → ${afterA} (delta ${deltaA} = ${Number(deltaA) / 1e12} NIGHT)`);
-  console.log(`  B: ${beforeB} → ${afterB} (delta ${deltaB} = ${Number(deltaB) / 1e12} NIGHT)`);
-  if (deltaA < 9n * NIGHT || deltaA > 11n * NIGHT) {
-    throw new Error(`A NIGHT delta ${deltaA} outside [9, 11] NIGHT — pot did not arrive`);
+  // Points assertions: A staked STAKE + fee then won the 2 * STAKE pot; B's
+  // entry was spent. Unshielded NIGHT must NOT have moved (points-only pot).
+  const afterA = await pointsOf("A");
+  const afterB = await pointsOf("B");
+  console.log(`[e2e] post-settle points — A: ${afterA}, B: ${afterB}`);
+  if (afterA - beforeA !== 2n * STAKE) {
+    throw new Error(`A points delta ${afterA - beforeA} != 2 * stake ${2n * STAKE}`);
   }
-  if (deltaB < -11n * NIGHT || deltaB > -9n * NIGHT) {
-    throw new Error(`B NIGHT delta ${deltaB} outside [-11, -9] NIGHT — stake not escrowed`);
+  if (afterB - beforeB !== 0n) {
+    throw new Error(`B points delta ${afterB - beforeB} != 0 (entry spent)`);
   }
 
   console.log("[e2e] GET /wagers + /state?athlete=A...");
@@ -167,11 +164,9 @@ const main = async () => {
   const stateA = await get("/state?athlete=A");
   console.log("  state A:", JSON.stringify(stateA).slice(0, 400));
 
-  console.log("[e2e] ✅ WAGER E2E PASSED — winner A, pot paid, NFT", nft.tokenType.slice(0, 24));
+  console.log("[e2e] ✅ WAGER E2E PASSED — winner A, pot in points, NFT", nft.tokenType.slice(0, 24));
 };
 
-// The built wallets hold open node/indexer WebSocket connections — without an
-// explicit exit the process hangs after PASSED.
 main()
   .then(() => process.exit(0))
   .catch((error) => {

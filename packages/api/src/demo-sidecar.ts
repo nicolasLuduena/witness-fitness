@@ -1,12 +1,16 @@
 // Demo sidecar (Phase B): Node service bridging the browser demo (no wallet
 // extension) to the Midnight devnet. TWO demo athlete identities (genesis
-// seeds ONE and TWO) with REAL unshielded NIGHT wager pots and a shielded
-// winner NFT. Wager endpoints (stable contract for the UI agent):
+// seeds ONE and TWO) with SHIELDED points balances (deposits pass NIGHT
+// through to the admin treasury wallet) and a shielded winner NFT. Wager
+// endpoints (stable contract for the UI agent):
 //   POST /wager/create {athlete, opponent, metricId, stake, deadlineBlock}
 //   POST /wager/accept {athlete, id}
 //   POST /wager/submit {athlete, id}
 //   POST /wager/settle {id, athlete?}
 //   GET  /wagers
+// Points endpoints (shielded treasury, Phase A v3):
+//   POST /points/deposit {athlete, amount}   — shielded NIGHT → points
+//   POST /points/withdraw {athlete, amount}  — admin-initiated points → NIGHT
 // Existing endpoints unchanged: /health, /attest (optional athlete param),
 // /streak/advance, /badge/mint, /badge/prove, /state (optional athlete param).
 // All bigint/bytes fields are 0x-hex strings on the wire.
@@ -32,16 +36,19 @@ import {
   advanceStreakFlow,
   attestWorkout,
   createWagerFlow,
+  depositPointsFlow,
   mintBadgeFlow,
   type NotarizedAttestation,
   NotaryClient,
   proveBadgeFlow,
+  selectNightCoin,
+  type ShieldedCoin,
   StrideContract,
   type StrideDerivedState,
   type StrideProviders,
   toHex,
-  userAddressBytes,
-  type WagerPayoutRouting,
+  withdrawPointsFlow,
+  type WagerCoinRouting,
   type WorkoutContext,
 } from "./index.js";
 
@@ -58,6 +65,10 @@ export interface DemoSidecarConfig {
   proofServerUrl: string;
   genesisSeed: string;
   genesisSeedB: string;
+  // Seed of the admin treasury wallet (holds the passthrough NIGHT and
+  // signs withdrawals). Defaults to a deterministic derivation off the
+  // genesis seed when unset.
+  adminSeed: string;
   txTimeoutMs: number;
   notaryTimeoutMs: number;
   walletInitTimeoutMs: number;
@@ -127,6 +138,9 @@ export const loadSidecarConfig = (env: NodeJS.ProcessEnv = process.env): DemoSid
     genesisSeedB:
       env.GENESIS_MINT_WALLET_SEED_B ??
       "0000000000000000000000000000000000000000000000000000000000000002",
+    adminSeed:
+      env.DEMO_SIDECAR_ADMIN_SEED ??
+      sha256Hex(`witnessfitness:demo:admin-wallet:${env.GENESIS_MINT_WALLET_SEED ?? "1"}`),
     txTimeoutMs: Number(env.DEMO_SIDECAR_TX_TIMEOUT_MS ?? 180_000),
     notaryTimeoutMs: Number(env.DEMO_SIDECAR_NOTARY_TIMEOUT_MS ?? 30_000),
     walletInitTimeoutMs: Number(env.DEMO_SIDECAR_WALLET_INIT_TIMEOUT_MS ?? 240_000),
@@ -320,11 +334,10 @@ export interface SidecarDeps {
         metricId: bigint;
         stake: bigint;
         deadlineBlock: bigint;
-        payout: Uint8Array;
         coinKey: { bytes: Uint8Array };
       },
     ): Promise<unknown>;
-    acceptWager(athlete: Athlete, id: bigint, routing: WagerPayoutRouting): Promise<unknown>;
+    acceptWager(athlete: Athlete, id: bigint, coinKey: { bytes: Uint8Array }): Promise<unknown>;
     submitWorkout(
       athlete: Athlete,
       wagerId: bigint,
@@ -345,11 +358,13 @@ export interface SidecarDeps {
       vaultKey: Uint8Array,
     ): Promise<unknown>;
     proveBadge(badgeId: bigint, verifierBinding: bigint): Promise<unknown>;
+    deposit(athlete: Athlete, amount: bigint): Promise<unknown>;
+    withdraw(binding: bigint, amount: bigint): Promise<unknown>;
   };
   stagePrivateState(athlete: Athlete, fields: Partial<PrivateState>): Promise<void>;
   readState(): Promise<StrideDerivedState>;
   shieldedBalances(athlete: Athlete): Promise<Record<string, bigint>>;
-  identities: Record<Athlete, { holderBinding: bigint; routing: WagerPayoutRouting }>;
+  identities: Record<Athlete, { holderBinding: bigint } & WagerCoinRouting>;
   holderSecret: Uint8Array;
   holderBinding: bigint;
   verifierBinding: bigint;
@@ -493,7 +508,6 @@ export const createDemoSidecarWithDeps = (
   const buildIdentity = async (
     walletCtx: WalletContext,
   ): Promise<{
-    payout: Uint8Array;
     coinKey: { bytes: Uint8Array };
     unshieldedAddress: string;
     nightBalance: bigint;
@@ -501,10 +515,8 @@ export const createDemoSidecarWithDeps = (
     const state = await firstValueFrom(walletCtx.wallet.state());
     const nightBalance = state.unshielded.balances[ledger.unshieldedToken().raw] ?? 0n;
     const bech32m = UnshieldedAddress.codec.encode(getNetworkId(), state.unshielded.address);
-    const hex = UnshieldedAddress.codec.decode(getNetworkId(), bech32m).hexString;
-    const payout = userAddressBytes(hex);
     const coinKey = { bytes: encodeCoinPublicKey(walletCtx.shieldedSecretKeys.coinPublicKey) };
-    return { payout, coinKey, unshieldedAddress: bech32m.toString(), nightBalance };
+    return { coinKey, unshieldedAddress: bech32m.toString(), nightBalance };
   };
 
   const init = async (): Promise<void> => {
@@ -577,14 +589,61 @@ export const createDemoSidecarWithDeps = (
             holderSecret: holderSecretB,
           };
 
+          // Admin treasury wallet: holds the passthrough deposit NIGHT
+          // (treasury key) and signs the admin-initiated withdrawals.
+          const adminWallet = await buildWallet(
+            {
+              indexer: config.indexerUrl,
+              indexerWS: config.indexerWsUrl,
+              node: config.nodeUrl,
+              proofServer: config.proofServerUrl,
+            },
+            config.adminSeed,
+          );
+          await registerForDustGeneration(adminWallet.wallet, adminWallet.unshieldedKeystore);
+          const adminProviders = await configureProviders(
+            adminWallet,
+            {
+              indexer: config.indexerUrl,
+              indexerWS: config.indexerWsUrl,
+              proofServer: config.proofServerUrl,
+            },
+            "stride-admin",
+          );
+          const adminContract = await StrideContract.join(
+            adminProviders,
+            config.contractAddress,
+            "wf-demo-admin",
+            StrideContract.freshPrivateState(adminSecret, holderSecret),
+          );
+          const adminCtx: WorkoutContext = {
+            contract: adminContract,
+            privateStateId: "wf-demo-admin",
+            holderSecret,
+          };
+
           const identityA = await buildIdentity(walletA);
           const identityB = await buildIdentity(walletB);
+          const adminCoinKey = {
+            bytes: encodeCoinPublicKey(adminWallet.shieldedSecretKeys.coinPublicKey),
+          };
           console.log(
             `[sidecar] athlete A binding 0x${holderBinding.toString(16).slice(0, 16)}… NIGHT ${identityA.nightBalance} addr ${identityA.unshieldedAddress}`,
           );
           console.log(
             `[sidecar] athlete B binding 0x${holderBindingB.toString(16).slice(0, 16)}… NIGHT ${identityB.nightBalance} addr ${identityB.unshieldedAddress}`,
           );
+
+          // One-time treasury pin: point the deposit passthrough at the admin
+          // wallet's shielded coin key (idempotent — a set key is kept).
+          const state0 = await contractA.readState();
+          if (
+            state0.treasuryKey.bytes.length === 32 &&
+            state0.treasuryKey.bytes.every((byte) => byte === 0)
+          ) {
+            console.log("[sidecar] pinning treasury key to the admin wallet…");
+            await adminCtx.contract.setTreasuryKey(adminCoinKey);
+          }
 
           const ctxFor = (athlete: Athlete): WorkoutContext => (athlete === "A" ? ctxA : ctxB);
           const providersFor = (athlete: Athlete): StrideProviders =>
@@ -596,7 +655,7 @@ export const createDemoSidecarWithDeps = (
               attest: (athlete, attestation, commitRand) =>
                 attestWorkout(ctxFor(athlete), attestation, commitRand),
               createWager: (athlete, input) => createWagerFlow(ctxFor(athlete), input),
-              acceptWager: (athlete, id, routing) => acceptWagerFlow(ctxFor(athlete), id, routing),
+              acceptWager: (athlete, id, coinKey) => acceptWagerFlow(ctxFor(athlete), id, coinKey),
               submitWorkout: (athlete, wagerId, vaultKey, value) =>
                 ctxFor(athlete).contract.submitWorkout(wagerId, vaultKey, value),
               settleWager: (athlete, id) => ctxFor(athlete).contract.settleWager(id),
@@ -605,6 +664,31 @@ export const createDemoSidecarWithDeps = (
               mintBadge: (attestation, commitRand, badgeId, vaultKey) =>
                 mintBadgeFlow(ctxA, attestation, commitRand, badgeId, vaultKey),
               proveBadge: (badgeId, binding) => proveBadgeFlow(ctxA, badgeId, binding),
+              // Shielded deposit: pick the athlete's smallest usable native
+              // NIGHT coin and pass it to the circuit (the wallet offers the
+              // spend; the contract passes it through to the treasury).
+              deposit: async (athlete, amount) => {
+                const wallet = athlete === "A" ? walletA! : walletB!;
+                const state = await firstValueFrom(wallet.wallet.state());
+                const coin = selectNightCoin(state, amount);
+                if (coin === null) {
+                  throw new Error(
+                    `no shielded NIGHT coin >= ${amount} in athlete ${athlete}'s wallet`,
+                  );
+                }
+                return depositPointsFlow(ctxFor(athlete), amount, coin);
+              },
+              // Admin-initiated withdrawal: the admin wallet offers a
+              // treasury coin; the contract routes the NIGHT to the payout
+              // key the user registered at their deposit.
+              withdraw: async (binding, amount) => {
+                const state = await firstValueFrom(adminWallet.wallet.state());
+                const coin = selectNightCoin(state, amount);
+                if (coin === null) {
+                  throw new Error(`no treasury NIGHT coin >= ${amount} in the admin wallet`);
+                }
+                return withdrawPointsFlow(adminCtx, binding, amount, coin);
+              },
             },
             stagePrivateState: async (athlete, fields) => {
               const providers = providersFor(athlete);
@@ -623,14 +707,8 @@ export const createDemoSidecarWithDeps = (
               return state.shielded.balances as Record<string, bigint>;
             },
             identities: {
-              A: {
-                holderBinding,
-                routing: { payout: identityA.payout, coinKey: identityA.coinKey },
-              },
-              B: {
-                holderBinding: holderBindingB,
-                routing: { payout: identityB.payout, coinKey: identityB.coinKey },
-              },
+              A: { holderBinding, coinKey: identityA.coinKey },
+              B: { holderBinding: holderBindingB, coinKey: identityB.coinKey },
             },
             holderSecret,
             holderBinding,
@@ -646,7 +724,7 @@ export const createDemoSidecarWithDeps = (
       console.log(
         `[sidecar] ready — contract ${config.contractAddress} | bindings A 0x${holderBinding
           .toString(16)
-          .slice(0, 16)}… B 0x${holderBindingB.toString(16).slice(0, 16)}…`,
+          .slice(0, 16)}… B 0x${holderBindingB.toString(16).slice(0, 16)}… | treasury 0x${Buffer.from(adminCoinKey.bytes).toString("hex").slice(0, 16)}…`,
       );
     } catch (caught) {
       error = caught instanceof Error ? caught.message : String(caught);
@@ -806,15 +884,14 @@ export const createDemoSidecarWithDeps = (
       return { status: 400, json: { error: "stake must be positive" } };
     }
     const { flows, readState, identities } = requireReady();
-    const routing = identities[athlete].routing;
+    const coinKey = identities[athlete].coinKey;
     const tx = await withTimeout(
       flows.createWager(athlete, {
         opponentBinding: identities[opponent].holderBinding,
         metricId,
         stake,
         deadlineBlock,
-        payout: routing.payout,
-        coinKey: routing.coinKey,
+        coinKey,
       }),
       config.txTimeoutMs,
       "createWager",
@@ -860,7 +937,7 @@ export const createDemoSidecarWithDeps = (
     }
     const { flows, identities } = requireReady();
     const tx = await withTimeout(
-      flows.acceptWager(athlete, id, identities[athlete].routing),
+      flows.acceptWager(athlete, id, identities[athlete].coinKey),
       config.txTimeoutMs,
       "acceptWager",
     );
@@ -1012,6 +1089,56 @@ export const createDemoSidecarWithDeps = (
         },
         txHash,
       },
+    };
+  };
+
+  const handlePointsDeposit = async (body: unknown): Promise<{ status: number; json: unknown }> => {
+    const athlete = parseAthlete((body as { athlete?: unknown } | null)?.athlete, "A");
+    const rawAmount = (body as { amount?: unknown } | null)?.amount;
+    if (typeof rawAmount !== "string" || !/^0x[0-9a-f]+$/i.test(rawAmount)) {
+      return { status: 400, json: { error: "body must be { athlete?, amount: 0x-hex }" } };
+    }
+    const amount = BigInt(rawAmount);
+    if (amount <= 0n) {
+      return { status: 400, json: { error: "amount must be positive" } };
+    }
+    const { flows, readState, identities } = requireReady();
+    const tx = await withTimeout(
+      flows.deposit(athlete, amount),
+      config.txTimeoutMs,
+      "depositPoints",
+    );
+    const state = await withTimeout(readState(), config.txTimeoutMs, "readState");
+    const binding = identities[athlete].holderBinding;
+    const points = state.balances.member(binding) ? state.balances.lookup(binding) : 0n;
+    return {
+      status: 200,
+      json: { athlete, amount: hexOf(amount), points: hexOf(points), txHash: txHashOf(tx) },
+    };
+  };
+
+  const handlePointsWithdraw = async (body: unknown): Promise<{ status: number; json: unknown }> => {
+    const athlete = parseAthlete((body as { athlete?: unknown } | null)?.athlete, "A");
+    const rawAmount = (body as { amount?: unknown } | null)?.amount;
+    if (typeof rawAmount !== "string" || !/^0x[0-9a-f]+$/i.test(rawAmount)) {
+      return { status: 400, json: { error: "body must be { athlete?, amount: 0x-hex }" } };
+    }
+    const amount = BigInt(rawAmount);
+    if (amount <= 0n) {
+      return { status: 400, json: { error: "amount must be positive" } };
+    }
+    const { flows, readState, identities } = requireReady();
+    const binding = identities[athlete].holderBinding;
+    const tx = await withTimeout(
+      flows.withdraw(binding, amount),
+      config.txTimeoutMs,
+      "withdrawPoints",
+    );
+    const state = await withTimeout(readState(), config.txTimeoutMs, "readState");
+    const points = state.balances.member(binding) ? state.balances.lookup(binding) : 0n;
+    return {
+      status: 200,
+      json: { athlete, amount: hexOf(amount), points: hexOf(points), txHash: txHashOf(tx) },
     };
   };
 
@@ -1203,10 +1330,12 @@ export const createDemoSidecarWithDeps = (
     const badgeEntries = state.badges.member(binding)
       ? [...state.badges.lookup(binding)].map(hexOf)
       : [];
+    const points = state.balances.member(binding) ? state.balances.lookup(binding) : 0n;
     return {
       status: 200,
       json: {
         athlete,
+        points: hexOf(points),
         vault: vaultEntries,
         streaks:
           streakEntry === null
@@ -1326,6 +1455,18 @@ export const createDemoSidecarWithDeps = (
         if (req.method === "POST" && url.pathname === "/wager/settle") {
           const body = JSON.parse(await readBody(req));
           const result = await queue.run(() => handleWagerSettle(body));
+          sendJson(res, result.status, result.json);
+          return;
+        }
+        if (req.method === "POST" && url.pathname === "/points/deposit") {
+          const body = JSON.parse(await readBody(req));
+          const result = await queue.run(() => handlePointsDeposit(body));
+          sendJson(res, result.status, result.json);
+          return;
+        }
+        if (req.method === "POST" && url.pathname === "/points/withdraw") {
+          const body = JSON.parse(await readBody(req));
+          const result = await queue.run(() => handlePointsWithdraw(body));
           sendJson(res, result.status, result.json);
           return;
         }

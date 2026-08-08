@@ -606,27 +606,12 @@ export class WalletClient implements WfClient {
     return crypto.getRandomValues(new Uint8Array(32));
   }
 
+  // Points-era routing (Phase A v3): only the winner-NFT recipient's shielded
+  // coin key — real-money payout addresses no longer exist (wagers settle in
+  // points; withdrawals are admin-initiated).
   private async myRouting(): Promise<WalletWagerRouting> {
-    const connection = this.requireConnection();
-    const { unshieldedAddress } = await connection.api.getUnshieldedAddress();
-    const { MidnightBech32m, UnshieldedAddress } = await import(
-      "@midnight-ntwrk/wallet-sdk-address-format"
-    );
-    // The wallet hands us a bech32m STRING; the codec decodes parsed instances.
-    const decoded = UnshieldedAddress.codec.decode(
-      NETWORK_ID,
-      MidnightBech32m.parse(unshieldedAddress),
-    );
-    // hexString relies on Buffer#toString('hex') (Node-only — the browser's
-    // Uint8Array would render comma-joined). Convert the raw bytes ourselves.
-    const bytes = decoded.data as Uint8Array;
-    const hex = Array.from(bytes)
-      .map((b) => b.toString(16).padStart(2, "0"))
-      .join("");
-    const { encodeUserAddress } = await import("@midnight-ntwrk/ledger-v8");
-    const payout = encodeUserAddress(hex);
     const coinKey = { bytes: await this.coinKeyBytes() };
-    return { payout, coinKey };
+    return { coinKey };
   }
 
   // The DApp Connector's shieldedCoinPublicKey is bech32m per the API doc
