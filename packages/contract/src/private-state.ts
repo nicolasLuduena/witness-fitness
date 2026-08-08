@@ -8,8 +8,10 @@ export type PrivateState = {
   readonly assertion: A_Assertion | null;
   readonly signatures: SchnorrSignature[];
   readonly commitRand: Uint8Array;
-  readonly submissionRand: bigint;
-  readonly wagerOpenings: [bigint, bigint, bigint, bigint];
+  // Bytes<32> since the sealed submission commitment is persistentCommit
+  // (audit L1) — persistentCommit takes a Bytes<32> rand.
+  readonly submissionRand: Uint8Array;
+  readonly wagerOpenings: [bigint, Uint8Array, bigint, Uint8Array];
 };
 
 export const createPrivateState = (
@@ -21,6 +23,6 @@ export const createPrivateState = (
   assertion: null,
   signatures: [],
   commitRand: new Uint8Array(32),
-  submissionRand: 1n,
-  wagerOpenings: [0n, 0n, 0n, 0n],
+  submissionRand: new Uint8Array(32).fill(1),
+  wagerOpenings: [0n, new Uint8Array(32), 0n, new Uint8Array(32)],
 });

@@ -15,6 +15,10 @@ export class StrideSim {
   private state: Contract['initialState'] extends never ? never : any;
   private lastEffects: Effects | null = null;
 
+  // Block-time override (seconds). Leave null to use the runtime default;
+  // set it forward to test deadline gates (audit H1 deadline tests).
+  now: number | null = null;
+
   readonly contract = new Contract(witnesses);
 
   constructor(privateState: PrivateState) {
@@ -23,7 +27,15 @@ export class StrideSim {
   }
 
   call(name: string, ps: PrivateState, ...args: unknown[]): any {
-    const ctx = createCircuitContext(ADDR, COIN_PK, this.state, ps);
+    const ctx = createCircuitContext(
+      ADDR,
+      COIN_PK,
+      this.state,
+      ps,
+      undefined,
+      undefined,
+      this.now ?? undefined
+    );
     const circuit = (this.contract.circuits as Record<string, (c: unknown, ...a: unknown[]) => any>)[
       name
     ];

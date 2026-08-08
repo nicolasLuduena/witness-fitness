@@ -21,8 +21,10 @@ export struct Wager {
     stake: Uint<64>;
     deadlineBlock: Uint<64>;
     accepted: Boolean;
-    challengerSubmission: Maybe<Field>;
-    opponentSubmission: Maybe<Field>;
+    // Sealed submissions: persistentCommit<Field>(value, rand) → Bytes<32>
+    // (audit L1 — persistent commitments must be stored as bytes, not Field).
+    challengerSubmission: Maybe<Bytes<32>>;
+    opponentSubmission: Maybe<Bytes<32>>;
     settled: Boolean;
     // Real-money payout routing, fixed at create/accept (contract law: settle
     // pays ONLY these stored values — no caller-supplied payout args).
@@ -55,8 +57,16 @@ export ledger nftNonce: Bytes<32>;
 witness adminSecretKey(): Bytes<32>;
 witness getHolderSecret(): Bytes<32>;
 witness getAttestationWitness(): [A_Assertion, Vector<3, Schnorr_SchnorrSignature>, Bytes<32>];
-witness getSubmissionRand(): Field;
-witness getWagerOpenings(): [Field, Field, Field, Field];
+witness getSubmissionRand(): Bytes<32>;
+witness getWagerOpenings(): [Field, Bytes<32>, Field, Bytes<32>];
+
+// Pin the admin identity at deploy time — the deploy tx's private state
+// carries the admin secret, so no post-deploy race can seize admin (audit
+// M1: the old first-call-wins registerAdmin let a front-runner pin their own
+// secret between deploy and the deployer's registerAdmin tx).
+constructor() {
+    adminSecret = disclose(deriveAdminBinding(adminSecretKey()));
+}
 
 circuit deriveAdminBinding(secret: Bytes<32>): Field {
     return jubjubPointX(hashToCurve<Vector<2, Bytes<32>>>([
@@ -193,13 +203,10 @@ circuit refundPlayer(payout: Bytes<32>, stake: Uint<64>): [] {
     sendPayout(stake, payout);
 }
 
-// First call pins the admin identity; later calls assert the caller holds it.
+// The admin identity is pinned by the constructor at deploy; this circuit
+// re-asserts the caller holds the admin secret (audit M1).
 export circuit registerAdmin(): [] {
-    if (adminSecret == 0) {
-        adminSecret = disclose(deriveAdminBinding(adminSecretKey()));
-    } else {
-        assert(isAdmin(), "Not the admin");
-    }
+    assert(isAdmin(), "Not the admin");
 }
 
 export circuit registerNotary(pk: JubjubPoint, index: Uint<8>): [] {
@@ -246,6 +253,17 @@ export circuit createWager(
 ): [] {
     const caller = deriveHolderBinding(getHolderSecret());
     const binding = disclose(caller);
+    // Deadline gates (audit H1): the auction closes at the deadline — a past
+    // deadline at create would let a challenger trap an accepting opponent
+    // into an instant forfeit (settle is already unlocked). blockTimeLt(x)
+    // means "now < x", i.e. the deadline is still in the future.
+    assert(blockTimeLt(disclose(deadlineBlock)), "Deadline must be in the future");
+    // A wager against yourself escrows both sides to the same person — a
+    // self-locked, victimless dead end (audit L4).
+    assert(disclose(opponentBinding) != binding, "Cannot challenge yourself");
+    // Cap the stake so the settle payout (2 * stake) always fits Uint<64>
+    // (audit L5) — an uncapped stake makes settle abort and the pot stuck.
+    assert(stake <= 0x7fffffffffffffff as Uint<64>, "Stake too large");
     receiveUnshielded(nativeToken(), disclose(stake) as Uint<128>);
     wagers.insert(disclose(nextWagerId), Wager {
         challenger: binding,
@@ -254,8 +272,8 @@ export circuit createWager(
         stake: disclose(stake),
         deadlineBlock: disclose(deadlineBlock),
         accepted: false,
-        challengerSubmission: none<Field>(),
-        opponentSubmission: none<Field>(),
+        challengerSubmission: none<Bytes<32>>(),
+        opponentSubmission: none<Bytes<32>>(),
         settled: false,
         challengerPayout: disclose(payout),
         opponentPayout: default<Bytes<32>>,
@@ -274,6 +292,7 @@ export circuit acceptWager(id: Uint<64>, payout: Bytes<32>, coinKey: ZswapCoinPu
     assert(!wager.settled, "Wager settled");
     assert(!wager.accepted, "Wager already accepted");
     assert(wager.opponent == binding, "Not the opponent");
+    assert(blockTimeLt(disclose(wager.deadlineBlock)), "Wager closed");
     receiveUnshielded(nativeToken(), disclose(wager.stake) as Uint<128>);
     wagers.insert(wid, Wager {
         challenger: wager.challenger,
@@ -342,6 +361,9 @@ export circuit submitWorkout(wagerId: Uint<64>, vaultKey: Bytes<32>, value: Uint
     const wager = wagers.lookup(wid);
     assert(!wager.settled, "Wager settled");
     assert(wager.accepted, "Wager not accepted");
+    // The sealed auction closes at the deadline — no post-deadline
+    // submissions (audit H1).
+    assert(blockTimeLt(disclose(wager.deadlineBlock)), "Deadline passed");
     assert(vault.member(key), "Unknown credential");
     const entry = vault.lookup(key);
     assert(entry.holderBinding == binding, "Credential not bound to caller");
@@ -356,7 +378,10 @@ export circuit submitWorkout(wagerId: Uint<64>, vaultKey: Bytes<32>, value: Uint
     ]);
     assert(!nullifiers.member(disclose(wagerNullifier)), "Workout already counted in this wager");
     nullifiers.insert(disclose(wagerNullifier));
-    const sealedValue = transientCommit<Field>(value, getSubmissionRand());
+    // persistentCommit (audit L1): the sealed submission is stored on-chain
+    // and opened in a LATER transaction (settle) — transientCommit output is
+    // not guaranteed stable across compiler upgrades. persistentCommit is.
+    const sealedValue = persistentCommit<Field>(value, getSubmissionRand());
     const updated = wager.challenger == binding
         ? Wager {
             challenger: wager.challenger,
@@ -365,7 +390,7 @@ export circuit submitWorkout(wagerId: Uint<64>, vaultKey: Bytes<32>, value: Uint
             stake: wager.stake,
             deadlineBlock: wager.deadlineBlock,
             accepted: wager.accepted,
-            challengerSubmission: some<Field>(sealedValue),
+            challengerSubmission: some<Bytes<32>>(sealedValue),
             opponentSubmission: wager.opponentSubmission,
             settled: false,
             challengerPayout: wager.challengerPayout,
@@ -381,7 +406,7 @@ export circuit submitWorkout(wagerId: Uint<64>, vaultKey: Bytes<32>, value: Uint
             deadlineBlock: wager.deadlineBlock,
             accepted: wager.accepted,
             challengerSubmission: wager.challengerSubmission,
-            opponentSubmission: some<Field>(sealedValue),
+            opponentSubmission: some<Bytes<32>>(sealedValue),
             settled: false,
             challengerPayout: wager.challengerPayout,
             opponentPayout: wager.opponentPayout,
@@ -404,9 +429,9 @@ export circuit settleWager(id: Uint<64>): [] {
            "Deadline not reached");
     const [v1, r1, v2, r2] = getWagerOpenings();
     if (wager.challengerSubmission.is_some && wager.opponentSubmission.is_some) {
-        assert(transientCommit<Field>(v1, r1) == wager.challengerSubmission.value,
+        assert(persistentCommit<Field>(v1, r1) == wager.challengerSubmission.value,
                "Bad challenger opening");
-        assert(transientCommit<Field>(v2, r2) == wager.opponentSubmission.value,
+        assert(persistentCommit<Field>(v2, r2) == wager.opponentSubmission.value,
                "Bad opponent opening");
         if ((disclose(v1) as Uint<64>) > (disclose(v2) as Uint<64>)) {
             payWinnerPot(wager.challengerPayout, wager.challengerCoinKey, wager.stake);
@@ -475,7 +500,9 @@ export circuit mintBadge(badgeId: Uint<8>, vaultKey: Bytes<32>, commitRand: Byte
 }
 
 // Prove badge ownership to a third party. The ledger learns (badgeId,
-// verifierBinding); the holder binding stays private.
+// verifierBinding, holder binding) — the proof is pseudonymous, not
+// anonymous: the binding (a per-wallet pseudonym) is disclosed by the
+// badges.member/lookup asserts (audit L2 comment fix).
 export circuit proveBadge(badgeId: Uint<8>, verifierBinding: Field): [Field] {
     const caller = deriveHolderBinding(getHolderSecret());
     const binding = disclose(caller);

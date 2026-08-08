@@ -7,7 +7,6 @@ import {
   makeNotaryKey,
   nowSeconds,
   privateStateWith,
-  randomField,
   signAttestation,
   vaultKeyOf,
 } from './helpers/fixtures.js';
@@ -161,6 +160,16 @@ describe('stride contract', () => {
         'Not the admin'
       );
     });
+
+    // AUDIT M1 (constructor pin): the admin identity is pinned by the
+    // constructor at deploy — a stranger can no longer seize admin via a
+    // first-call race on registerAdmin.
+    it('AUDIT: rejects a stranger seizing admin via registerAdmin', () => {
+      const stranger = createPrivateState(randomBytes(32), holderA);
+      expect(() => sim.call('registerAdmin', stranger)).toThrow('Not the admin');
+      // the deployer's registerAdmin re-assert passes
+      expect(() => sim.call('registerAdmin', psA())).not.toThrow();
+    });
   });
 
   describe('wagers (real unshielded NIGHT pot)', () => {
@@ -235,7 +244,7 @@ describe('stride contract', () => {
   });
 
   describe('submitWorkout', () => {
-    const openWager = (stake = 1000n, deadline = nowSeconds() - 10000n): bigint => {
+    const openWager = (stake = 1000n, deadline = nowSeconds() + 3600n): bigint => {
       sim.call('createWager', psA(), bindingB, 1n, stake, deadline, payoutA, coinKeyA);
       sim.call('acceptWager', psB(), 0n, payoutB, coinKeyB);
       return 0n;
@@ -257,7 +266,7 @@ describe('stride contract', () => {
         sim.call('submitWorkout', privateStateWith(psA(), att), id0, vaultKey, 12345n)
       ).toThrow('Workout already counted in this wager');
 
-      sim.call('createWager', psA(), bindingB, 1n, 1000n, nowSeconds() - 10000n, payoutA, coinKeyA);
+      sim.call('createWager', psA(), bindingB, 1n, 1000n, nowSeconds() + 3600n, payoutA, coinKeyA);
       sim.call('acceptWager', psB(), 1n, payoutB, coinKeyB);
       sim.call('submitWorkout', privateStateWith(psA(), att), 1n, vaultKey, 12345n);
       expect(sim.ledgerView().wagers.lookup(1n).challengerSubmission.is_some).toBe(true);
@@ -282,10 +291,15 @@ describe('stride contract', () => {
   });
 
   describe('settleWager (real payouts + winner NFT)', () => {
-    const wagerFixture = (stake = 1000n, deadline = nowSeconds() - 10000n) => {
+    const wagerFixture = (stake = 1000n, deadline = nowSeconds() + 3600n) => {
       sim.call('createWager', psA(), bindingB, 1n, stake, deadline, payoutA, coinKeyA);
       sim.call('acceptWager', psB(), 0n, payoutB, coinKeyB);
       return 0n;
+    };
+
+    // Time-travel past deadline + settleGrace(60s) so settlement unlocks.
+    const afterDeadline = (): void => {
+      sim.now = Number(nowSeconds()) + 3700;
     };
 
     const submitAs = (
@@ -294,8 +308,8 @@ describe('stride contract', () => {
       vaultKey: Uint8Array,
       value: bigint,
       wagerId: bigint
-    ): bigint => {
-      const submissionRand = randomField();
+    ): Uint8Array => {
+      const submissionRand = randomBytes(32);
       const ps = {
         ...privateStateWith(holderSecret === holderA ? psA() : psB(), att),
         submissionRand,
@@ -304,7 +318,8 @@ describe('stride contract', () => {
       return submissionRand;
     };
 
-    const settleWith = (v1: bigint, r1: bigint, v2: bigint, r2: bigint) => {
+    const settleWith = (v1: bigint, r1: Uint8Array, v2: bigint, r2: Uint8Array) => {
+      afterDeadline();
       sim.call('settleWager', { ...psA(), wagerOpenings: [v1, r1, v2, r2] }, 0n);
     };
 
@@ -338,6 +353,7 @@ describe('stride contract', () => {
       wagerFixture();
       const a = vaultCredential(holderA);
       submitAs(holderA, a.att, a.vaultKey, 12345n, 0n);
+      afterDeadline();
       sim.call('settleWager', psA(), 0n);
       expect(sim.unshieldedOutputSum()).toBe(2000n);
       const mints = sim.shieldedMints();
@@ -347,6 +363,7 @@ describe('stride contract', () => {
 
     it('refunds both when neither submits and mints no NFT', () => {
       wagerFixture();
+      afterDeadline();
       sim.call('settleWager', psA(), 0n);
       expect(sim.unshieldedOutputSum()).toBe(2000n);
       expect(sim.shieldedMints().size).toBe(0);
@@ -356,13 +373,16 @@ describe('stride contract', () => {
       wagerFixture();
       const a = vaultCredential(holderA);
       submitAs(holderA, a.att, a.vaultKey, 12345n, 0n);
+      afterDeadline();
       sim.call('settleWager', psA(), 0n);
       const firstMint = sim.shieldedMints();
 
-      sim.call('createWager', psA(), bindingB, 1n, 1000n, nowSeconds() - 10000n, payoutA, coinKeyA);
+      sim.now = null; // back to real time for the second wager's creation
+      sim.call('createWager', psA(), bindingB, 1n, 1000n, nowSeconds() + 3600n, payoutA, coinKeyA);
       sim.call('acceptWager', psB(), 1n, payoutB, coinKeyB);
       const a2 = vaultCredential(holderA);
       submitAs(holderA, a2.att, a2.vaultKey, 12345n, 1n);
+      afterDeadline();
       sim.call('settleWager', psA(), 1n);
       const secondMint = sim.shieldedMints();
       expect(firstMint.size).toBe(1);
@@ -376,19 +396,74 @@ describe('stride contract', () => {
       expect(() => sim.call('settleWager', psA(), 0n)).toThrow('Deadline not reached');
     });
 
+    // AUDIT VR-1 (High — the missing deadline gates, now FIXED): a challenger
+    // could create a wager whose deadline had ALREADY passed; the victim
+    // accepts (escrowing real NIGHT), the challenger submits + settles
+    // immediately (deadline + 60s grace already elapsed) — the victim never
+    // got a chance to submit and lost their stake to a forfeit. createWager
+    // now requires a future deadline, so the exploit is closed at the root.
+    it('AUDIT: rejects creating a wager whose deadline has already passed', () => {
+      expect(() =>
+        sim.call('createWager', psA(), bindingB, 1n, 1000n, nowSeconds() - 10000n, payoutA, coinKeyA)
+      ).toThrow('Deadline must be in the future');
+    });
+
+    it('rejects accepting after the deadline (wager closed)', () => {
+      sim.call('createWager', psA(), bindingB, 1n, 1000n, nowSeconds() + 3600n, payoutA, coinKeyA);
+      sim.now = Number(nowSeconds()) + 3700;
+      expect(() => sim.call('acceptWager', psB(), 0n, payoutB, coinKeyB)).toThrow('Wager closed');
+    });
+
+    it('rejects submitting after the deadline (auction closed)', () => {
+      sim.call('createWager', psA(), bindingB, 1n, 1000n, nowSeconds() + 3600n, payoutA, coinKeyA);
+      sim.call('acceptWager', psB(), 0n, payoutB, coinKeyB);
+      const a = vaultCredential(holderA);
+      submitAs(holderA, a.att, a.vaultKey, 12345n, 0n);
+      // a different credential, submitted after the deadline
+      const a2 = vaultCredential(holderA);
+      sim.now = Number(nowSeconds()) + 3700;
+      expect(() => sim.call('submitWorkout', privateStateWith(psA(), a2.att), 0n, a2.vaultKey, 12345n)).toThrow(
+        'Deadline passed'
+      );
+    });
+
+    it('settles normally once the deadline + grace has passed', () => {
+      wagerFixture();
+      const a = vaultCredential(holderA);
+      submitAs(holderA, a.att, a.vaultKey, 12345n, 0n);
+      sim.now = Number(nowSeconds()) + 3700;
+      sim.call('settleWager', psA(), 0n);
+      expect(sim.unshieldedOutputSum()).toBe(2000n);
+      expect(sim.ledgerView().wagers.lookup(0n).settled).toBe(true);
+    });
+
+    it('rejects a self-challenge (opponent == challenger)', () => {
+      expect(() =>
+        sim.call('createWager', psA(), bindingA, 1n, 1000n, nowSeconds() + 3600n, payoutA, coinKeyA)
+      ).toThrow('Cannot challenge yourself');
+    });
+
+    it('rejects a stake above 2^63 - 1 (settle payout would overflow)', () => {
+      expect(() =>
+        sim.call('createWager', psA(), bindingB, 1n, 9223372036854775808n, nowSeconds() + 3600n, payoutA, coinKeyA)
+      ).toThrow('Stake too large');
+    });
+
     it('rejects settlement with wrong openings', () => {
       wagerFixture();
       const a = vaultCredential(holderA, makeAssertion({ claims: [{ metricId: 1n, value: 15000n }] }));
       const b = vaultCredential(holderB, makeAssertion({ claims: [{ metricId: 1n, value: 9000n }] }));
       submitAs(holderA, a.att, a.vaultKey, 15000n, 0n);
       submitAs(holderB, b.att, b.vaultKey, 9000n, 0n);
-      expect(() => sim.call('settleWager', { ...psA(), wagerOpenings: [1n, 1n, 1n, 1n] }, 0n)).toThrow(
-        'Bad challenger opening'
-      );
+      afterDeadline();
+      expect(() =>
+        sim.call('settleWager', { ...psA(), wagerOpenings: [1n, new Uint8Array(32).fill(1), 1n, new Uint8Array(32).fill(2)] }, 0n)
+      ).toThrow('Bad challenger opening');
     });
 
     it('rejects settling a wager twice', () => {
       wagerFixture();
+      afterDeadline();
       sim.call('settleWager', psA(), 0n);
       expect(() => sim.call('settleWager', psA(), 0n)).toThrow('Wager settled');
     });

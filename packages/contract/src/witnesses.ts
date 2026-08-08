@@ -44,14 +44,14 @@ export const witnesses = {
 
   getSubmissionRand: ({
     privateState,
-  }: WitnessBase): [PrivateState, bigint] => [
+  }: WitnessBase): [PrivateState, Uint8Array] => [
     privateState,
     privateState.submissionRand,
   ],
 
   getWagerOpenings: ({
     privateState,
-  }: WitnessBase): [PrivateState, [bigint, bigint, bigint, bigint]] => [
+  }: WitnessBase): [PrivateState, [bigint, Uint8Array, bigint, Uint8Array]] => [
     privateState,
     privateState.wagerOpenings,
   ],
