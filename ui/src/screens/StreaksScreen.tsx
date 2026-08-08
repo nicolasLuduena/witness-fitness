@@ -1,19 +1,16 @@
-// Streaks & Badges — the sealed streak chain, mintBadge, and the demo
-// showpiece: proveBadge to a mock employer panel (third-party verification
-// while the streak data stays sealed).
-
+import { Award, Check, Flame, LockKeyhole, ShieldCheck } from "lucide-react";
 import { useState } from "react";
-import { Button, Card, Chip, Modal, Notice } from "../components/bits";
-import { EMPLOYER } from "../domain/story";
+import { Button, Notice } from "../components/bits";
+import type { BadgeView } from "../domain/types";
 import { logError } from "../lib/logger";
+import { navigateTo } from "../lib/navigation";
 import { useDemo } from "../state/DemoStore";
 
 export const StreaksScreen = () => {
-  const { streak, badges, session, advanceStreak, mintBadge, proveBadge } = useDemo();
+  const { streak, badges, session, credentials, advanceStreak, mintBadge } =
+    useDemo();
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [employerOpen, setEmployerOpen] = useState(false);
-  const [provingBadge, setProvingBadge] = useState<number | null>(null);
 
   const run = async (key: string, fn: () => Promise<unknown>) => {
     setBusy(key);
@@ -22,306 +19,226 @@ export const StreaksScreen = () => {
       await fn();
     } catch (err) {
       logError("StreaksScreen.action", err);
-      setError(err instanceof Error ? err.message : "action failed");
+      setError(
+        err instanceof Error
+          ? err.message
+          : "We couldn't complete that action. Try again.",
+      );
     } finally {
       setBusy(null);
     }
   };
 
-  const streakBadge = badges.find((b) => b.id === 1);
-  const distanceBadge = badges.find((b) => b.id === 2);
-  const streakReady = (streak?.current ?? 0) >= 3;
+  const current = streak?.current ?? 0;
+  const hasCredential = credentials.length > 0;
+  const streakBadge = badges.find((badge) => badge.id === 1);
+  const distanceBadge = badges.find((badge) => badge.id === 2);
 
   return (
-    <div className="screen">
-      <div className="screen-header">
-        <h1 className="screen-title">Streaks &amp; Badges — sealed proof of habit</h1>
-        <p className="screen-sub">
-          Every chain link is a sealed day. Badges mint from the chain;{" "}
-          <code className="mono">proveBadge</code> lets a third party verify the feat without ever
-          seeing the workouts behind it.
-        </p>
-      </div>
-
-      {error ? (
-        <div style={{ marginBottom: 16 }}>
-          <Notice tone="error">{error}</Notice>
+    <div className="page page--streak">
+      <header className="page-heading page-heading--compact">
+        <div>
+          <p className="page-context">Streak &amp; badges</p>
+          <h1>
+            {current > 0
+              ? `${current}-day private streak`
+              : "Make consistency provable."}
+          </h1>
+          <p>
+            Link attested days without publishing dates, distances, or
+            activities. Mint a badge when the contract confirms the requirement.
+          </p>
         </div>
-      ) : null}
+      </header>
 
-      <div className="grid-2">
-        <Card title="Sealed streak chain" glow>
-          {!session ? (
-            <div className="empty-state">Enter the demo on the Connect tab first.</div>
-          ) : (
-            <>
-              <div className="row-between">
-                <div>
-                  <div className="stat" style={{ fontSize: 30, fontWeight: 800 }}>
-                    {streak?.current ?? 0}
-                    <span className="faint" style={{ fontSize: 16, fontWeight: 500 }}>
-                      {" "}
-                      day streak
-                    </span>
+      {error ? <Notice tone="error">{error}</Notice> : null}
+
+      {!session || !hasCredential ? (
+        <section className="empty-journey" aria-labelledby="streak-empty-title">
+          <LockKeyhole aria-hidden="true" />
+          <div>
+            <h2 id="streak-empty-title">
+              {!session
+                ? "Connect before starting a streak"
+                : "Attest a workout first"}
+            </h2>
+            <p>
+              {!session
+                ? "A private athlete identity is required to hold your sealed streak."
+                : "Your latest attested activity becomes the next private link in the chain."}
+            </p>
+          </div>
+          <Button tone="primary" onClick={() => navigateTo("account")}>
+            {!session ? "Connect wallet" : "Attest workout"}
+          </Button>
+        </section>
+      ) : (
+        <>
+          <section
+            className="streak-course"
+            aria-labelledby="streak-course-title"
+          >
+            <div className="streak-course__path" aria-hidden="true">
+              {[1, 2, 3].map((day) => {
+                const complete = current >= day;
+                const active = !complete && day === Math.min(current + 1, 3);
+                return (
+                  <div
+                    key={day}
+                    className={`streak-node ${complete ? "streak-node--complete" : ""} ${active ? "streak-node--active" : ""}`}
+                  >
+                    <span>{complete ? <Check /> : day}</span>
+                    <div>
+                      <strong>
+                        {day === Math.min(current + 1, 3) && !complete
+                          ? "Today"
+                          : `Day ${day}`}
+                      </strong>
+                      <small>
+                        {complete
+                          ? "Attested"
+                          : active
+                            ? "Ready to continue"
+                            : "Locked"}
+                      </small>
+                    </div>
                   </div>
-                </div>
+                );
+              })}
+            </div>
+
+            <div className="streak-course__action">
+              <div className="action-symbol">
+                <Flame aria-hidden="true" />
+              </div>
+              <div>
+                <p className="section-label">Current action</p>
+                <h2 id="streak-course-title">
+                  {current >= 3
+                    ? "Your streak badge is ready"
+                    : "Continue your private streak"}
+                </h2>
+                <p>
+                  {current >= 3
+                    ? "The contract has confirmed three consecutive attested days."
+                    : "This uses your latest attested workout. The activity and its value remain on your device."}
+                </p>
+              </div>
+              {current < 3 ? (
                 <Button
-                  tone="seal"
-                  size="sm"
+                  tone="primary"
                   disabled={busy !== null}
                   onClick={() => void run("advance", () => advanceStreak())}
                 >
                   {busy === "advance" ? <span className="spin" /> : null}
-                  Attest today → advance
+                  Continue streak
                 </Button>
+              ) : null}
+            </div>
+
+            <details className="verification-details">
+              <summary>
+                <ShieldCheck aria-hidden="true" /> How the streak stays private
+              </summary>
+              <div>
+                <p>
+                  Each day adds a sealed credential to a continuity proof. The
+                  public ledger stores the chain commitment—not your activity,
+                  date, or distance.
+                </p>
+                {streak?.chainId ? <code>{streak.chainId}</code> : null}
               </div>
+            </details>
+          </section>
 
-              <div className="streak-days">
-                {streak?.days.map((day) => (
-                  <div
-                    key={day.day}
-                    className={[
-                      "streak-day",
-                      day.sealed ? "streak-day--sealed" : "",
-                      day.active ? "streak-day--active" : "",
-                    ]
-                      .filter(Boolean)
-                      .join(" ")}
-                  >
-                    {day.sealed ? (
-                      <span className="streak-day__flame">🔥</span>
-                    ) : (
-                      <span className="wax" style={{ width: 16, height: 16 }} />
-                    )}
-                    {day.label}
-                  </div>
-                ))}
-                {streak?.days.some((d) => d.label === "TODAY" && d.sealed) ? null : (
-                  <div className="streak-day streak-day--active">TODAY</div>
-                )}
+          <section className="badge-section" aria-labelledby="badges-title">
+            <header>
+              <div>
+                <p className="section-label">Earned on-chain</p>
+                <h2 id="badges-title">Badges</h2>
               </div>
-
-              <div className="hash">chain commitment: {streak?.chainId}</div>
-
-              <div style={{ marginTop: 12 }}>
-                <Notice tone="info">
-                  Each link is sealed with the day's attested credential. The chain proves{" "}
-                  <em>continuity</em> — the workouts behind it never leave your machine.
-                </Notice>
-              </div>
-            </>
-          )}
-        </Card>
-
-        <Card title="Badges">
-          {!session ? (
-            <div className="empty-state">Badges mint from your attested chain.</div>
-          ) : (
-            <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+              <p>Mint only when a private requirement is satisfied.</p>
+            </header>
+            <div className="badge-list">
               <BadgeRow
-                badgeId={1}
-                label={streakBadge?.label ?? "Streak of 3"}
-                requirement={streakBadge?.requirement ?? ""}
-                minted={streakBadge?.minted ?? false}
-                count={streakBadge?.count}
-                busy={busy}
+                badge={streakBadge}
+                fallbackLabel="Streak of 3"
+                fallbackRequirement="3 consecutive attested workout days"
+                ready={current >= 3}
+                busy={busy === "mint1"}
+                disabled={busy !== null}
                 onMint={() => void run("mint1", () => mintBadge(1))}
-                onProve={() => {
-                  setProvingBadge(1);
-                  setEmployerOpen(true);
-                }}
-                proving={provingBadge === 1}
-                disabled={!streakReady && !(streakBadge?.minted ?? false)}
-                disabledReason={streakReady ? undefined : "requires a 3-day attested streak"}
               />
-              <div className="divider" />
               <BadgeRow
-                badgeId={2}
-                label={distanceBadge?.label ?? "Centurion"}
-                requirement={distanceBadge?.requirement ?? ""}
-                minted={distanceBadge?.minted ?? false}
-                busy={busy}
+                badge={distanceBadge}
+                fallbackLabel="Centurion"
+                fallbackRequirement="One attested distance of at least 10 km"
+                ready={
+                  Boolean(distanceBadge?.minted) ||
+                  credentials.some(
+                    (credential) =>
+                      credential.metric.id === 1n && credential.value >= 10_000,
+                  )
+                }
+                busy={busy === "mint2"}
+                disabled={busy !== null}
                 onMint={() => void run("mint2", () => mintBadge(2))}
-                onProve={() => {
-                  setProvingBadge(2);
-                  setEmployerOpen(true);
-                }}
-                proving={provingBadge === 2}
-                disabled={false}
-                disabledReason="requires an attested distance ≥ 10 km"
               />
             </div>
-          )}
-        </Card>
-      </div>
-
-      <div style={{ marginTop: 18 }}>
-        <Notice tone="info">
-          <strong>The showpiece:</strong> hand {EMPLOYER.name} a verification, not your data. The
-          mock-employer panel is the next tab.
-        </Notice>
-      </div>
-
-      <EmployerModal
-        open={employerOpen}
-        onClose={() => {
-          setEmployerOpen(false);
-          setProvingBadge(null);
-        }}
-        badgeId={provingBadge}
-        onProve={async (verifier) => {
-          if (provingBadge === null) return;
-          setProvingBadge(provingBadge);
-          await proveBadge(provingBadge, verifier);
-        }}
-      />
+          </section>
+        </>
+      )}
     </div>
   );
 };
 
 const BadgeRow = ({
-  badgeId,
-  label,
-  requirement,
-  minted,
-  count,
+  badge,
+  fallbackLabel,
+  fallbackRequirement,
+  ready,
   busy,
-  onMint,
-  onProve,
-  proving,
   disabled,
-  disabledReason,
+  onMint,
 }: {
-  badgeId: number;
-  label: string;
-  requirement: string;
-  minted: boolean;
-  count?: number;
-  busy: string | null;
-  onMint: () => void;
-  onProve: () => void;
-  proving: boolean;
+  badge?: BadgeView;
+  fallbackLabel: string;
+  fallbackRequirement: string;
+  ready: boolean;
+  busy: boolean;
   disabled: boolean;
-  disabledReason?: string;
-}) => (
-  <div className="row" style={{ alignItems: "flex-start", gap: 14 }}>
-    <div className={`medal ${minted ? "" : "medal--dim"}`}>{badgeId === 1 ? "🔥" : "🏅"}</div>
-    <div style={{ flex: 1 }}>
-      <div className="row-between">
-        <div>
-          <div style={{ fontWeight: 700 }}>{label}</div>
-          <div className="faint" style={{ fontSize: 12.5 }}>
-            {requirement}
-            {count ? ` · held: ${count} days` : ""}
-          </div>
-        </div>
-        {minted ? <Chip tone="provable">minted</Chip> : <Chip>not yet</Chip>}
-      </div>
-      <div className="row" style={{ marginTop: 10 }}>
-        <Button
-          tone="gold"
-          size="sm"
-          disabled={busy !== null || disabled}
-          onClick={onMint}
-          title={disabledReason}
-        >
-          {busy === `mint${badgeId}` ? <span className="spin" /> : null}
-          mintBadge({badgeId})
-        </Button>
-        <Button tone="ghost" size="sm" disabled={!minted || busy !== null} onClick={onProve}>
-          {proving ? <span className="spin" /> : null}
-          proveBadge →
-        </Button>
-      </div>
-    </div>
-  </div>
-);
-
-const EmployerModal = ({
-  open,
-  onClose,
-  badgeId,
-  onProve,
-}: {
-  open: boolean;
-  onClose: () => void;
-  badgeId: number | null;
-  onProve: (verifier: string) => Promise<void>;
+  onMint: () => void;
 }) => {
-  const { proofs } = useDemo();
-  const [verifier, setVerifier] = useState(EMPLOYER.handle + "@northwind.example");
-  const [running, setRunning] = useState(false);
-
-  const submit = async () => {
-    if (badgeId === null) return;
-    setRunning(true);
-    try {
-      await onProve(verifier);
-    } finally {
-      setRunning(false);
-    }
-  };
-
+  const minted = badge?.minted ?? false;
   return (
-    <Modal open={open} onClose={onClose}>
-      <h3 className="card-title">Mock employer — third-party verification</h3>
-      <div className="employer-frame">
-        <div className="employer-bar">
-          <div className="wax" style={{ width: 18, height: 18 }} />
-          <strong>{EMPLOYER.name}</strong>
-          <span className="faint">wellness program · verifier panel</span>
-        </div>
-        <div className="verify-line verify-line--pending">
-          <span>01</span> employee submits a badge proof request
-        </div>
-        <div className="verify-line verify-line--pending">
-          <span>02</span> contract runs <code>proveBadge</code> — returns the verifier binding
-        </div>
-        <div className="verify-line verify-line--sealed">
-          <span>03</span> streak data remains sealed (ledger stores commitments only)
-        </div>
-        {proofs
-          .filter((p) => p.badgeId === badgeId)
-          .map((proof) => (
-            <div key={proof.proofId} className="verify-line verify-line--ok">
-              <span>✓</span> {proof.statement} · proof {proof.proofId.slice(0, 20)}…
-            </div>
-          ))}
+    <article
+      className={`badge-row ${minted ? "badge-row--minted" : ready ? "badge-row--ready" : ""}`}
+    >
+      <div className="badge-mark" aria-hidden="true">
+        {minted ? <Check /> : ready ? <Award /> : <LockKeyhole />}
       </div>
-
-      <div style={{ marginTop: 16 }}>
-        <div className="field">
-          <label htmlFor="verifier-binding">Verifier identity (binding)</label>
-          <input
-            id="verifier-binding"
-            className="input"
-            value={verifier}
-            onChange={(e) => setVerifier(e.target.value)}
-          />
+      <div className="badge-row__copy">
+        <div className="badge-row__heading">
+          <h3>{badge?.label ?? fallbackLabel}</h3>
+          <span>{minted ? "Minted" : ready ? "Ready" : "Locked"}</span>
         </div>
-        <div className="row-between">
-          <Button tone="ghost" onClick={onClose}>
-            Close
-          </Button>
-          <Button
-            tone="primary"
-            onClick={() => void submit()}
-            disabled={running || badgeId === null || !verifier.trim()}
-          >
-            {running ? <span className="spin" /> : null}
-            Prove badge to verifier
-          </Button>
-        </div>
+        <p>{badge?.requirement ?? fallbackRequirement}</p>
+        <small>
+          {minted
+            ? "The badge is recorded. Its source workouts remain sealed."
+            : ready
+              ? "Requirement confirmed. Minting creates the on-chain badge."
+              : "Keep training—only the completed requirement becomes provable."}
+        </small>
       </div>
-
-      <div style={{ marginTop: 12 }}>
-        <Notice tone="info">
-          The proof receipt names the badge and the verifier — the workouts, dates, and distances
-          behind it never leave the sealed chain.
-        </Notice>
-      </div>
-    </Modal>
+      <Button
+        tone={ready && !minted ? "primary" : "ghost"}
+        disabled={disabled || !ready || minted}
+        onClick={onMint}
+      >
+        {busy ? <span className="spin" /> : null}
+        {minted ? "Badge minted" : ready ? "Mint badge" : "Not ready"}
+      </Button>
+    </article>
   );
 };
-
-export { EmployerModal };

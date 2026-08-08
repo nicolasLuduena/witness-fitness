@@ -1,31 +1,37 @@
-// Wagers — create/join/open wagers with sealed envelope submissions, and the
-// settle reveal (winner + pot; "find the losing number"; athletes choose to
-// disclose). The ledger never publishes the losing input.
-//
-// Fixture mode: the rehearsed story (Ava 3.90 km vs Milo 2.43 km, auto
-// opponent submission). Live mode: REAL on-chain wagers via the sidecar —
-// both athletes are sidecar identities (A/B), stakes move unshielded NIGHT,
-// the winner receives a shielded WitnessFitness NFT, and the disclosed
-// comparison appears only when the athletes choose to show it.
-
-import { useEffect, useState } from "react";
-import { Button, Card, Chip, Modal, Notice } from "../components/bits";
-import { Envelope } from "../components/Envelope";
+import {
+  ArrowLeft,
+  ArrowRight,
+  CalendarClock,
+  Check,
+  Coins,
+  LockKeyhole,
+  RefreshCw,
+  ShieldCheck,
+  UserRound,
+} from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { Button, Notice } from "../components/bits";
 import { RevealSettle } from "../components/RevealSettle";
 import { ATHLETE_A, ATHLETE_B } from "../domain/story";
 import type { Athlete, WagerCreateRequest, WagerView } from "../domain/types";
 import { METRICS } from "../domain/types";
 import { fmtTnight, hexShort } from "../lib/format";
+import { athleteLabel, opponentLabel } from "../lib/identity-label";
 import { logError } from "../lib/logger";
-import { challengeIdOf, formatCountdown, settleReadyAtMs } from "../lib/wager-countdown";
+import { navigateTo } from "../lib/navigation";
+import {
+  challengeIdOf,
+  formatCountdown,
+  settleReadyAtMs,
+} from "../lib/wager-countdown";
 import { useDemo } from "../state/DemoStore";
 
 const statusLabel: Record<WagerView["status"], string> = {
-  open: "open — waiting for opponent",
-  accepted: "accepted — awaiting submissions",
-  submitted: "submissions sealed",
-  settled: "settled",
-  cancelled: "cancelled",
+  open: "Waiting for acceptance",
+  accepted: "Ready to seal",
+  submitted: "Submissions sealed",
+  settled: "Settled",
+  cancelled: "Cancelled",
 };
 
 export const WagersScreen = () => {
@@ -42,483 +48,607 @@ export const WagersScreen = () => {
     clearSettleReveal,
     refresh,
   } = useDemo();
-
-  const [createOpen, setCreateOpen] = useState(false);
+  const [creating, setCreating] = useState(false);
+  const [selectedId, setSelectedId] = useState<number | null>(null);
   const [busyId, setBusyId] = useState<number | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [now, setNow] = useState(() => Date.now());
-  const [copied, setCopied] = useState<string | null>(null);
 
-  const isLive = mode === "live";
-  const isWallet = mode === "wallet";
+  useEffect(() => {
+    if (selectedId === null && wagers.length > 0) {
+      const active = wagers.find(
+        (wager) => wager.status !== "settled" && wager.status !== "cancelled",
+      );
+      setSelectedId(active?.id ?? wagers[0].id);
+    }
+  }, [selectedId, wagers]);
 
-  // Poll while ANY wager is mid-flight (open/accepted/submitted) — discovery
-  // of opponent actions (accept, seal) is indexer-lag-bound; also covers the
-  // post-create read-back window (audit P1-5).
   useEffect(() => {
     const awaiting = wagers.some(
-      (w) => w.status === "open" || w.status === "accepted" || w.status === "submitted",
+      (wager) =>
+        wager.status === "open" ||
+        wager.status === "accepted" ||
+        wager.status === "submitted",
     );
     if (!awaiting) return;
     const timer = window.setInterval(() => void refresh(), 3_000);
     return () => window.clearInterval(timer);
   }, [wagers, refresh]);
 
-  // 1 s tick while any wager is accepted/submitted but not settled — drives
-  // the settle countdown (both live and wallet modes carry real deadlines).
   useEffect(() => {
-    const needsTick = wagers.some((w) => w.status !== "settled" && w.status !== "open");
-    if (!needsTick) return;
+    if (
+      !wagers.some(
+        (wager) => wager.status !== "settled" && wager.status !== "cancelled",
+      )
+    )
+      return;
     const timer = window.setInterval(() => setNow(Date.now()), 1_000);
     return () => window.clearInterval(timer);
   }, [wagers]);
 
-  // Wallet mode: the credential my sealed submission opens (the latest
-  // attested workout — real distance, never revealed).
+  const selected = wagers.find((wager) => wager.id === selectedId) ?? wagers[0];
+  const isWallet = mode === "wallet";
+  const isLive = mode === "live";
   const myCredentialId = credentials[0]?.id;
 
-  const run = async (id: number | null, fn: () => Promise<unknown>) => {
+  const run = async (id: number, fn: () => Promise<unknown>) => {
     setBusyId(id);
     setActionError(null);
     try {
       await fn();
     } catch (err) {
       logError("WagersScreen.action", err);
-      setActionError(err instanceof Error ? err.message : "action failed");
+      setActionError(
+        err instanceof Error
+          ? err.message
+          : "We couldn't update this wager. Try again.",
+      );
     } finally {
       setBusyId(null);
     }
   };
 
-  const handleCreate = async (req: WagerCreateRequest) => {
+  const handleCreate = async (request: WagerCreateRequest) => {
     setActionError(null);
     try {
-      await createWager(req);
-      setCreateOpen(false);
+      const wager = await createWager(request);
+      setSelectedId(wager.id);
+      setCreating(false);
     } catch (err) {
       logError("WagersScreen.create", err);
-      setActionError(err instanceof Error ? err.message : "wager create failed");
+      setActionError(
+        err instanceof Error
+          ? err.message
+          : "We couldn't create the wager. Try again.",
+      );
+      throw err;
     }
   };
 
-  const copyChallengeId = async (id: string) => {
-    try {
-      await navigator.clipboard.writeText(id);
-      setCopied(id);
-      window.setTimeout(() => setCopied(null), 1_500);
-    } catch (err) {
-      logError("WagersScreen.copyChallengeId", err);
-      setActionError("clipboard unavailable");
-    }
-  };
-
-  const submittedBy = (wager: WagerView, athlete: Athlete) =>
-    wager.submissions.some((s) => s.athlete.handle === athlete.handle);
-
-  const settleLocked = (wager: WagerView): { locked: boolean; label: string } => {
-    if (wager.deadlineBlock <= 0n) return { locked: false, label: "" };
-    const readyAt = settleReadyAtMs(wager.deadlineBlock);
-    const left = readyAt - now;
-    if (left <= 0) return { locked: false, label: "settle unlocked" };
-    return { locked: true, label: `settle in ${formatCountdown(left)}` };
-  };
-
-  // Submissions close at the deadline (the contract enforces it — audit H1);
-  // the UI mirrors it so the button state never lies.
-  const submitLocked = (wager: WagerView): { locked: boolean; label: string } => {
-    if (wager.deadlineBlock <= 0n) return { locked: false, label: "" };
-    const left = Number(wager.deadlineBlock) * 1000 - now;
-    if (left <= 0) return { locked: true, label: "submissions closed at the deadline" };
-    return { locked: false, label: `submissions close in ${formatCountdown(left)}` };
-  };
-
-  // The contract settles every outcome once the deadline + grace passes:
-  // both submitted → reveal the winner; one → forfeit; none → refund both.
-  const settleLabel = (wager: WagerView): string => {
-    const challengerSubmitted = wager.submissions.some(
-      (s) => s.athlete.handle === wager.challenger.handle,
+  if (creating) {
+    return (
+      <CreateWagerPage
+        isWallet={isWallet}
+        onBack={() => setCreating(false)}
+        onCreate={handleCreate}
+        error={actionError}
+      />
     );
-    const opponentSubmitted = wager.submissions.some(
-      (s) => s.athlete.handle === wager.opponent.handle,
-    );
-    if (challengerSubmitted && opponentSubmitted) return "Settle — reveal winner";
-    if (challengerSubmitted) return `Settle — forfeit to ${wager.challenger.name}`;
-    if (opponentSubmitted) return `Settle — forfeit to ${wager.opponent.name}`;
-    return "Settle — refund both (no submissions)";
-  };
+  }
 
   return (
-    <div className="screen">
-      <div className="screen-header">
-        <div className="row-between">
+    <div className="page page--wagers">
+      <header className="page-heading page-heading--actions">
+        <div>
+          <p className="page-context">Private wagers</p>
+          <h1>Compete as a holder binding—not a profile.</h1>
+          <p>
+            Stake NIGHT, seal an attested result, and let the contract settle
+            the outcome. Opponent names and wallet identities never enter the
+            wager.
+          </p>
+        </div>
+        <div className="heading-actions">
+          <button
+            className="icon-action"
+            onClick={() => void refresh()}
+            aria-label="Refresh wagers"
+          >
+            <RefreshCw aria-hidden="true" />
+          </button>
+          <Button
+            tone="primary"
+            disabled={!session}
+            onClick={() => setCreating(true)}
+          >
+            Create private wager <ArrowRight aria-hidden="true" />
+          </Button>
+        </div>
+      </header>
+
+      {actionError ? <Notice tone="error">{actionError}</Notice> : null}
+
+      {settleReveal ? (
+        <section className="settlement-stage" aria-live="polite">
+          <RevealSettle result={settleReveal} />
+          <Button tone="ghost" onClick={clearSettleReveal}>
+            Return to wagers
+          </Button>
+        </section>
+      ) : null}
+
+      {!session ? (
+        <section
+          className="empty-journey"
+          aria-labelledby="wager-connect-title"
+        >
+          <LockKeyhole aria-hidden="true" />
           <div>
-            <h1 className="screen-title">Wagers — sealed duels</h1>
-            <p className="screen-sub">
-              Two athletes stake; the chain compares two <strong>sealed distances</strong> at the
-              deadline and pays the winner. The room never sees a single number.
+            <h2 id="wager-connect-title">
+              Connect your private athlete identity
+            </h2>
+            <p>
+              Your wallet funds transactions but is never used as your
+              opponent-facing identity.
             </p>
           </div>
-          {session ? (
-            <div className="row" style={{ gap: 10 }}>
+          <Button tone="primary" onClick={() => navigateTo("account")}>
+            Connect wallet
+          </Button>
+        </section>
+      ) : wagers.length === 0 ? (
+        <section className="empty-journey" aria-labelledby="wager-empty-title">
+          <ShieldCheck aria-hidden="true" />
+          <div>
+            <h2 id="wager-empty-title">No private wagers yet</h2>
+            <p>
+              Paste another athlete's holder binding, choose the terms, and
+              escrow your stake. Their name and wallet never become part of the
+              challenge.
+            </p>
+          </div>
+          <Button tone="primary" onClick={() => setCreating(true)}>
+            Create private wager
+          </Button>
+        </section>
+      ) : (
+        <div className="wager-workspace">
+          <aside className="wager-list" aria-label="Your wagers">
+            <div className="wager-list__heading">
+              <h2>Your wagers</h2>
+              <span>{wagers.length}</span>
+            </div>
+            {wagers.map((wager) => (
+              <button
+                key={wager.id}
+                className={
+                  selected?.id === wager.id
+                    ? "wager-list-item wager-list-item--active"
+                    : "wager-list-item"
+                }
+                onClick={() => setSelectedId(wager.id)}
+                aria-current={selected?.id === wager.id ? "true" : undefined}
+              >
+                <span className="wager-list-item__top">
+                  <strong>Wager #{wager.id}</strong>
+                  <small>{statusLabel[wager.status]}</small>
+                </span>
+                <span className="wager-list-item__pair">
+                  {athleteLabel(wager.challenger)} ↔{" "}
+                  {athleteLabel(wager.opponent)}
+                </span>
+                <span>
+                  {fmtTnight(wager.stake)} NIGHT · {wager.metric.label}
+                </span>
+              </button>
+            ))}
+          </aside>
+
+          {selected ? (
+            <WagerDetail
+              wager={selected}
+              now={now}
+              isWallet={isWallet}
+              isLive={isLive}
+              myCredentialId={myCredentialId}
+              busy={busyId === selected.id}
+              onAccept={() => run(selected.id, () => acceptWager(selected.id))}
+              onSubmit={(credential) =>
+                run(selected.id, () => submitWorkout(selected.id, credential))
+              }
+              onSettle={() => run(selected.id, () => settleWager(selected.id))}
+            />
+          ) : null}
+        </div>
+      )}
+    </div>
+  );
+};
+
+const WagerDetail = ({
+  wager,
+  now,
+  isWallet,
+  isLive,
+  myCredentialId,
+  busy,
+  onAccept,
+  onSubmit,
+  onSettle,
+}: {
+  wager: WagerView;
+  now: number;
+  isWallet: boolean;
+  isLive: boolean;
+  myCredentialId?: string;
+  busy: boolean;
+  onAccept: () => Promise<unknown>;
+  onSubmit: (credential: string) => Promise<unknown>;
+  onSettle: () => Promise<unknown>;
+}) => {
+  const submittedBy = (athlete: Athlete) =>
+    wager.submissions.some(
+      (submission) => submission.athlete.handle === athlete.handle,
+    );
+  const localAthlete =
+    wager.challenger.role === "local" ? wager.challenger : wager.opponent;
+  const localSubmitted = submittedBy(localAthlete);
+  const deadlineMs = Number(wager.deadlineBlock) * 1_000;
+  const submissionsClosed = wager.deadlineBlock > 0n && deadlineMs <= now;
+  const settleReadyAt = settleReadyAtMs(wager.deadlineBlock);
+  const settleLocked = wager.deadlineBlock > 0n && settleReadyAt > now;
+  const canAccept =
+    wager.status === "open" && (isLive || wager.opponent.role === "local");
+  const canSettle = wager.status === "accepted" || wager.status === "submitted";
+  const currentStep = stepForWager(wager, settleLocked);
+
+  return (
+    <article className="wager-detail">
+      <header className="wager-detail__heading">
+        <div>
+          <p className="section-label">Wager #{wager.id}</p>
+          <h2>{headingForWager(wager, settleLocked)}</h2>
+          <p>{copyForWager(wager, settleLocked)}</p>
+        </div>
+        <span className={`state-label state-label--${wager.status}`}>
+          {statusLabel[wager.status]}
+        </span>
+      </header>
+
+      <Course currentStep={currentStep} settled={wager.status === "settled"} />
+
+      <div className="current-stage">
+        <section
+          className="wager-terms"
+          aria-labelledby={`wager-${wager.id}-terms`}
+        >
+          <h3 id={`wager-${wager.id}-terms`}>Wager terms</h3>
+          <dl>
+            <div>
+              <dt>
+                <UserRound aria-hidden="true" /> Opponent
+              </dt>
+              <dd>{opponentLabel(wager.opponent)}</dd>
+              <small>No name or wallet is linked on-chain.</small>
+            </div>
+            <div>
+              <dt>
+                <Coins aria-hidden="true" /> Stake
+              </dt>
+              <dd>{fmtTnight(wager.stake)} NIGHT</dd>
+            </div>
+            <div>
+              <dt>
+                <CalendarClock aria-hidden="true" /> Deadline
+              </dt>
+              <dd>
+                {new Date(deadlineMs).toLocaleTimeString([], {
+                  hour: "2-digit",
+                  minute: "2-digit",
+                })}
+              </dd>
+              <small>
+                {settleLocked
+                  ? `Settlement opens in ${formatCountdown(settleReadyAt - now)}`
+                  : "Settlement window open"}
+              </small>
+            </div>
+          </dl>
+        </section>
+
+        <section className="stage-action" aria-live="polite">
+          <StageActionIcon step={currentStep} />
+          <div className="stage-action__copy">
+            <p className="section-label">Current action</p>
+            <h3>{actionHeading(wager, settleLocked)}</h3>
+            <p>{actionCopy(wager, settleLocked, localSubmitted)}</p>
+          </div>
+
+          {canAccept ? (
+            <Button
+              tone="primary"
+              disabled={busy}
+              onClick={() => void onAccept()}
+            >
+              {busy ? <span className="spin" /> : null} Accept challenge
+            </Button>
+          ) : null}
+
+          {isWallet && wager.status === "accepted" && !localSubmitted ? (
+            <Button
+              tone="primary"
+              disabled={busy || !myCredentialId || submissionsClosed}
+              onClick={() => myCredentialId && void onSubmit(myCredentialId)}
+            >
+              {busy ? <span className="spin" /> : null}
+              {submissionsClosed
+                ? "Submissions closed"
+                : myCredentialId
+                  ? "Seal my workout"
+                  : "Attest a workout first"}
+            </Button>
+          ) : null}
+
+          {isLive && wager.status === "accepted" ? (
+            <div
+              className="debug-actions"
+              aria-label="Maintainer debug submissions"
+            >
+              <Button
+                tone="primary"
+                disabled={
+                  busy || submittedBy(wager.challenger) || submissionsClosed
+                }
+                onClick={() => void onSubmit(athleteOf(wager.challenger))}
+              >
+                {submittedBy(wager.challenger)
+                  ? "Side A sealed"
+                  : "Seal side A"}
+              </Button>
               <Button
                 tone="ghost"
-                size="sm"
-                onClick={() => void refresh()}
-                title="Re-read wagers from the chain"
+                disabled={
+                  busy || submittedBy(wager.opponent) || submissionsClosed
+                }
+                onClick={() => void onSubmit(athleteOf(wager.opponent))}
               >
-                ↻ Refresh
-              </Button>
-              <Button tone="seal" onClick={() => setCreateOpen(true)}>
-                + Create wager
+                {submittedBy(wager.opponent) ? "Side B sealed" : "Seal side B"}
               </Button>
             </div>
           ) : null}
-        </div>
-      </div>
 
-      {actionError ? (
-        <div style={{ marginBottom: 16 }}>
-          <Notice tone="error">{actionError}</Notice>
-        </div>
-      ) : null}
+          {canSettle ? (
+            <Button
+              tone="primary"
+              disabled={busy || settleLocked}
+              onClick={() => void onSettle()}
+            >
+              {busy ? <span className="spin" /> : null}
+              {settleLocked
+                ? `Settle in ${formatCountdown(settleReadyAt - now)}`
+                : "Settle wager"}
+            </Button>
+          ) : null}
 
-      {isLive && session ? (
-        <div style={{ marginBottom: 16 }}>
-          <Card title="Roster — challenge IDs">
-            <div className="row" style={{ gap: 10, flexWrap: "wrap" }}>
-              {[
-                { id: "A", athlete: ATHLETE_A, note: "seed ONE" },
-                { id: "B", athlete: ATHLETE_B, note: "seed TWO" },
-              ].map((entry) => (
-                <div
-                  key={entry.id}
-                  className="chip chip--gold"
-                  style={{ padding: "6px 12px", gap: 8 }}
-                >
-                  <span style={{ fontWeight: 700 }}>{entry.athlete.name}</span>
-                  <span className="faint">challenge ID</span>
-                  <button
-                    type="button"
-                    className="copy-id-btn"
-                    title="copy challenge ID"
-                    onClick={() => void copyChallengeId(entry.athlete.holderBinding)}
-                  >
-                    {copied === entry.athlete.holderBinding ? "Copied ✓" : "Copy ID"}
-                  </button>
-                  <span className="faint">{entry.note}</span>
-                </div>
-              ))}
-              <span className="faint" style={{ fontSize: 12 }}>
-                paste a challenge ID into the create form to challenge by ID — real NIGHT moves
-                on-chain; the winner also receives a shielded WitnessFitness NFT.
+          {wager.status === "settled" && wager.result ? (
+            <div className="settled-summary">
+              <Check aria-hidden="true" />
+              <span>
+                <strong>{wager.result.summary}</strong>
+                {fmtTnight(wager.result.pot)} {wager.result.currency} settled.
               </span>
             </div>
-          </Card>
-        </div>
-      ) : null}
+          ) : null}
 
-      {settleReveal ? (
-        <div style={{ marginBottom: 20 }}>
-          <RevealSettle result={settleReveal} />
-          <div className="row" style={{ marginTop: 12 }}>
-            <Button tone="ghost" size="sm" onClick={clearSettleReveal}>
-              Close reveal
-            </Button>
+          <div className="privacy-note">
+            <LockKeyhole aria-hidden="true" />
+            <span>
+              Only you see your workout. The contract receives a sealed
+              commitment.
+            </span>
           </div>
+        </section>
+      </div>
+
+      <details className="verification-details">
+        <summary>
+          <ShieldCheck aria-hidden="true" /> How this is verified
+        </summary>
+        <div>
+          <p>
+            Two independent notaries verify the attested activity before the
+            contract accepts its commitment. Holder bindings identify the two
+            sides without names or wallet addresses.
+          </p>
+          <dl className="technical-receipt">
+            <div>
+              <dt>Challenger</dt>
+              <dd>
+                <code>{hexShort(wager.challenger.holderBinding, 10, 8)}</code>
+              </dd>
+            </div>
+            <div>
+              <dt>Opponent</dt>
+              <dd>
+                <code>{hexShort(wager.opponent.holderBinding, 10, 8)}</code>
+              </dd>
+            </div>
+            <div>
+              <dt>Submissions</dt>
+              <dd>{wager.submissions.length}/2 sealed</dd>
+            </div>
+          </dl>
         </div>
-      ) : null}
-
-      {wagers.length === 0 ? (
-        <div className="empty-state">
-          No wagers yet.{" "}
-          {session
-            ? isWallet
-              ? "Challenge another wallet by its holder-binding ID (their Connect tab) — real NIGHT moves on-chain; the winner takes the pot plus a shielded NFT."
-              : "Create one — both athletes are sidecar identities (A/B); the winner takes the pot plus a shielded NFT."
-            : "Enter the demo on the Connect tab first."}
-        </div>
-      ) : (
-        <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
-          {wagers.map((wager) => {
-            const readyToSettle = wager.status === "accepted" || wager.status === "submitted";
-            const lock = settleLocked(wager);
-            const submitLock = submitLocked(wager);
-            return (
-              <Card
-                key={wager.id}
-                title={`Wager #${wager.id} — ${wager.title}`}
-                glow={wager.status !== "settled"}
-              >
-                <div className="row-between" style={{ marginBottom: 14 }}>
-                  <div className="row" style={{ gap: 14, flexWrap: "wrap" }}>
-                    <Chip>{wager.metric.label}</Chip>
-                    <Chip tone="gold">
-                      {fmtTnight(wager.stake)} {wager.result?.currency ?? "NIGHT"} stake
-                    </Chip>
-                    <Chip>
-                      settle unlocks {formatCountdown(settleReadyAtMs(wager.deadlineBlock) - now)}
-                    </Chip>
-                  </div>
-                  <Chip
-                    tone={
-                      wager.status === "settled"
-                        ? "provable"
-                        : wager.status === "submitted"
-                          ? "seal"
-                          : "default"
-                    }
-                  >
-                    {statusLabel[wager.status]}
-                  </Chip>
-                </div>
-
-                <div
-                  className="row"
-                  style={{ gap: 22, justifyContent: "center", margin: "18px 0" }}
-                >
-                  <Envelope
-                    label={wager.challenger.name}
-                    sealed={
-                      !wager.submissions.some((s) => s.athlete.handle === wager.challenger.handle)
-                    }
-                    commitment={
-                      wager.submissions.find((s) => s.athlete.handle === wager.challenger.handle)
-                        ?.commitment
-                    }
-                    title="sealed submission — commitment on-chain; the value is revealed only at settlement"
-                  />
-                  <span className="faint mono">vs</span>
-                  <Envelope
-                    label={wager.opponent.name}
-                    sealed={
-                      !wager.submissions.some((s) => s.athlete.handle === wager.opponent.handle)
-                    }
-                    commitment={
-                      wager.submissions.find((s) => s.athlete.handle === wager.opponent.handle)
-                        ?.commitment
-                    }
-                    title="sealed submission — commitment on-chain; the value is revealed only at settlement"
-                  />
-                </div>
-
-                {wager.status === "open" && wager.challenger.role === "local" ? (
-                  <Notice tone="info">
-                    Waiting for the opponent to accept — their wallet must accept this challenge (ID{" "}
-                    {wager.id}).
-                  </Notice>
-                ) : null}
-
-                {wager.status === "open" && (isLive || wager.opponent.role === "local") ? (
-                  <Button
-                    tone="primary"
-                    block
-                    disabled={busyId !== null}
-                    onClick={() => void run(wager.id, () => acceptWager(wager.id))}
-                  >
-                    {busyId === wager.id ? <span className="spin" /> : null}
-                    Accept as {wager.opponent.name}
-                  </Button>
-                ) : null}
-
-                {isLive && wager.status === "accepted" ? (
-                  <div className="row" style={{ gap: 10 }}>
-                    <Button
-                      tone="seal"
-                      block
-                      disabled={
-                        busyId !== null || submittedBy(wager, wager.challenger) || submitLock.locked
-                      }
-                      title={submitLock.locked ? submitLock.label : undefined}
-                      onClick={() =>
-                        void run(wager.id, () =>
-                          submitWorkout(wager.id, athleteOf(wager.challenger)),
-                        )
-                      }
-                    >
-                      {busyId === wager.id ? <span className="spin" /> : null}
-                      {submittedBy(wager, wager.challenger)
-                        ? "Sealed ✓"
-                        : `Seal ${wager.challenger.name}'s submission${submitLock.locked ? ` — ${submitLock.label}` : ""}`}
-                    </Button>
-                    <Button
-                      tone="seal"
-                      block
-                      disabled={
-                        busyId !== null || submittedBy(wager, wager.opponent) || submitLock.locked
-                      }
-                      title={submitLock.locked ? submitLock.label : undefined}
-                      onClick={() =>
-                        void run(wager.id, () => submitWorkout(wager.id, athleteOf(wager.opponent)))
-                      }
-                    >
-                      {busyId === wager.id ? <span className="spin" /> : null}
-                      {submittedBy(wager, wager.opponent)
-                        ? "Sealed ✓"
-                        : `Seal ${wager.opponent.name}'s submission${submitLock.locked ? ` — ${submitLock.label}` : ""}`}
-                    </Button>
-                  </div>
-                ) : null}
-
-                {isWallet && wager.status === "accepted" ? (
-                  <Button
-                    tone="seal"
-                    block
-                    disabled={
-                      busyId !== null ||
-                      submittedBy(wager, localSide(wager)) ||
-                      !myCredentialId ||
-                      submitLock.locked
-                    }
-                    title={
-                      submitLock.locked
-                        ? submitLock.label
-                        : myCredentialId
-                          ? "Seals the latest attested workout — the value stays sealed until settle"
-                          : "Attest a workout first (Connect tab)"
-                    }
-                    onClick={() =>
-                      void run(wager.id, () => submitWorkout(wager.id, myCredentialId))
-                    }
-                  >
-                    {busyId === wager.id ? <span className="spin" /> : null}
-                    {submittedBy(wager, localSide(wager))
-                      ? "Sealed ✓ — waiting for the opponent"
-                      : submitLock.locked
-                        ? `Submissions closed — ${submitLock.label}`
-                        : myCredentialId
-                          ? "Seal my submission (latest attested workout)"
-                          : "Attest a workout first"}
-                  </Button>
-                ) : null}
-
-                {wager.status === "accepted" && wager.submissions.length === 1 ? (
-                  <Notice tone="info">Waiting for the other athlete's sealed submission…</Notice>
-                ) : null}
-
-                {readyToSettle ? (
-                  <Button
-                    tone="gold"
-                    block
-                    disabled={busyId !== null || lock.locked}
-                    onClick={() => void run(wager.id, () => settleWager(wager.id))}
-                  >
-                    {busyId === wager.id ? <span className="spin" /> : null}
-                    {settleLabel(wager)} under seal{lock.locked ? ` (${lock.label})` : ""}
-                  </Button>
-                ) : null}
-
-                {wager.status === "settled" && wager.result ? (
-                  <Notice tone={wager.result.tie || wager.result.forfeit ? "info" : "success"}>
-                    {wager.result.summary} · pot {fmtTnight(wager.result.pot)}{" "}
-                    {wager.result.currency} ·{" "}
-                    {wager.result.disclosed
-                      ? "the comparison was revealed on-chain at settlement"
-                      : "comparison not disclosed"}
-                    {wager.result.nft ? " · shielded NFT to the winner" : ""}
-                  </Notice>
-                ) : null}
-              </Card>
-            );
-          })}
-        </div>
-      )}
-
-      {session ? (
-        <div style={{ marginTop: 18 }}>
-          <Notice tone="info">
-            Sealed submission commitments land on-chain as{" "}
-            <code className="mono">persistentCommit</code> envelopes — hover them:{" "}
-            <code className="mono">{hexShort("0x" + "0".repeat(64), 10, 8)}</code> style. The values
-            stay sealed until the deadline; at settlement the chain reveals both openings to decide
-            the winner — never before.
-          </Notice>
-        </div>
-      ) : null}
-
-      <CreateWagerModal
-        open={createOpen}
-        onClose={() => setCreateOpen(false)}
-        onCreate={handleCreate}
-        isWallet={isWallet}
-      />
-    </div>
+      </details>
+    </article>
   );
+};
+
+const COURSE = ["Connect", "Attest", "Challenge", "Seal", "Wait", "Settle"];
+
+const Course = ({
+  currentStep,
+  settled,
+}: {
+  currentStep: number;
+  settled: boolean;
+}) => (
+  <ol className="course" aria-label="Wager progress">
+    {COURSE.map((label, index) => {
+      const complete = settled || index < currentStep;
+      const active = !settled && index === currentStep;
+      return (
+        <li
+          key={label}
+          className={`${complete ? "course__step--complete" : ""} ${active ? "course__step--active" : ""}`}
+          aria-current={active ? "step" : undefined}
+        >
+          <span>{complete ? <Check aria-hidden="true" /> : index + 1}</span>
+          <strong>{label}</strong>
+        </li>
+      );
+    })}
+  </ol>
+);
+
+const StageActionIcon = ({ step }: { step: number }) => (
+  <div className="action-symbol" aria-hidden="true">
+    {step >= 4 ? (
+      <CalendarClock />
+    ) : step === 3 ? (
+      <LockKeyhole />
+    ) : (
+      <ShieldCheck />
+    )}
+  </div>
+);
+
+const stepForWager = (wager: WagerView, settleLocked: boolean): number => {
+  if (wager.status === "settled") return 5;
+  if (wager.status === "cancelled") return 2;
+  if (wager.status === "open") return 2;
+  if (wager.status === "accepted" && wager.submissions.length === 0) return 3;
+  if (settleLocked) return 4;
+  return 5;
+};
+
+const headingForWager = (wager: WagerView, settleLocked: boolean): string => {
+  if (wager.status === "cancelled") return "Wager cancelled";
+  if (wager.status === "open") return "Challenge sent";
+  if (wager.status === "accepted" && wager.submissions.length === 0)
+    return "Challenge ready";
+  if (wager.status === "settled") return "Wager settled";
+  return settleLocked ? "Both sides are under seal" : "Settlement is ready";
+};
+
+const copyForWager = (wager: WagerView, settleLocked: boolean): string => {
+  if (wager.status === "cancelled")
+    return "This challenge is closed and no further action is available.";
+  if (wager.status === "open")
+    return "The anonymous opponent must accept before either side can seal a workout.";
+  if (wager.status === "accepted" && wager.submissions.length === 0)
+    return "Use your latest attested workout to lock your submission.";
+  if (wager.status === "settled")
+    return "The contract enforced the terms and moved the pot.";
+  return settleLocked
+    ? "The contract is holding the commitments until the deadline."
+    : "The deadline has passed. Either side can settle.";
+};
+
+const actionHeading = (wager: WagerView, settleLocked: boolean): string => {
+  if (wager.status === "cancelled") return "No further action";
+  if (wager.status === "open")
+    return wager.opponent.role === "local"
+      ? "Accept this challenge"
+      : "Waiting for acceptance";
+  if (wager.status === "accepted" && wager.submissions.length < 2)
+    return "Seal the eligible workout";
+  if (wager.status === "settled") return "Outcome confirmed";
+  return settleLocked ? "Wait for the settlement window" : "Settle the wager";
+};
+
+const actionCopy = (
+  wager: WagerView,
+  settleLocked: boolean,
+  localSubmitted: boolean,
+): string => {
+  if (wager.status === "cancelled")
+    return "The wager remains in your history as a private receipt.";
+  if (wager.status === "open")
+    return "Acceptance binds the pseudonymous holder to these terms.";
+  if (wager.status === "accepted" && localSubmitted)
+    return "Your commitment is sealed. Waiting for the other holder binding.";
+  if (wager.status === "accepted")
+    return "The value stays on your device while a commitment is added to the contract.";
+  if (wager.status === "settled")
+    return "The result is final. Athlete and wallet identities remain unlinked.";
+  return settleLocked
+    ? "No further action is needed until settlement opens."
+    : "Settlement compares the submitted openings and pays the result.";
 };
 
 const athleteOf = (athlete: Athlete): "A" | "B" =>
   athlete.handle === ATHLETE_B.handle ? "B" : "A";
 
-// Wallet mode: the athlete object of MY side (the client maps the local role).
-const localSide = (wager: WagerView): Athlete =>
-  wager.challenger.role === "local" ? wager.challenger : wager.opponent;
-
-// Wallet mode challenge input: the opponent's 64-hex holder binding
-// (their challenge ID, copied from their Connect tab). Accepts bare hex.
 const normalizeChallengeBinding = (input: string): string | null => {
   const hex = input.trim().replace(/^0x/, "");
-  return /^[0-9a-fA-F]{64}$/.test(hex) ? "0x" + hex.toLowerCase() : null;
+  return /^[0-9a-fA-F]{64}$/.test(hex) ? `0x${hex.toLowerCase()}` : null;
 };
 
-const CreateWagerModal = ({
-  open,
-  onClose,
-  onCreate,
+const CreateWagerPage = ({
   isWallet,
+  onBack,
+  onCreate,
+  error,
 }: {
-  open: boolean;
-  onClose: () => void;
-  onCreate: (req: WagerCreateRequest) => Promise<void>;
   isWallet: boolean;
+  onBack: () => void;
+  onCreate: (request: WagerCreateRequest) => Promise<void>;
+  error: string | null;
 }) => {
-  const [metricId, setMetricId] = useState<string>("1");
+  const [metricId, setMetricId] = useState("1");
   const [stake, setStake] = useState("10");
   const [deadline, setDeadline] = useState("90");
-  const [challengeId, setChallengeId] = useState<string>("");
+  const [challengeId, setChallengeId] = useState("");
   const [challengeError, setChallengeError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
-  const opponentOf = (): Athlete => {
+  const opponent = useMemo<Athlete>(() => {
     if (!isWallet) {
-      const parsed = challengeIdOf(challengeId);
-      if (parsed === "B") return ATHLETE_B;
-      if (parsed === "A") return ATHLETE_A;
-      return ATHLETE_B;
+      return challengeIdOf(challengeId) === "A" ? ATHLETE_A : ATHLETE_B;
     }
-    const binding = normalizeChallengeBinding(challengeId);
-    if (!binding) return ATHLETE_B;
+    const binding =
+      normalizeChallengeBinding(challengeId) ?? ATHLETE_B.holderBinding;
     return {
-      name: `Athlete ${hexShort(binding, 8, 6)}`,
+      name: "Anonymous athlete",
       handle: hexShort(binding, 8, 6),
       role: "opponent",
       holderBinding: binding,
     };
-  };
-
-  const validateChallenge = (): boolean => {
-    if (isWallet) {
-      if (normalizeChallengeBinding(challengeId) === null) {
-        setChallengeError(
-          "challenge ID must be the opponent\u2019s 64-hex holder binding (their Connect tab)",
-        );
-        return false;
-      }
-    } else if (challengeIdOf(challengeId) === null) {
-      setChallengeError("unknown challenge ID — the roster IDs are A (Ava) and B (Milo)");
-      return false;
-    }
-    setChallengeError(null);
-    return true;
-  };
+  }, [challengeId, isWallet]);
 
   const submit = async () => {
-    if (!validateChallenge()) return;
+    const normalized = isWallet
+      ? normalizeChallengeBinding(challengeId)
+      : challengeIdOf(challengeId);
+    if (!normalized) {
+      setChallengeError(
+        isWallet
+          ? "Paste the opponent's 64-character holder binding. It starts with 0x."
+          : "Use demo holder side A or B.",
+      );
+      return;
+    }
+    setChallengeError(null);
     setSaving(true);
     try {
       await onCreate({
-        opponent: opponentOf(),
+        opponent,
         metricId: BigInt(metricId),
         stake: Number(stake),
-        deadlineBlock: BigInt(Math.floor(Date.now() / 1000) + Number(deadline)),
+        deadlineBlock: BigInt(
+          Math.floor(Date.now() / 1_000) + Number(deadline),
+        ),
       });
     } finally {
       setSaving(false);
@@ -526,81 +656,146 @@ const CreateWagerModal = ({
   };
 
   return (
-    <Modal open={open} onClose={onClose}>
-      <h3 className="card-title">Create wager</h3>
-      <div className="field">
-        <label htmlFor="wager-opponent">
-          {isWallet
-            ? "Opponent — their holder-binding challenge ID (0x + 64 hex, from their Connect tab)"
-            : "Opponent — challenge by ID (A = Ava, B = Milo)"}
-        </label>
-        <input
-          id="wager-opponent"
-          className="input"
-          placeholder={
-            isWallet ? "0x4f8c… (paste the opponent\u2019s challenge ID)" : "Challenge ID, e.g. B"
-          }
-          value={challengeId}
-          onChange={(e) => setChallengeId(e.target.value)}
-        />
-        {challengeError ? (
-          <div style={{ marginTop: 6 }}>
-            <Notice tone="error">{challengeError}</Notice>
-          </div>
-        ) : null}
-      </div>
-      <div className="field">
-        <label htmlFor="wager-metric">Metric</label>
-        <select
-          id="wager-metric"
-          className="select"
-          value={metricId}
-          onChange={(e) => setMetricId(e.target.value)}
+    <div className="page create-wager-page">
+      <button className="back-action" onClick={onBack}>
+        <ArrowLeft aria-hidden="true" /> Back to wagers
+      </button>
+      <header className="page-heading page-heading--compact">
+        <div>
+          <p className="page-context">New private wager</p>
+          <h1>Set the terms. Keep both identities out.</h1>
+          <p>
+            The opponent is represented only by a holder binding. No name or
+            wallet address is requested.
+          </p>
+        </div>
+      </header>
+
+      {error ? <Notice tone="error">{error}</Notice> : null}
+
+      <div className="create-wager-layout">
+        <form
+          className="wager-form"
+          onSubmit={(event) => {
+            event.preventDefault();
+            void submit();
+          }}
         >
-          {METRICS.map((m) => (
-            <option key={m.id.toString()} value={m.id.toString()}>
-              {m.label} ({m.unit})
-            </option>
-          ))}
-        </select>
+          <div className="field">
+            <label htmlFor="wager-opponent">Opponent holder binding</label>
+            <input
+              id="wager-opponent"
+              className="input"
+              placeholder={
+                isWallet ? "0x…64-character holder binding" : "Demo side A or B"
+              }
+              value={challengeId}
+              onChange={(event) => setChallengeId(event.target.value)}
+              aria-describedby="wager-opponent-hint wager-opponent-error"
+              aria-invalid={Boolean(challengeError)}
+              autoComplete="off"
+            />
+            <small id="wager-opponent-hint">
+              Copied from the other athlete's private account screen.
+            </small>
+            {challengeError ? (
+              <p className="field-error" id="wager-opponent-error">
+                {challengeError}
+              </p>
+            ) : null}
+          </div>
+
+          <div className="form-row">
+            <div className="field">
+              <label htmlFor="wager-metric">Winning metric</label>
+              <select
+                id="wager-metric"
+                className="select"
+                value={metricId}
+                onChange={(event) => setMetricId(event.target.value)}
+              >
+                {METRICS.map((metric) => (
+                  <option
+                    key={metric.id.toString()}
+                    value={metric.id.toString()}
+                  >
+                    {metric.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="field">
+              <label htmlFor="wager-stake">Your stake (NIGHT)</label>
+              <input
+                id="wager-stake"
+                className="input"
+                type="number"
+                min="1"
+                value={stake}
+                onChange={(event) => setStake(event.target.value)}
+              />
+            </div>
+          </div>
+
+          <div className="field">
+            <label htmlFor="wager-deadline">Submission window (seconds)</label>
+            <input
+              id="wager-deadline"
+              className="input"
+              type="number"
+              min="1"
+              value={deadline}
+              onChange={(event) => setDeadline(event.target.value)}
+            />
+            <small>
+              Settlement opens after this window plus the contract's grace
+              period.
+            </small>
+          </div>
+
+          <Button tone="primary" block disabled={saving} type="submit">
+            {saving ? <span className="spin" /> : null} Create and escrow{" "}
+            {stake || "0"} NIGHT
+          </Button>
+        </form>
+
+        <aside className="wager-review" aria-label="Wager privacy review">
+          <p className="section-label">Before you create</p>
+          <h2>Private by construction</h2>
+          <ul>
+            <li>
+              <Check aria-hidden="true" />
+              <span>
+                <strong>Pseudonymous opponent</strong>
+                {challengeId
+                  ? opponentLabel(opponent)
+                  : "Waiting for a holder binding"}
+              </span>
+            </li>
+            <li>
+              <Check aria-hidden="true" />
+              <span>
+                <strong>Sealed workout</strong>The raw result stays on each
+                athlete's device until settlement.
+              </span>
+            </li>
+            <li>
+              <Check aria-hidden="true" />
+              <span>
+                <strong>Contract-enforced terms</strong>The stake and deadline
+                cannot be changed after creation.
+              </span>
+            </li>
+          </ul>
+          <div className="privacy-note">
+            <LockKeyhole aria-hidden="true" />
+            <span>
+              The chain never receives an athlete name, profile, or linked
+              wallet identity.
+            </span>
+          </div>
+        </aside>
       </div>
-      <div className="field">
-        <label htmlFor="wager-stake">Stake (NIGHT)</label>
-        <input
-          id="wager-stake"
-          className="input"
-          type="number"
-          min={1}
-          value={stake}
-          onChange={(e) => setStake(e.target.value)}
-        />
-      </div>
-      <div className="field">
-        <label htmlFor="wager-deadline">Deadline (seconds from now)</label>
-        <input
-          id="wager-deadline"
-          className="input"
-          type="number"
-          min={1}
-          value={deadline}
-          onChange={(e) => setDeadline(e.target.value)}
-        />
-      </div>
-      <div className="row-between">
-        <Button tone="ghost" onClick={onClose}>
-          Cancel
-        </Button>
-        <Button tone="seal" onClick={() => void submit()} disabled={saving}>
-          {saving ? <span className="spin" /> : null} Create & escrow stake
-        </Button>
-      </div>
-      <div style={{ marginTop: 12 }}>
-        <Notice tone="info">
-          {isWallet
-            ? `Challenging ${opponentOf().name}. The ${stake} NIGHT stake is escrowed on-chain for real; the winner takes both sides plus a shielded NFT. The opponent accepts from their own wallet.`
-            : `Challenging ${opponentOf().name} (${athleteOf(opponentOf())}). The ${stake} NIGHT stake is escrowed on-chain for real; the winner takes both sides plus a shielded NFT.`}
-        </Notice>
-      </div>
-    </Modal>
+    </div>
   );
 };

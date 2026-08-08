@@ -1,84 +1,98 @@
-// App shell: brand header, mode pill (informational — mode is decided at
-// startup: wallet by default, ?mode=live for maintainer debugging), tab
-// navigation, screens, and the always-visible notary trust strip.
-
-import { useState } from "react";
-import { NotaryStrip } from "./components/NotaryStrip";
+import { Award, CalendarDays, Shield, Trophy } from "lucide-react";
+import { useEffect, useState } from "react";
 import { ConnectScreen } from "./screens/ConnectScreen";
-import { EmployerScreen } from "./screens/EmployerScreen";
 import { StreaksScreen } from "./screens/StreaksScreen";
-import { VaultScreen } from "./screens/VaultScreen";
+import { TodayScreen } from "./screens/TodayScreen";
 import { WagersScreen } from "./screens/WagersScreen";
+import { type AppRoute, navigateTo, routeFromPath } from "./lib/navigation";
 import { DemoProvider, useDemo } from "./state/DemoStore";
 
-type Tab = "connect" | "vault" | "wagers" | "streaks" | "employer";
-
-const TABS: { id: Tab; label: string }[] = [
-  { id: "connect", label: "Connect" },
-  { id: "vault", label: "Vault" },
-  { id: "wagers", label: "Wagers" },
-  { id: "streaks", label: "Streaks & Badges" },
-  { id: "employer", label: "Employer Panel" },
-];
+const NAV_ITEMS: { id: AppRoute; label: string; icon: typeof CalendarDays }[] =
+  [
+    { id: "today", label: "Today", icon: CalendarDays },
+    { id: "wagers", label: "Wagers", icon: Trophy },
+    { id: "streak", label: "Streak & badges", icon: Award },
+  ];
 
 const Shell = () => {
-  const { mode, credentials, wagers, proofs } = useDemo();
-  const [tab, setTab] = useState<Tab>("connect");
+  const { session, credentials } = useDemo();
+  const [route, setRoute] = useState<AppRoute>(() => routeFromPath());
+
+  useEffect(() => {
+    const syncRoute = () => setRoute(routeFromPath());
+    window.addEventListener("popstate", syncRoute);
+    return () => window.removeEventListener("popstate", syncRoute);
+  }, []);
+
+  const ready = Boolean(session && credentials.length > 0);
 
   return (
     <div className="app-shell">
+      <a className="skip-link" href="#main-content">
+        Skip to main content
+      </a>
       <header className="app-header">
-        <div className="brand">
-          <div className="brand-mark" />
-          <div>
-            <div className="brand-name">WITNESSFITNESS</div>
-            <div className="brand-tagline">prove the workout, hide the data</div>
-          </div>
-        </div>
-        <div className="header-right">
-          <div
-            className="mode-pill"
-            title={
-              mode === "live"
-                ? "Live mode — maintainer debug via the identity sidecar (?mode=live)"
-                : "Wallet mode — Lace DApp Connector, direct chain access"
-            }
-          >
-            <span className="dot dot--green" />
-            {mode === "live" ? "live mode" : "wallet mode"}
-          </div>
-        </div>
+        <button
+          className="brand"
+          onClick={() => navigateTo("today")}
+          aria-label="WitnessFitness home"
+        >
+          WitnessFitness
+        </button>
+        <nav className="desktop-nav" aria-label="Primary navigation">
+          {NAV_ITEMS.map((item) => (
+            <button
+              key={item.id}
+              className={
+                route === item.id ? "nav-link nav-link--active" : "nav-link"
+              }
+              onClick={() => navigateTo(item.id)}
+              aria-current={route === item.id ? "page" : undefined}
+            >
+              {item.label}
+            </button>
+          ))}
+        </nav>
+        <button
+          className="account-status"
+          onClick={() => navigateTo("account")}
+        >
+          <span
+            className={`status-dot ${ready ? "status-dot--ready" : ""}`}
+            aria-hidden="true"
+          />
+          <span>{ready ? "Ready" : "Setup"}</span>
+          <Shield aria-hidden="true" />
+        </button>
       </header>
 
-      <nav className="tabbar">
-        {TABS.map((t) => (
-          <button
-            key={t.id}
-            type="button"
-            className={`tab ${tab === t.id ? "tab--active" : ""}`}
-            onClick={() => setTab(t.id)}
-          >
-            {t.label}
-            {t.id === "vault" && credentials.length > 0 ? (
-              <span className="tab__count">{credentials.length}</span>
-            ) : null}
-            {t.id === "wagers" && wagers.length > 0 ? (
-              <span className="tab__count">{wagers.length}</span>
-            ) : null}
-            {t.id === "employer" && proofs.length > 0 ? (
-              <span className="tab__count">{proofs.length}</span>
-            ) : null}
-          </button>
-        ))}
+      <main id="main-content">
+        {route === "today" ? <TodayScreen /> : null}
+        {route === "wagers" ? <WagersScreen /> : null}
+        {route === "streak" ? <StreaksScreen /> : null}
+        {route === "account" ? <ConnectScreen /> : null}
+      </main>
+
+      <nav className="mobile-nav" aria-label="Primary navigation">
+        {NAV_ITEMS.map((item) => {
+          const Icon = item.icon;
+          return (
+            <button
+              key={item.id}
+              className={
+                route === item.id
+                  ? "mobile-nav__item mobile-nav__item--active"
+                  : "mobile-nav__item"
+              }
+              onClick={() => navigateTo(item.id)}
+              aria-current={route === item.id ? "page" : undefined}
+            >
+              <Icon aria-hidden="true" />
+              <span>{item.id === "streak" ? "Streak" : item.label}</span>
+            </button>
+          );
+        })}
       </nav>
-
-      {tab === "connect" ? <ConnectScreen /> : null}
-      {tab === "vault" ? <VaultScreen /> : null}
-      {tab === "wagers" ? <WagersScreen /> : null}
-      {tab === "streaks" ? <StreaksScreen /> : null}
-      {tab === "employer" ? <EmployerScreen /> : null}
-
-      <NotaryStrip />
     </div>
   );
 };
