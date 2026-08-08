@@ -474,3 +474,23 @@ describe('browser stwo operator (real wasm roundtrip)', () => {
     expect(valid).toBe(false);
   });
 });
+
+describe('re2 browser shim (attestor-core makeRegex path)', () => {
+  it('default export is callable without new and returns a native RegExp', async () => {
+    const mod = await import('./stubs/re2.js');
+    const RE2 = mod.default as (pattern: string, flags?: string) => RegExp;
+    expect(typeof RE2).toBe('function');
+    const re = RE2('(?<data>.*)', 'sgiu');
+    expect(re).toBeInstanceOf(RegExp);
+    expect('abc'.match(re)).not.toBeNull();
+  });
+
+  it('supports new (hypothetical constructor-style call)', async () => {
+    const mod = await import('./stubs/re2.js');
+    const re = Reflect.construct(mod.default as unknown as new (pattern: string, flags?: string) => RegExp, [
+      'x',
+      'i',
+    ]);
+    expect(re).toBeInstanceOf(RegExp);
+  });
+});
