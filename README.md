@@ -36,6 +36,19 @@ Full layout with files: `AGENTS.md` §5.
 
 Attestation-side npm packages (versions confirmed 2026-08): `@reclaimprotocol/attestor-core@5.0.8`, `@reclaimprotocol/zk-fetch@1.1.0`.
 
+# Build the contract (hackathon reviewers)
+
+```bash
+pnpm install
+pnpm --filter @witnessfitness/contract build   # compact compile + ZK verifier keys + tsc
+```
+
+Compiles `src/stride.compact` into `packages/contract/dist` (compiled contract,
+ZK verifier keys, generated TS) — everything downstream (api, tests, ui bundle)
+consumes that `dist`.
+
+
+
 ## Quickstart
 
 ```bash
