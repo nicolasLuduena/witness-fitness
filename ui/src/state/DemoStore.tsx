@@ -1,3 +1,4 @@
+import { logError } from '../lib/logger';
 // Demo state store: the single source of truth for all screens. Wraps the
 // WfClient (fixture or live) and holds the UI-facing slices: session,
 // credentials, wagers, streak, badges, proofs, notary strip, and the
@@ -94,7 +95,7 @@ export const DemoProvider = ({ children }: { children: ReactNode }) => {
       setStreak(strk);
       setBadges(bdgs);
     } catch (err) {
-      console.error('refresh failed', err);
+      logError('DemoStore.refresh', err);
     }
   }, [client]);
 
@@ -102,7 +103,7 @@ export const DemoProvider = ({ children }: { children: ReactNode }) => {
     try {
       setNotaries(await client.notaryStatus());
     } catch (err) {
-      console.error('notary status failed', err);
+      logError('DemoStore.refreshNotaries', err);
     }
   }, [client]);
 
@@ -124,6 +125,7 @@ export const DemoProvider = ({ children }: { children: ReactNode }) => {
       await refresh();
       await refreshNotaries();
     } catch (err) {
+      logError('DemoStore.connect', err);
       setConnectError(err instanceof Error ? err.message : 'connection failed');
     } finally {
       setConnecting(false);

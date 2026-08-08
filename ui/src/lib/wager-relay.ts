@@ -10,6 +10,7 @@
 // opponentValue, opponentRand].
 
 import { ATTEST_SERVICE_URL } from './attest/config';
+import { logError } from './logger';
 
 export type RelaySide = 'A' | 'B';
 
@@ -40,7 +41,10 @@ export const postWagerOpening = async (
     body: JSON.stringify({ wagerId, who, value: hexOf(value), rand: hexOf(rand) }),
   });
   if (!res.ok) {
-    const body = (await res.json().catch(() => null)) as { error?: string } | null;
+    const body = (await res.json().catch((parseErr) => {
+      logError('wager-relay.parseErrorBody', parseErr);
+      return null;
+    })) as { error?: string } | null;
     throw new Error(`wager-opening relay failed: ${body?.error ?? `HTTP ${res.status}`}`);
   }
 };

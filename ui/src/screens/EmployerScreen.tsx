@@ -6,6 +6,7 @@ import { useState } from 'react';
 import { useDemo } from '../state/DemoStore';
 import { Button, Card, Notice } from '../components/bits';
 import { EMPLOYER } from '../domain/story';
+import { logError } from '../lib/logger';
 
 export const EmployerScreen = () => {
   const { badges, proofs, proveBadge, streak } = useDemo();
@@ -23,6 +24,7 @@ export const EmployerScreen = () => {
     try {
       await proveBadge(Number(badgeId), verifier);
     } catch (err) {
+      logError('EmployerScreen.proveBadge', err);
       setError(err instanceof Error ? err.message : 'proof failed');
     } finally {
       setRunning(false);

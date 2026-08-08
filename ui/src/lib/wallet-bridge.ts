@@ -18,6 +18,7 @@
 
 import type { ConnectedAPI } from '@midnight-ntwrk/dapp-connector-api';
 import { NOTARY_URLS } from '../config';
+import { logError } from './logger';
 
 // Deterministic 32-byte (64-hex) digest for the TEST stub — FNV-1a expanded
 // over 32 lanes. Dependency-free + synchronous + identical in Node and the
@@ -666,8 +667,8 @@ export const loadWalletBridge = async (): Promise<WalletBridge> => {
       joinStrideFromBrowser: (api, contractAddress, privateStateId) =>
         adaptStrideSession(api, contractAddress, privateStateId),
     };
-  } catch {
-    console.warn('[wallet-bridge] @witnessfitness/api/browser not available — using the local stub');
+  } catch (err) {
+    logError('wallet-bridge.load (using local stub)', err);
     stubSingleton ??= createStubWalletBridge();
     return stubSingleton;
   }

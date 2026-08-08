@@ -7,6 +7,7 @@
 // strip to red instead of hanging the demo.
 
 import { NOTARY_TIMEOUT_MS, NOTARY_URLS } from '../config';
+import { logError } from './logger';
 
 export interface NotaryHealth {
   keyId?: string;
@@ -69,6 +70,7 @@ export const notaryAttestate = async (
       body: JSON.stringify({ proofArtifacts }),
     });
   } catch (err) {
+    logError('notary.attestate', err);
     return { error: err instanceof Error ? err.message : 'unreachable' };
   }
 };

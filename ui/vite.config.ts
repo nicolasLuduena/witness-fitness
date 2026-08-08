@@ -67,13 +67,9 @@ export default defineConfig({
       },
     },
     include: ['@midnight-ntwrk/compact-runtime'],
-    // Dev pre-bundling (esbuild) resolves bare `crypto` differently than the
-    // build's alias — exclude the reclaim stack so dev serves its source
-    // through the vite resolver (alias applies), matching build behavior.
-    exclude: [
-      '@reclaimprotocol/attestor-core',
-      '@reclaimprotocol/tls',
-      '@reclaimprotocol/zk-symmetric-crypto',
-    ],
+    // The reclaim stack is PRE-BUNDLED (not excluded): esbuild resolves bare
+    // `crypto` via the alias below and converts the CJS deps (canonicalize,
+    // micro-rsa-dsa-dh root builds, …) with proper interop. Serving them raw
+    // made the browser hit CJS `exports` references → "exports is not defined".
   },
 });

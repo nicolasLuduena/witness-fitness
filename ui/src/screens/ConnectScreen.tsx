@@ -11,6 +11,7 @@ import { EMPLOYER } from '../domain/story';
 import { hexShort } from '../lib/format';
 import { discoverWalletSummaries, type WalletSummary } from '../lib/wallet-connector';
 import { hasStoredBackup, performRestore, shouldAutoResume, storeBackupPayload, walletBackupKey } from '../lib/wallet-restore';
+import { logError } from '../lib/logger';
 
 export const ConnectScreen = () => {
   const {
@@ -69,6 +70,7 @@ export const ConnectScreen = () => {
     try {
       client.connectStrava?.();
     } catch (err) {
+      logError('ConnectScreen.stravaRedirect', err);
       setAttestError(err instanceof Error ? err.message : 'strava oauth failed');
     }
   };
@@ -85,6 +87,7 @@ export const ConnectScreen = () => {
           setStrava(client.stravaStatus?.() ?? null);
         }
       } catch (err) {
+        logError('ConnectScreen.stravaCallback', err);
         setAttestError(err instanceof Error ? err.message : 'strava oauth failed');
       }
     })();
@@ -101,6 +104,7 @@ export const ConnectScreen = () => {
       await attest();
       setStrava(client.stravaStatus?.() ?? null);
     } catch (err) {
+      logError('ConnectScreen.attest', err);
       setAttestError(err instanceof Error ? err.message : 'attestation failed');
     }
   };
@@ -118,6 +122,7 @@ export const ConnectScreen = () => {
       setBackupPayload(payload);
       setBackupNotice('Private state backed up — the payload is stored in this browser and shown below.');
     } catch (err) {
+      logError('ConnectScreen.backup', err);
       setBackupNotice(`Backup failed: ${err instanceof Error ? err.message : 'unknown error'}`);
     } finally {
       setBackupBusy(false);
@@ -147,6 +152,7 @@ export const ConnectScreen = () => {
       setRestorePassword('');
     } catch (err) {
       // The stored backup is only ever read — a wrong password leaves it intact.
+      logError('ConnectScreen.restore', err);
       setRestoreNotice(`Restore failed: ${err instanceof Error ? err.message : 'unknown error'}`);
     } finally {
       setRestoreBusy(false);

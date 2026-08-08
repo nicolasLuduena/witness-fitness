@@ -18,6 +18,7 @@ import { METRICS } from '../domain/types';
 import type { Athlete, WagerCreateRequest, WagerView } from '../domain/types';
 import { fmtTnight, hexShort } from '../lib/format';
 import { challengeIdOf, formatCountdown, settleReadyAtMs } from '../lib/wager-countdown';
+import { logError } from '../lib/logger';
 
 const statusLabel: Record<WagerView['status'], string> = {
   open: 'open — waiting for opponent',
@@ -78,6 +79,7 @@ export const WagersScreen = () => {
     try {
       await fn();
     } catch (err) {
+      logError('WagersScreen.action', err);
       setActionError(err instanceof Error ? err.message : 'action failed');
     } finally {
       setBusyId(null);
@@ -94,7 +96,8 @@ export const WagersScreen = () => {
       await navigator.clipboard.writeText(id);
       setCopied(id);
       window.setTimeout(() => setCopied(null), 1_500);
-    } catch {
+    } catch (err) {
+      logError('WagersScreen.copyChallengeId', err);
       setActionError('clipboard unavailable');
     }
   };

@@ -12,6 +12,7 @@
 //   GET  /state           → { vault: [...], streaks: [...], badges: [...] }
 
 import { SIDECAR_TIMEOUT_MS, SIDECAR_URL } from '../config';
+import { logError } from './logger';
 
 export class SidecarOfflineError extends Error {
   constructor(message: string) {
@@ -171,6 +172,7 @@ async function fetchJson<T>(url: string, init: RequestInit, timeoutMs = SIDECAR_
   try {
     res = await fetch(url, { ...init, signal: controller.signal });
   } catch (err) {
+    logError(`chain.fetchJson(${url})`, err);
     if (err instanceof DOMException && err.name === 'AbortError') {
       throw new SidecarOfflineError(
         `demo service offline (${url}) — request timed out after ${timeoutMs}ms`
@@ -187,7 +189,8 @@ async function fetchJson<T>(url: string, init: RequestInit, timeoutMs = SIDECAR_
     try {
       const parsed = (await res.json()) as { error?: unknown };
       if (typeof parsed?.error === 'string') message = parsed.error;
-    } catch {
+    } catch (parseErr) {
+      logError('chain.parseErrorBody', parseErr);
       // non-JSON error body — keep the HTTP message
     }
     if (res.status >= 500) {

@@ -1,3 +1,4 @@
+import { logError } from './logger';
 // On-chain registry facts for the notary strip, sourced from
 // packages/contract/deploy-output.json (copied to public/ by copy-keys so the
 // UI survives redeploys without a code change). Fetch fails at dev-time are
@@ -58,7 +59,8 @@ export const loadDeployInfo = async (): Promise<DeployInfo> => {
     const parsed = normalize(await res.json());
     if (parsed) cached = parsed;
     return parsed ?? FALLBACK;
-  } catch {
+  } catch (err) {
+    logError('deploy-info.load', err);
     return FALLBACK;
   }
 };

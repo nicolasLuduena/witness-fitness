@@ -6,6 +6,7 @@ import { useState } from 'react';
 import { useDemo } from '../state/DemoStore';
 import { Button, Card, Chip, Modal, Notice } from '../components/bits';
 import { EMPLOYER } from '../domain/story';
+import { logError } from '../lib/logger';
 
 export const StreaksScreen = () => {
   const { streak, badges, session, advanceStreak, mintBadge, proveBadge } = useDemo();
@@ -20,6 +21,7 @@ export const StreaksScreen = () => {
     try {
       await fn();
     } catch (err) {
+      logError('StreaksScreen.action', err);
       setError(err instanceof Error ? err.message : 'action failed');
     } finally {
       setBusy(null);

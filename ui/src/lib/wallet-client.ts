@@ -1,3 +1,4 @@
+import { logError } from './logger';
 // WALLET-mode implementation of the WfClient contract (Track 0.2 + Round 2D).
 // Connects the demo to the contract DIRECTLY through a browser wallet (Lace,
 // DApp Connector) — no sidecar identity. The holder secret is deterministic
@@ -246,7 +247,8 @@ export class WalletClient implements WfClient {
     let token: string;
     try {
       token = await getValidAccessToken();
-    } catch {
+    } catch (err) {
+      logError('wallet-client.getToken', err);
       throw new StravaFlowError(
         'strava-auth-required',
         'No Strava account connected — connect Strava first (the client secret never touches this browser)'
@@ -379,6 +381,7 @@ export class WalletClient implements WfClient {
     // rand)); the settler (either side) polls until both are present.
     const mySide = wager.challenger === BigInt(session.holderBinding) ? 'A' : 'B';
     await postWagerOpening(id, mySide, value, rand).catch((err) => {
+      logError('wallet-client.relayOpening', err);
       throw new Error(
         `submission sealed on-chain but the opening relay failed: ${err instanceof Error ? err.message : String(err)} — retry settle later`
       );
