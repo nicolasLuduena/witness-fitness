@@ -1,3 +1,4 @@
+import { getNetworkId } from '@midnight-ntwrk/midnight-js-network-id';
 // Track 0.1 browser-wallet provider stack tests: provider slot assembly,
 // export→import roundtrip (password-encrypted private state), wrong-password
 // rejection, and joinStrideFromBrowser readState against the devnet indexer
@@ -149,6 +150,14 @@ describe('browser provider stack', () => {
       (globalThis as Record<string, unknown>).window = originalWindow;
     }
     await new Promise<void>((resolve) => assetServer.close(() => resolve()));
+  });
+
+  it('initializeProviders configures the network id before any operation', async () => {
+    await initializeProviders(stub);
+    // The stub wallet reports networkId 'devnet' — the module must have
+    // called setNetworkId(config.networkId) (the browser path previously
+    // threw "Network ID has not been configured" on every circuit call).
+    expect(getNetworkId()).toBe('devnet');
   });
 
   it('initializeProviders returns all provider slots wired to the stub wallet', async () => {

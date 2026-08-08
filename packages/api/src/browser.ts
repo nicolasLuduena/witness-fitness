@@ -36,6 +36,7 @@ import type { ConnectedAPI } from '@midnight-ntwrk/dapp-connector-api';
 import { createPrivateState, type PrivateState, type StrideContractType } from '@witnessfitness/contract';
 import { inMemoryPrivateStateProvider } from './in-memory-private-state-provider.js';
 import { StrideContract, type StrideProviders } from './index.js';
+import { setNetworkId } from '@midnight-ntwrk/midnight-js-network-id';
 
 export { inMemoryPrivateStateProvider } from './in-memory-private-state-provider.js';
 
@@ -61,6 +62,11 @@ export const initializeProviders = async (connectedAPI: ConnectedAPI): Promise<S
     CompactContract.ProvableCircuitId<StrideContractType>
   >(zkConfigPath, fetch.bind(window));
   const config = await connectedAPI.getConfiguration();
+  // The Node path configures the network id in buildWallet; the browser path
+  // must configure it before ANY wallet/contract operation — otherwise every
+  // circuit call throws "Network ID has not been configured. Call
+  // setNetworkId() before any wallet or contract operation."
+  setNetworkId(config.networkId ?? 'undeployed');
   const shieldedAddresses = await connectedAPI.getShieldedAddresses();
   return {
     privateStateProvider: browserPrivateStateProvider,
