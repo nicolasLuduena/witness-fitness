@@ -1,11 +1,4 @@
-import {
-  ArrowRight,
-  Check,
-  Flame,
-  LockKeyhole,
-  ShieldCheck,
-  Trophy,
-} from "lucide-react";
+import { ArrowRight, Check, Flame, LockKeyhole, ShieldCheck, Trophy } from "lucide-react";
 import { athleteLabel } from "../lib/identity-label";
 import { navigateTo } from "../lib/navigation";
 import { useDemo } from "../state/DemoStore";
@@ -24,35 +17,24 @@ export const TodayScreen = () => {
         <div className="today-hero__copy">
           <p className="page-context">Today</p>
           <h1>
-            {ready
-              ? "Your next effort stays yours."
-              : "Compete without publishing your workout."}
+            {ready ? "Your next effort stays yours." : "Compete without publishing your workout."}
           </h1>
           <p>
-            Use a real, attested activity in a private wager or turn consistent
-            training into an on-chain badge.
+            Use a real, attested activity in a private wager or turn consistent training into an
+            on-chain badge.
           </p>
           <div className={`readiness ${ready ? "readiness--ready" : ""}`}>
-            {ready ? (
-              <ShieldCheck aria-hidden="true" />
-            ) : (
-              <LockKeyhole aria-hidden="true" />
-            )}
+            {ready ? <ShieldCheck aria-hidden="true" /> : <LockKeyhole aria-hidden="true" />}
             <span>
               <strong>{ready ? "Ready" : "Setup needed"}</strong>
-              {ready
-                ? "Identity and workout are private"
-                : "Connect once to get started"}
+              {ready ? "Identity and workout are private" : "Connect once to get started"}
             </span>
           </div>
         </div>
 
         <figure className="today-hero__visual">
           <picture>
-            <source
-              srcSet="/images/witnessfitness-runner.webp"
-              type="image/webp"
-            />
+            <source srcSet="/images/witnessfitness-runner.webp" type="image/webp" />
             <img
               src="/images/witnessfitness-runner.png"
               alt="A runner training above a city at dawn"
@@ -78,15 +60,11 @@ export const TodayScreen = () => {
           <div className="journey-copy">
             <h2 id="setup-title">Connect your private athlete identity</h2>
             <p>
-              Your wallet pays fees, but it is never used as your public
-              identity. WitnessFitness creates a separate holder binding for
-              challenges.
+              Your wallet pays fees, but it is never used as your public identity. WitnessFitness
+              creates a separate holder binding for challenges.
             </p>
           </div>
-          <button
-            className="btn btn--primary journey-action"
-            onClick={() => navigateTo("account")}
-          >
+          <button className="btn btn--primary journey-action" onClick={() => navigateTo("account")}>
             Connect wallet <ArrowRight aria-hidden="true" />
           </button>
         </section>
@@ -98,14 +76,11 @@ export const TodayScreen = () => {
           <div className="journey-copy">
             <h2 id="attest-title">Attest your latest workout</h2>
             <p>
-              Connect Strava and turn one real activity into a reusable private
-              credential. The chain receives a commitment, not the workout.
+              Connect Strava and turn one real activity into a reusable private credential. The
+              chain receives a commitment, not the workout.
             </p>
           </div>
-          <button
-            className="btn btn--primary journey-action"
-            onClick={() => navigateTo("account")}
-          >
+          <button className="btn btn--primary journey-action" onClick={() => navigateTo("account")}>
             Attest workout <ArrowRight aria-hidden="true" />
           </button>
         </section>
@@ -117,9 +92,7 @@ export const TodayScreen = () => {
           <div className="journey-copy">
             <p className="section-label">Private wager</p>
             <h2 id="wager-next-title">
-              {activeWager
-                ? `Continue wager #${activeWager.id}`
-                : "Put your effort on the line"}
+              {activeWager ? `Continue wager #${activeWager.id}` : "Put your effort on the line"}
             </h2>
             <p>
               {activeWager
@@ -135,29 +108,20 @@ export const TodayScreen = () => {
               </div>
             ) : null}
           </div>
-          <button
-            className="btn btn--primary journey-action"
-            onClick={() => navigateTo("wagers")}
-          >
-            {activeWager ? "Open wager" : "Create private wager"}{" "}
-            <ArrowRight aria-hidden="true" />
+          <button className="btn btn--primary journey-action" onClick={() => navigateTo("wagers")}>
+            {activeWager ? "Open wager" : "Create private wager"} <ArrowRight aria-hidden="true" />
           </button>
         </section>
       )}
 
-      <section
-        className="today-secondary"
-        aria-labelledby="streak-summary-title"
-      >
+      <section className="today-secondary" aria-labelledby="streak-summary-title">
         <div className="streak-summary-icon">
           <Flame aria-hidden="true" />
         </div>
         <div>
           <p className="section-label">Streak &amp; badges</p>
           <h2 id="streak-summary-title">
-            {streak?.current
-              ? `${streak.current}-day private streak`
-              : "Start a private streak"}
+            {streak?.current ? `${streak.current}-day private streak` : "Start a private streak"}
           </h2>
           <p>
             {minted > 0
@@ -180,15 +144,13 @@ export const TodayScreen = () => {
         <div>
           <LockKeyhole aria-hidden="true" />
           <span>
-            <strong>Sealed by default</strong>Raw values stay private until
-            settlement
+            <strong>Sealed by default</strong>Raw values stay private until settlement
           </span>
         </div>
         <div>
           <ShieldCheck aria-hidden="true" />
           <span>
-            <strong>Pseudonymous</strong>No athlete name or wallet identity
-            on-chain
+            <strong>Pseudonymous</strong>No athlete name or wallet identity on-chain
           </span>
         </div>
       </section>

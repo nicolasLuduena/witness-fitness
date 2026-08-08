@@ -9,5 +9,4 @@ const compactBinding = (binding: string): string => {
 export const athleteLabel = (athlete: Athlete): string =>
   athlete.role === "local" ? "You" : compactBinding(athlete.holderBinding);
 
-export const opponentLabel = (athlete: Athlete): string =>
-  compactBinding(athlete.holderBinding);
+export const opponentLabel = (athlete: Athlete): string => compactBinding(athlete.holderBinding);

@@ -38,8 +38,7 @@ export const METRICS: Metric[] = [
   },
 ];
 
-export const metricById = (id: bigint): Metric =>
-  METRICS.find((m) => m.id === id) ?? METRICS[0];
+export const metricById = (id: bigint): Metric => METRICS.find((m) => m.id === id) ?? METRICS[0];
 
 export interface AttestationStage {
   id: string;
@@ -70,12 +69,7 @@ export interface AttestedCredential {
   assertionId: string; // first bytes of the encoded assertion hash
 }
 
-export type WagerStatus =
-  | "open"
-  | "accepted"
-  | "submitted"
-  | "settled"
-  | "cancelled";
+export type WagerStatus = "open" | "accepted" | "submitted" | "settled" | "cancelled";
 
 export interface WagerSubmission {
   athlete: Athlete;

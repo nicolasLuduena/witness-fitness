@@ -73,8 +73,7 @@ export const RevealSettle = ({ result }: { result: WagerSettleResult }) => {
       ) : null}
 
       <Notice tone="success">
-        The contract enforced the wager and moved the pot. Both participants
-        remain pseudonymous.
+        The contract enforced the wager and moved the pot. Both participants remain pseudonymous.
       </Notice>
     </div>
   );

@@ -8,10 +8,7 @@ import { Button, Card, Chip, Notice, Stat } from "../components/bits";
 import { StatusLine } from "../components/StatusLine";
 import { hexShort } from "../lib/format";
 import { logError } from "../lib/logger";
-import {
-  discoverWalletSummaries,
-  type WalletSummary,
-} from "../lib/wallet-connector";
+import { discoverWalletSummaries, type WalletSummary } from "../lib/wallet-connector";
 import {
   hasStoredBackup,
   performRestore,
@@ -47,9 +44,7 @@ export const ConnectScreen = () => {
   const [backupBusy, setBackupBusy] = useState(false);
   const [backupNotice, setBackupNotice] = useState<string | null>(null);
   const [restoreOpen, setRestoreOpen] = useState(false);
-  const [restoreMode, setRestoreMode] = useState<"restore" | "resume">(
-    "restore",
-  );
+  const [restoreMode, setRestoreMode] = useState<"restore" | "resume">("restore");
   const [restorePassword, setRestorePassword] = useState("");
   const [restoreBusy, setRestoreBusy] = useState(false);
   const [restoreNotice, setRestoreNotice] = useState<string | null>(null);
@@ -99,9 +94,7 @@ export const ConnectScreen = () => {
       client.connectStrava?.();
     } catch (err) {
       logError("ConnectScreen.stravaRedirect", err);
-      setAttestError(
-        err instanceof Error ? err.message : "strava oauth failed",
-      );
+      setAttestError(err instanceof Error ? err.message : "strava oauth failed");
     }
   };
 
@@ -118,9 +111,7 @@ export const ConnectScreen = () => {
         }
       } catch (err) {
         logError("ConnectScreen.stravaCallback", err);
-        setAttestError(
-          err instanceof Error ? err.message : "strava oauth failed",
-        );
+        setAttestError(err instanceof Error ? err.message : "strava oauth failed");
       }
     })();
     setStrava(client.stravaStatus?.() ?? null);
@@ -140,12 +131,8 @@ export const ConnectScreen = () => {
     }
   };
 
-  const backupKey = session?.walletAddress
-    ? walletBackupKey(session.walletAddress)
-    : null;
-  const hasBackup = session?.walletAddress
-    ? hasStoredBackup(session.walletAddress)
-    : false;
+  const backupKey = session?.walletAddress ? walletBackupKey(session.walletAddress) : null;
+  const hasBackup = session?.walletAddress ? hasStoredBackup(session.walletAddress) : false;
 
   const handleBackup = async () => {
     if (!backupPrivateState || !backupPassword || backupKey === null) return;
@@ -160,9 +147,7 @@ export const ConnectScreen = () => {
       );
     } catch (err) {
       logError("ConnectScreen.backup", err);
-      setBackupNotice(
-        `Backup failed: ${err instanceof Error ? err.message : "unknown error"}`,
-      );
+      setBackupNotice(`Backup failed: ${err instanceof Error ? err.message : "unknown error"}`);
     } finally {
       setBackupBusy(false);
     }
@@ -192,9 +177,7 @@ export const ConnectScreen = () => {
     } catch (err) {
       // The stored backup is only ever read — a wrong password leaves it intact.
       logError("ConnectScreen.restore", err);
-      setRestoreNotice(
-        `Restore failed: ${err instanceof Error ? err.message : "unknown error"}`,
-      );
+      setRestoreNotice(`Restore failed: ${err instanceof Error ? err.message : "unknown error"}`);
     } finally {
       setRestoreBusy(false);
     }
@@ -223,9 +206,8 @@ export const ConnectScreen = () => {
         <p className="page-context">Account &amp; workout access</p>
         <h1 className="screen-title">Your private athlete identity</h1>
         <p className="screen-sub">
-          Your wallet funds transactions but does not identify you on-chain.
-          Strava provides a real workout; WitnessFitness turns it into a sealed
-          credential for wagers and streaks.
+          Your wallet funds transactions but does not identify you on-chain. Strava provides a real
+          workout; WitnessFitness turns it into a sealed credential for wagers and streaks.
         </p>
       </div>
 
@@ -234,9 +216,7 @@ export const ConnectScreen = () => {
           {session ? (
             <div>
               <div className="row" style={{ marginBottom: 12 }}>
-                <span style={{ fontWeight: 700, fontSize: 17 }}>
-                  Private athlete
-                </span>
+                <span style={{ fontWeight: 700, fontSize: 17 }}>Private athlete</span>
                 <Chip tone="provable">pseudonymous on-chain</Chip>
               </div>
               <div className="stat-row" style={{ marginBottom: 14 }}>
@@ -251,28 +231,19 @@ export const ConnectScreen = () => {
                         title="copy challenge ID to share"
                         onClick={() => void handleCopyBinding()}
                       >
-                        {copiedId === session.athlete.holderBinding
-                          ? "Copied ✓"
-                          : "Copy ID"}
+                        {copiedId === session.athlete.holderBinding ? "Copied ✓" : "Copy ID"}
                       </button>
                     </span>
                   }
                 />
-                <Stat
-                  label="Mode"
-                  value={isWallet ? "wallet (Lace)" : "live (sidecar :8200)"}
-                />
+                <Stat label="Mode" value={isWallet ? "wallet (Lace)" : "live (sidecar :8200)"} />
                 <Stat label="Backend" value={session.walletLabel} />
               </div>
               {session.walletAddress ? (
                 <div className="stat-row" style={{ marginBottom: 14 }}>
                   <Stat
                     label="Funding wallet (local only)"
-                    value={
-                      <span className="hash">
-                        {hexShort(session.walletAddress, 10, 8)}
-                      </span>
-                    }
+                    value={<span className="hash">{hexShort(session.walletAddress, 10, 8)}</span>}
                   />
                   <Stat label="Network" value={session.networkId ?? "—"} />
                 </div>
@@ -308,9 +279,7 @@ export const ConnectScreen = () => {
                       disabled={attestRunning}
                     >
                       {attestRunning ? <span className="spin" /> : null}
-                      {attestRunning
-                        ? "Attesting…"
-                        : "Connect Strava & attest workout"}
+                      {attestRunning ? "Attesting…" : "Connect Strava & attest workout"}
                     </Button>
                   )}
                 </div>
@@ -319,10 +288,9 @@ export const ConnectScreen = () => {
               {isWallet && !strava?.connected ? (
                 <div style={{ marginTop: 8 }}>
                   <Notice tone="info">
-                    Attestation needs a Strava account: authorize with Strava
-                    (the client secret never touches this browser — the
-                    stateless service on :8200 exchanges the code), then attest
-                    a real workout.
+                    Attestation needs a Strava account: authorize with Strava (the client secret
+                    never touches this browser — the stateless service on :8200 exchanges the code),
+                    then attest a real workout.
                   </Notice>
                 </div>
               ) : null}
@@ -335,9 +303,7 @@ export const ConnectScreen = () => {
               {isWallet && backupPrivateState ? (
                 <>
                   <div className="divider" />
-                  <h3 className="card-title">
-                    Private-state backup &amp; resume
-                  </h3>
+                  <h3 className="card-title">Private-state backup &amp; resume</h3>
                   <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
                     <input
                       className="input"
@@ -358,23 +324,14 @@ export const ConnectScreen = () => {
                   </div>
                   {backupNotice ? (
                     <div style={{ marginTop: 8 }}>
-                      <Notice
-                        tone={
-                          backupNotice.startsWith("Backup failed")
-                            ? "error"
-                            : "success"
-                        }
-                      >
+                      <Notice tone={backupNotice.startsWith("Backup failed") ? "error" : "success"}>
                         {backupNotice}
                       </Notice>
                     </div>
                   ) : null}
                   {backupPayload ? (
                     <div style={{ marginTop: 8 }}>
-                      <div
-                        className="faint"
-                        style={{ fontSize: 12, marginBottom: 4 }}
-                      >
+                      <div className="faint" style={{ fontSize: 12, marginBottom: 4 }}>
                         payload (encrypted) — {backupPayload.length} chars
                       </div>
                       <div
@@ -428,11 +385,7 @@ export const ConnectScreen = () => {
                           value={restorePassword}
                           onChange={(e) => setRestorePassword(e.target.value)}
                           onKeyDown={(e) => {
-                            if (
-                              e.key === "Enter" &&
-                              restorePassword &&
-                              !restoreBusy
-                            )
+                            if (e.key === "Enter" && restorePassword && !restoreBusy)
                               void handleRestore();
                           }}
                         />
@@ -459,11 +412,7 @@ export const ConnectScreen = () => {
                       {restoreNotice ? (
                         <div style={{ marginTop: 8 }}>
                           <Notice
-                            tone={
-                              restoreNotice.startsWith("Restore failed")
-                                ? "error"
-                                : "success"
-                            }
+                            tone={restoreNotice.startsWith("Restore failed") ? "error" : "success"}
                           >
                             {restoreNotice}
                           </Notice>
@@ -487,11 +436,7 @@ export const ConnectScreen = () => {
                     <button
                       type="button"
                       key={w.rdns}
-                      className={
-                        pickedRdns === w.rdns
-                          ? "wallet-pick selected"
-                          : "wallet-pick"
-                      }
+                      className={pickedRdns === w.rdns ? "wallet-pick selected" : "wallet-pick"}
                       onClick={() => handlePickWallet(w.rdns)}
                       disabled={connecting}
                     >
@@ -529,10 +474,7 @@ export const ConnectScreen = () => {
                     : "Connect wallet"}
               </Button>
               {connecting ? (
-                <p
-                  className="muted"
-                  style={{ marginTop: 8, textAlign: "center" }}
-                >
+                <p className="muted" style={{ marginTop: 8, textAlign: "center" }}>
                   Waiting for wallet approval…
                 </p>
               ) : null}
@@ -548,23 +490,18 @@ export const ConnectScreen = () => {
         <Card title="Attestation pipeline">
           {attestStages.length > 0 || attestOutcome ? (
             <StatusLine
-              stages={
-                attestStages.length > 0
-                  ? attestStages
-                  : (attestOutcome?.stages ?? [])
-              }
+              stages={attestStages.length > 0 ? attestStages : (attestOutcome?.stages ?? [])}
             />
           ) : (
             <div className="empty-state">
-              The pipeline lights up here when an attestation runs: TLS witness
-              → ZK proof → notary signing (2-of-3) → on-chain vaulting.
+              The pipeline lights up here when an attestation runs: TLS witness → ZK proof → notary
+              signing (2-of-3) → on-chain vaulting.
             </div>
           )}
           {outcome ? (
             <div style={{ marginTop: 12 }}>
               <Notice tone="success">
-                Credential vaulted —{" "}
-                <strong>{outcome.provableChips.join(" · ")}</strong>.
+                Credential vaulted — <strong>{outcome.provableChips.join(" · ")}</strong>.
                 {attestOutcome?.replayed
                   ? " Session replayed from the attested log (identical crypto path)."
                   : ""}
@@ -573,20 +510,12 @@ export const ConnectScreen = () => {
               <div className="stat-row" style={{ gap: 20 }}>
                 <Stat
                   label="Commitment (vault key)"
-                  value={
-                    <span className="hash">
-                      {hexShort(outcome.commitment, 12, 10)}
-                    </span>
-                  }
+                  value={<span className="hash">{hexShort(outcome.commitment, 12, 10)}</span>}
                 />
                 {outcome.txHash ? (
                   <Stat
                     label="Transaction"
-                    value={
-                      <span className="hash">
-                        {hexShort(outcome.txHash, 12, 10)}
-                      </span>
-                    }
+                    value={<span className="hash">{hexShort(outcome.txHash, 12, 10)}</span>}
                   />
                 ) : null}
               </div>
@@ -596,8 +525,7 @@ export const ConnectScreen = () => {
             <div style={{ marginTop: 12 }}>
               <Notice tone="info">
                 {credentials.length} sealed credential
-                {credentials.length > 1 ? "s" : ""} ready for private wagers and
-                streaks.
+                {credentials.length > 1 ? "s" : ""} ready for private wagers and streaks.
               </Notice>
             </div>
           ) : null}

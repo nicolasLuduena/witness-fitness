@@ -44,11 +44,7 @@ import {
 } from "./chain";
 import { displayHash, hexShort } from "./format";
 import { notaryHealth } from "./notary-api";
-import {
-  badgeViewsFrom,
-  credentialFromVaultEntry,
-  streakViewFrom,
-} from "./state-mappers";
+import { badgeViewsFrom, credentialFromVaultEntry, streakViewFrom } from "./state-mappers";
 import type { WfClient } from "./wf-client";
 
 // NIGHT base units on the devnet (api scripts convention: NIGHT = 10^12).
@@ -58,8 +54,7 @@ export const hexOf = (value: bigint): string => "0x" + value.toString(16);
 export const athleteLetter = (athlete: Athlete): "A" | "B" =>
   athlete.role === "local" ? "A" : "B";
 
-export const nightToDisplay = (base: number): number =>
-  base / Number(NIGHT_BASE);
+export const nightToDisplay = (base: number): number => base / Number(NIGHT_BASE);
 
 export class LiveClient implements WfClient {
   readonly mode: DemoMode = "live";
@@ -80,8 +75,7 @@ export class LiveClient implements WfClient {
   }
 
   async attest(onProgress?: AttestationProgress): Promise<AttestOutcome> {
-    if (!this.sidecar)
-      throw new Error("live client not connected — start the sidecar first");
+    if (!this.sidecar) throw new Error("live client not connected — start the sidecar first");
     const stages = liveStages();
     const publish = () => onProgress?.(stages.map((stage) => ({ ...stage })));
     const mark = (id: string, state: AttestationStage["state"]) => {
@@ -372,9 +366,7 @@ export class LiveClient implements WfClient {
     const badge = BADGES.find((b) => b.id === badgeId);
     if (!badge) throw new Error(`unknown badge ${badgeId}`);
     if (!result.minted) {
-      throw new Error(
-        `sidecar could not mint badge ${badgeId} — requirement unmet?`,
-      );
+      throw new Error(`sidecar could not mint badge ${badgeId} — requirement unmet?`);
     }
     return { ...badge, minted: true, mintedAt: Date.now() };
   }
@@ -383,18 +375,14 @@ export class LiveClient implements WfClient {
     const sidecar = this.requireSidecar();
     const result = await sidecar.proveBadge(badgeId);
     if (!result.verified) {
-      throw new Error(
-        `verification failed for badge ${badgeId} — not minted on-chain?`,
-      );
+      throw new Error(`verification failed for badge ${badgeId} — not minted on-chain?`);
     }
     const badge = BADGES.find((b) => b.id === badgeId);
     return {
       badgeId,
       badgeLabel: badge?.label ?? `badge ${badgeId}`,
       verifier,
-      proofId:
-        result.verifierBinding ||
-        displayHash(`sidecar:proof:${badgeId}:${Date.now()}`),
+      proofId: result.verifierBinding || displayHash(`sidecar:proof:${badgeId}:${Date.now()}`),
       verifiedAt: Date.now(),
       statement: `Athlete holds badge "${badge?.label ?? badgeId}" — verified on-chain`,
       dataStillSealed: true,

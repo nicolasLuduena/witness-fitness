@@ -69,22 +69,19 @@ class WalletClientProxy implements WfClient {
   }
   backupPrivateState(password: string) {
     return this.real().then((c) => {
-      if (!c.backupPrivateState)
-        throw new Error("backup not supported in this mode");
+      if (!c.backupPrivateState) throw new Error("backup not supported in this mode");
       return c.backupPrivateState(password);
     });
   }
   restorePrivateState(password: string, payload: string) {
     return this.real().then((c) => {
-      if (!c.restorePrivateState)
-        throw new Error("restore not supported in this mode");
+      if (!c.restorePrivateState) throw new Error("restore not supported in this mode");
       return c.restorePrivateState(password, payload);
     });
   }
   resetPrivateState() {
     return this.real().then((c) => {
-      if (!c.resetPrivateState)
-        throw new Error("reset not supported in this mode");
+      if (!c.resetPrivateState) throw new Error("reset not supported in this mode");
       return c.resetPrivateState();
     });
   }
@@ -98,8 +95,7 @@ class WalletClientProxy implements WfClient {
   }
   handleStravaRedirect(): Promise<boolean> {
     return this.real().then((c) => {
-      if (!c.handleStravaRedirect)
-        throw new Error("strava redirect not supported in this mode");
+      if (!c.handleStravaRedirect) throw new Error("strava redirect not supported in this mode");
       return c.handleStravaRedirect();
     });
   }
@@ -170,22 +166,19 @@ class LiveClientProxy implements WfClient {
   }
   backupPrivateState(password: string) {
     return this.real().then((c) => {
-      if (!c.backupPrivateState)
-        throw new Error("backup not supported in this mode");
+      if (!c.backupPrivateState) throw new Error("backup not supported in this mode");
       return c.backupPrivateState(password);
     });
   }
   restorePrivateState(password: string, payload: string) {
     return this.real().then((c) => {
-      if (!c.restorePrivateState)
-        throw new Error("restore not supported in this mode");
+      if (!c.restorePrivateState) throw new Error("restore not supported in this mode");
       return c.restorePrivateState(password, payload);
     });
   }
   resetPrivateState() {
     return this.real().then((c) => {
-      if (!c.resetPrivateState)
-        throw new Error("reset not supported in this mode");
+      if (!c.resetPrivateState) throw new Error("reset not supported in this mode");
       return c.resetPrivateState();
     });
   }
@@ -194,8 +187,7 @@ class LiveClientProxy implements WfClient {
   }
   handleStravaRedirect(): Promise<boolean> {
     return this.real().then((c) => {
-      if (!c.handleStravaRedirect)
-        throw new Error("strava redirect not supported in this mode");
+      if (!c.handleStravaRedirect) throw new Error("strava redirect not supported in this mode");
       return c.handleStravaRedirect();
     });
   }

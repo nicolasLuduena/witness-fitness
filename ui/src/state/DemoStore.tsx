@@ -89,12 +89,8 @@ export const DemoProvider = ({ children }: { children: ReactNode }) => {
 
   const [attestRunning, setAttestRunning] = useState(false);
   const [attestStages, setAttestStages] = useState<AttestationStage[]>([]);
-  const [attestOutcome, setAttestOutcome] = useState<AttestOutcome | null>(
-    null,
-  );
-  const [settleReveal, setSettleReveal] = useState<WagerSettleResult | null>(
-    null,
-  );
+  const [attestOutcome, setAttestOutcome] = useState<AttestOutcome | null>(null);
+  const [settleReveal, setSettleReveal] = useState<WagerSettleResult | null>(null);
 
   const notaryTimer = useRef<number | undefined>(undefined);
 
@@ -130,13 +126,9 @@ export const DemoProvider = ({ children }: { children: ReactNode }) => {
   useEffect(() => {
     void refresh();
     void refreshNotaries();
-    notaryTimer.current = window.setInterval(
-      () => void refreshNotaries(),
-      3_000,
-    );
+    notaryTimer.current = window.setInterval(() => void refreshNotaries(), 3_000);
     return () => {
-      if (notaryTimer.current !== undefined)
-        window.clearInterval(notaryTimer.current);
+      if (notaryTimer.current !== undefined) window.clearInterval(notaryTimer.current);
     };
   }, [refresh, refreshNotaries]);
 
@@ -151,9 +143,7 @@ export const DemoProvider = ({ children }: { children: ReactNode }) => {
         await refreshNotaries();
       } catch (err) {
         logError("DemoStore.connect", err);
-        setConnectError(
-          err instanceof Error ? err.message : "connection failed",
-        );
+        setConnectError(err instanceof Error ? err.message : "connection failed");
       } finally {
         setConnecting(false);
       }
@@ -254,8 +244,7 @@ export const DemoProvider = ({ children }: { children: ReactNode }) => {
   );
 
   const resetPrivateState = useCallback(() => {
-    if (!client.resetPrivateState)
-      return Promise.reject(new Error("not supported in this mode"));
+    if (!client.resetPrivateState) return Promise.reject(new Error("not supported in this mode"));
     return client.resetPrivateState();
   }, [client]);
 

@@ -7,12 +7,11 @@ import { WagersScreen } from "./screens/WagersScreen";
 import { type AppRoute, navigateTo, routeFromPath } from "./lib/navigation";
 import { DemoProvider, useDemo } from "./state/DemoStore";
 
-const NAV_ITEMS: { id: AppRoute; label: string; icon: typeof CalendarDays }[] =
-  [
-    { id: "today", label: "Today", icon: CalendarDays },
-    { id: "wagers", label: "Wagers", icon: Trophy },
-    { id: "streak", label: "Streak & badges", icon: Award },
-  ];
+const NAV_ITEMS: { id: AppRoute; label: string; icon: typeof CalendarDays }[] = [
+  { id: "today", label: "Today", icon: CalendarDays },
+  { id: "wagers", label: "Wagers", icon: Trophy },
+  { id: "streak", label: "Streak & badges", icon: Award },
+];
 
 const Shell = () => {
   const { session, credentials } = useDemo();
@@ -43,9 +42,7 @@ const Shell = () => {
           {NAV_ITEMS.map((item) => (
             <button
               key={item.id}
-              className={
-                route === item.id ? "nav-link nav-link--active" : "nav-link"
-              }
+              className={route === item.id ? "nav-link nav-link--active" : "nav-link"}
               onClick={() => navigateTo(item.id)}
               aria-current={route === item.id ? "page" : undefined}
             >
@@ -53,14 +50,8 @@ const Shell = () => {
             </button>
           ))}
         </nav>
-        <button
-          className="account-status"
-          onClick={() => navigateTo("account")}
-        >
-          <span
-            className={`status-dot ${ready ? "status-dot--ready" : ""}`}
-            aria-hidden="true"
-          />
+        <button className="account-status" onClick={() => navigateTo("account")}>
+          <span className={`status-dot ${ready ? "status-dot--ready" : ""}`} aria-hidden="true" />
           <span>{ready ? "Ready" : "Setup"}</span>
           <Shield aria-hidden="true" />
         </button>
@@ -80,9 +71,7 @@ const Shell = () => {
             <button
               key={item.id}
               className={
-                route === item.id
-                  ? "mobile-nav__item mobile-nav__item--active"
-                  : "mobile-nav__item"
+                route === item.id ? "mobile-nav__item mobile-nav__item--active" : "mobile-nav__item"
               }
               onClick={() => navigateTo(item.id)}
               aria-current={route === item.id ? "page" : undefined}

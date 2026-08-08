@@ -7,8 +7,7 @@ import { navigateTo } from "../lib/navigation";
 import { useDemo } from "../state/DemoStore";
 
 export const StreaksScreen = () => {
-  const { streak, badges, session, credentials, advanceStreak, mintBadge } =
-    useDemo();
+  const { streak, badges, session, credentials, advanceStreak, mintBadge } = useDemo();
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -19,11 +18,7 @@ export const StreaksScreen = () => {
       await fn();
     } catch (err) {
       logError("StreaksScreen.action", err);
-      setError(
-        err instanceof Error
-          ? err.message
-          : "We couldn't complete that action. Try again.",
-      );
+      setError(err instanceof Error ? err.message : "We couldn't complete that action. Try again.");
     } finally {
       setBusy(null);
     }
@@ -39,14 +34,10 @@ export const StreaksScreen = () => {
       <header className="page-heading page-heading--compact">
         <div>
           <p className="page-context">Streak &amp; badges</p>
-          <h1>
-            {current > 0
-              ? `${current}-day private streak`
-              : "Make consistency provable."}
-          </h1>
+          <h1>{current > 0 ? `${current}-day private streak` : "Make consistency provable."}</h1>
           <p>
-            Link attested days without publishing dates, distances, or
-            activities. Mint a badge when the contract confirms the requirement.
+            Link attested days without publishing dates, distances, or activities. Mint a badge when
+            the contract confirms the requirement.
           </p>
         </div>
       </header>
@@ -58,9 +49,7 @@ export const StreaksScreen = () => {
           <LockKeyhole aria-hidden="true" />
           <div>
             <h2 id="streak-empty-title">
-              {!session
-                ? "Connect before starting a streak"
-                : "Attest a workout first"}
+              {!session ? "Connect before starting a streak" : "Attest a workout first"}
             </h2>
             <p>
               {!session
@@ -74,10 +63,7 @@ export const StreaksScreen = () => {
         </section>
       ) : (
         <>
-          <section
-            className="streak-course"
-            aria-labelledby="streak-course-title"
-          >
+          <section className="streak-course" aria-labelledby="streak-course-title">
             <div className="streak-course__path" aria-hidden="true">
               {[1, 2, 3].map((day) => {
                 const complete = current >= day;
@@ -90,16 +76,10 @@ export const StreaksScreen = () => {
                     <span>{complete ? <Check /> : day}</span>
                     <div>
                       <strong>
-                        {day === Math.min(current + 1, 3) && !complete
-                          ? "Today"
-                          : `Day ${day}`}
+                        {day === Math.min(current + 1, 3) && !complete ? "Today" : `Day ${day}`}
                       </strong>
                       <small>
-                        {complete
-                          ? "Attested"
-                          : active
-                            ? "Ready to continue"
-                            : "Locked"}
+                        {complete ? "Attested" : active ? "Ready to continue" : "Locked"}
                       </small>
                     </div>
                   </div>
@@ -114,9 +94,7 @@ export const StreaksScreen = () => {
               <div>
                 <p className="section-label">Current action</p>
                 <h2 id="streak-course-title">
-                  {current >= 3
-                    ? "Your streak badge is ready"
-                    : "Continue your private streak"}
+                  {current >= 3 ? "Your streak badge is ready" : "Continue your private streak"}
                 </h2>
                 <p>
                   {current >= 3
@@ -142,9 +120,8 @@ export const StreaksScreen = () => {
               </summary>
               <div>
                 <p>
-                  Each day adds a sealed credential to a continuity proof. The
-                  public ledger stores the chain commitment—not your activity,
-                  date, or distance.
+                  Each day adds a sealed credential to a continuity proof. The public ledger stores
+                  the chain commitment—not your activity, date, or distance.
                 </p>
                 {streak?.chainId ? <code>{streak.chainId}</code> : null}
               </div>
@@ -176,8 +153,7 @@ export const StreaksScreen = () => {
                 ready={
                   Boolean(distanceBadge?.minted) ||
                   credentials.some(
-                    (credential) =>
-                      credential.metric.id === 1n && credential.value >= 10_000,
+                    (credential) => credential.metric.id === 1n && credential.value >= 10_000,
                   )
                 }
                 busy={busy === "mint2"}

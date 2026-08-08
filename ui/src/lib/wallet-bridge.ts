@@ -140,10 +140,7 @@ export interface WalletStrideSession {
   // My on-chain holder binding (0x-hex, 64 chars) — the challenge ID the
   // other browser pastes to challenge me.
   holderBinding: string;
-  attest(
-    artifacts: WalletProofArtifacts,
-    onNotarized?: () => void,
-  ): Promise<WalletAttestResult>;
+  attest(artifacts: WalletProofArtifacts, onNotarized?: () => void): Promise<WalletAttestResult>;
   listWagers(): Promise<WalletWagerView[]>;
   createWager(input: {
     opponentBinding: bigint;
@@ -152,10 +149,7 @@ export interface WalletStrideSession {
     deadlineBlock: bigint;
     routing: WalletWagerRouting;
   }): Promise<{ txHash: string }>;
-  acceptWager(
-    id: bigint,
-    routing: WalletWagerRouting,
-  ): Promise<{ txHash: string }>;
+  acceptWager(id: bigint, routing: WalletWagerRouting): Promise<{ txHash: string }>;
   // value is the attestation's claim for the wager metric; submissionRand
   // must be staged via stageSubmissionRand BEFORE calling (the contract seals
   // transientCommit(value, submissionRand) from the private state).
@@ -174,13 +168,8 @@ export interface WalletStrideSession {
   // streak/badge circuits can open (persistentCommit(assertion, rand) == key).
   // null when nothing is staged. Never derived from vault iteration order.
   stagedVaultKey(): Promise<Uint8Array | null>;
-  advanceStreak(
-    vaultKey: Uint8Array,
-  ): Promise<{ streakCount: bigint; lastDay: bigint }>;
-  mintBadge(
-    badgeId: number,
-    vaultKey: Uint8Array,
-  ): Promise<{ minted: boolean }>;
+  advanceStreak(vaultKey: Uint8Array): Promise<{ streakCount: bigint; lastDay: bigint }>;
+  mintBadge(badgeId: number, vaultKey: Uint8Array): Promise<{ minted: boolean }>;
   proveBadge(
     badgeId: number,
     verifierBinding: bigint,
@@ -191,11 +180,7 @@ export interface WalletStrideSession {
 export interface WalletBridge {
   initializeProviders(connectedAPI: ConnectedAPI): Promise<unknown>;
   exportPrivateState(password: string, storeName: string): Promise<string>;
-  importPrivateState(
-    password: string,
-    storeName: string,
-    payload: string,
-  ): Promise<void>;
+  importPrivateState(password: string, storeName: string, payload: string): Promise<void>;
   resetPrivateState(storeName: string): Promise<void>;
   deriveBrowserHolderSecret(): Uint8Array;
   joinStrideFromBrowser(
@@ -207,9 +192,7 @@ export interface WalletBridge {
 
 export class WalletBridgeNotImplementedError extends Error {
   constructor(feature: string) {
-    super(
-      `@witnessfitness/api/browser not available yet — ${feature} (stub) is not implemented`,
-    );
+    super(`@witnessfitness/api/browser not available yet — ${feature} (stub) is not implemented`);
     this.name = "WalletBridgeNotImplementedError";
   }
 }
@@ -290,17 +273,12 @@ export const createStubWalletBridge = (): WalletBridge => {
     return shielded.shieldedCoinPublicKey;
   };
 
-  const stubSession = (
-    _api: ConnectedAPI,
-    storeName: string,
-  ): WalletStrideSession => {
+  const stubSession = (_api: ConnectedAPI, storeName: string): WalletStrideSession => {
     const state = (): StoredState => {
       let s = stores.get(storeName);
       if (!s) {
         s = {
-          holderSecretHex: sha256Hex(
-            `witnessfitness:wallet:${lastContractAddress}:${storeName}`,
-          ),
+          holderSecretHex: sha256Hex(`witnessfitness:wallet:${lastContractAddress}:${storeName}`),
           vault: [],
           streakCount: 0,
           lastDay: 0,
@@ -319,14 +297,10 @@ export const createStubWalletBridge = (): WalletBridge => {
       holderBinding: "0x" + sha256Hex(storeName).slice(0, 64),
       attest: async (artifacts, onNotarized) => {
         const s = state();
-        const metricsJson = (artifacts.responseText ?? "").match(
-          /"distance"\s*:\s*([0-9.]+)/,
-        );
+        const metricsJson = (artifacts.responseText ?? "").match(/"distance"\s*:\s*([0-9.]+)/);
         const distance = metricsJson ? Math.round(Number(metricsJson[1])) : 0;
         const metrics: WalletMetric[] =
-          distance > 0
-            ? [{ metricId: "0x1", label: "distance", value: String(distance) }]
-            : [];
+          distance > 0 ? [{ metricId: "0x1", label: "distance", value: String(distance) }] : [];
         const commitRand = crypto.getRandomValues(new Uint8Array(32));
         const vaultKey = crypto.getRandomValues(new Uint8Array(32));
         onNotarized?.();
@@ -344,8 +318,7 @@ export const createStubWalletBridge = (): WalletBridge => {
         });
         return {
           vaultKey,
-          txHash:
-            "0x" + sha256Hex(`wf-tx:${vaultKeyHex}:${Date.now()}`).slice(0, 64),
+          txHash: "0x" + sha256Hex(`wf-tx:${vaultKeyHex}:${Date.now()}`).slice(0, 64),
           metrics,
           attestation: {
             assertion: {
@@ -371,37 +344,21 @@ export const createStubWalletBridge = (): WalletBridge => {
           challengerSubmission: w.submissions.challenger
             ? {
                 is_some: true,
-                value: sealedCommit(
-                  w.submissions.challenger.value,
-                  w.submissions.challenger.rand,
-                ),
+                value: sealedCommit(w.submissions.challenger.value, w.submissions.challenger.rand),
               }
             : { is_some: false, value: new Uint8Array(32) },
           opponentSubmission: w.submissions.opponent
             ? {
                 is_some: true,
-                value: sealedCommit(
-                  w.submissions.opponent.value,
-                  w.submissions.opponent.rand,
-                ),
+                value: sealedCommit(w.submissions.opponent.value, w.submissions.opponent.rand),
               }
             : { is_some: false, value: new Uint8Array(32) },
         })),
-      createWager: async ({
-        opponentBinding,
-        metricId,
-        stake,
-        deadlineBlock,
-        routing,
-      }) => {
+      createWager: async ({ opponentBinding, metricId, stake, deadlineBlock, routing }) => {
         // Strict-fake contract: mirror the api flow's flat input requirement
         // so client→bridge shape drift fails tests instead of silently
         // passing undefined payout/coinKey to the real flow (audit P0-A).
-        if (
-          !routing ||
-          !(routing.payout instanceof Uint8Array) ||
-          !routing.coinKey?.bytes
-        ) {
+        if (!routing || !(routing.payout instanceof Uint8Array) || !routing.coinKey?.bytes) {
           throw new Error(
             "createWager requires routing { payout: Uint8Array, coinKey: { bytes } } — the real flow reads payout/coinKey flat",
           );
@@ -463,27 +420,19 @@ export const createStubWalletBridge = (): WalletBridge => {
         // Faithful to the contract: the openings are only verified against
         // the sealed commitments when BOTH submissions exist — the forfeit
         // (one) and refund (none) branches ignore them entirely.
-        const both =
-          w.submissions.challenger !== null && w.submissions.opponent !== null;
+        const both = w.submissions.challenger !== null && w.submissions.opponent !== null;
         if (both) {
-          const match = (
-            expected: WalletWagerOpening | null,
-            actual: WalletWagerOpening,
-          ) =>
+          const match = (expected: WalletWagerOpening | null, actual: WalletWagerOpening) =>
             expected !== null &&
             keysEqual(
               sealedCommit(actual.value, actual.rand),
               sealedCommit(expected.value, expected.rand),
             );
           if (!match(w.submissions.challenger, openings.challenger)) {
-            throw new Error(
-              "challenger opening does not match the sealed submission",
-            );
+            throw new Error("challenger opening does not match the sealed submission");
           }
           if (!match(w.submissions.opponent, openings.opponent)) {
-            throw new Error(
-              "opponent opening does not match the sealed submission",
-            );
+            throw new Error("opponent opening does not match the sealed submission");
           }
         }
         w.settled = true;
@@ -548,9 +497,7 @@ export const createStubWalletBridge = (): WalletBridge => {
       // Stub of the real AEAD envelope: the payload carries a password
       // check so import validates against the payload, not a remembered
       // password (the real bridge decrypts with the supplied password).
-      return btoa(
-        JSON.stringify({ data: s, passwordHash: sha256Hex(password) }),
-      );
+      return btoa(JSON.stringify({ data: s, passwordHash: sha256Hex(password) }));
     },
     importPrivateState: async (password, storeName, payload) => {
       const parsed = JSON.parse(atob(payload)) as {
@@ -588,11 +535,8 @@ let stubSingleton: WalletBridge | null = null;
 // --------------------------------------------------------------- loader ---
 
 const txHashOf = (tx: unknown): string => {
-  const publicData = (tx as { public?: { txHash?: unknown } } | undefined)
-    ?.public;
-  return publicData && typeof publicData.txHash === "string"
-    ? publicData.txHash
-    : "";
+  const publicData = (tx as { public?: { txHash?: unknown } } | undefined)?.public;
+  return publicData && typeof publicData.txHash === "string" ? publicData.txHash : "";
 };
 
 const keysEqual = (a: Uint8Array, b: Uint8Array): boolean =>
@@ -603,19 +547,10 @@ const claimsToMetrics = (claims: unknown): WalletMetric[] => {
   return claims.map((raw) => {
     const claim = raw as { metricId?: unknown; value?: unknown };
     const metricId =
-      typeof claim.metricId === "bigint"
-        ? claim.metricId
-        : BigInt(String(claim.metricId ?? 0));
-    const value =
-      typeof claim.value === "bigint"
-        ? claim.value
-        : BigInt(String(claim.value ?? 0));
+      typeof claim.metricId === "bigint" ? claim.metricId : BigInt(String(claim.metricId ?? 0));
+    const value = typeof claim.value === "bigint" ? claim.value : BigInt(String(claim.value ?? 0));
     const label =
-      metricId === 1n
-        ? "distance"
-        : metricId === 2n
-          ? "moving time"
-          : `metric ${metricId}`;
+      metricId === 1n ? "distance" : metricId === 2n ? "moving time" : `metric ${metricId}`;
     return {
       metricId: "0x" + metricId.toString(16),
       label,
@@ -662,10 +597,10 @@ export const adaptStrideSession = async (
       }>;
     }>;
   };
-  const apiMod = (await import(
-    /* @vite-ignore */ "@witnessfitness/api"
-  )) as unknown as {
-    NotaryClient: new (urls: string[]) => {
+  const apiMod = (await import(/* @vite-ignore */ "@witnessfitness/api")) as unknown as {
+    NotaryClient: new (
+      urls: string[],
+    ) => {
       attestate(artifacts: unknown): Promise<unknown>;
     };
     attestWorkout(
@@ -674,11 +609,7 @@ export const adaptStrideSession = async (
       commitRand: Uint8Array,
     ): Promise<{ vaultKey: Uint8Array; tx: unknown }>;
     createWagerFlow(ctx: unknown, input: unknown): Promise<unknown>;
-    acceptWagerFlow(
-      ctx: unknown,
-      id: bigint,
-      routing: unknown,
-    ): Promise<unknown>;
+    acceptWagerFlow(ctx: unknown, id: bigint, routing: unknown): Promise<unknown>;
     submitWorkoutFlow(
       ctx: unknown,
       attestation: unknown,
@@ -702,26 +633,16 @@ export const adaptStrideSession = async (
       badgeId: bigint,
       vaultKey: Uint8Array,
     ): Promise<unknown>;
-    proveBadgeFlow(
-      ctx: unknown,
-      badgeId: bigint,
-      verifierBinding: bigint,
-    ): Promise<unknown>;
+    proveBadgeFlow(ctx: unknown, badgeId: bigint, verifierBinding: bigint): Promise<unknown>;
   };
-  const contractMod = (await import(
-    /* @vite-ignore */ "@witnessfitness/contract"
-  )) as unknown as {
+  const contractMod = (await import(/* @vite-ignore */ "@witnessfitness/contract")) as unknown as {
     pureCircuits: {
       holderBinding(secret: Uint8Array): bigint;
       computeVaultKey(assertion: unknown, commitRand: Uint8Array): Uint8Array;
     };
   };
 
-  const contract = await browserMod.joinStrideFromBrowser(
-    api,
-    contractAddress,
-    privateStateId,
-  );
+  const contract = await browserMod.joinStrideFromBrowser(api, contractAddress, privateStateId);
   const providers = contract.providers;
   providers.privateStateProvider.setContractAddress(contractAddress);
   const stored = (await providers.privateStateProvider.get(privateStateId)) as
@@ -730,11 +651,7 @@ export const adaptStrideSession = async (
     | undefined;
   const holderSecret = stored?.holderSecret ?? new Uint8Array(32);
   const holderBinding =
-    "0x" +
-    contractMod.pureCircuits
-      .holderBinding(holderSecret)
-      .toString(16)
-      .padStart(64, "0");
+    "0x" + contractMod.pureCircuits.holderBinding(holderSecret).toString(16).padStart(64, "0");
   const ctx = { contract, privateStateId, holderSecret };
   const notaryClient = new apiMod.NotaryClient(NOTARY_URLS);
 
@@ -799,17 +716,11 @@ export const adaptStrideSession = async (
       };
       onNotarized?.();
       const commitRand = crypto.getRandomValues(new Uint8Array(32));
-      const { vaultKey, tx } = await apiMod.attestWorkout(
-        ctx,
-        notarized,
-        commitRand,
-      );
+      const { vaultKey, tx } = await apiMod.attestWorkout(ctx, notarized, commitRand);
       return {
         vaultKey,
         txHash: txHashOf(tx),
-        metrics: claimsToMetrics(
-          (notarized.assertion as { claims?: unknown }).claims,
-        ),
+        metrics: claimsToMetrics((notarized.assertion as { claims?: unknown }).claims),
         attestation: {
           assertion: notarized.assertion,
           signatures: notarized.signatures,
@@ -898,13 +809,7 @@ export const adaptStrideSession = async (
           `credential ${hexOf(vaultKey)} is not the staged attestation (${hexOf(stagedKey)}) — use stagedVaultKey()`,
         );
       }
-      await apiMod.advanceStreakFlow(
-        ctx,
-        staged,
-        staged.commitRand,
-        stagedKey,
-        day,
-      );
+      await apiMod.advanceStreakFlow(ctx, staged, staged.commitRand, stagedKey, day);
       const state = await contract.readState();
       const binding = BigInt(holderBinding);
       const streak = state.streaks.member(binding)
@@ -923,13 +828,7 @@ export const adaptStrideSession = async (
           `credential ${hexOf(vaultKey)} is not the staged attestation (${hexOf(stagedKey)}) — use stagedVaultKey()`,
         );
       }
-      await apiMod.mintBadgeFlow(
-        ctx,
-        staged,
-        staged.commitRand,
-        BigInt(badgeId),
-        stagedKey,
-      );
+      await apiMod.mintBadgeFlow(ctx, staged, staged.commitRand, BigInt(badgeId), stagedKey);
       return { minted: true };
     },
     proveBadge: async (badgeId, verifierBinding) => {
@@ -950,26 +849,16 @@ export const adaptStrideSession = async (
 export const loadWalletBridge = async (): Promise<WalletBridge> => {
   try {
     // Probe the api module exists; the session adapter does the heavy lifting.
-    const mod = (await import(
-      /* @vite-ignore */ "@witnessfitness/api/browser"
-    )) as unknown as {
+    const mod = (await import(/* @vite-ignore */ "@witnessfitness/api/browser")) as unknown as {
       initializeProviders: (api: ConnectedAPI) => Promise<unknown>;
-      exportPrivateState: (
-        password: string,
-        storeName: string,
-      ) => Promise<string>;
-      importPrivateState: (
-        password: string,
-        storeName: string,
-        payload: string,
-      ) => Promise<void>;
+      exportPrivateState: (password: string, storeName: string) => Promise<string>;
+      importPrivateState: (password: string, storeName: string, payload: string) => Promise<void>;
       resetPrivateState: (storeName: string) => Promise<void>;
       deriveBrowserHolderSecret: () => Uint8Array;
     };
     return {
       initializeProviders: (api) => mod.initializeProviders(api),
-      exportPrivateState: (password, storeName) =>
-        mod.exportPrivateState(password, storeName),
+      exportPrivateState: (password, storeName) => mod.exportPrivateState(password, storeName),
       importPrivateState: (password, storeName, payload) =>
         mod.importPrivateState(password, storeName, payload),
       resetPrivateState: (storeName) => mod.resetPrivateState(storeName),
