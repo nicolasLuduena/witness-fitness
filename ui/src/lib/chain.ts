@@ -128,7 +128,8 @@ export interface SidecarWagerSimpleResponse {
 
 export interface SidecarWagerSettleResponse {
   id: string;
-  winner: 'A' | 'B' | 'tie';
+  // null = neither submitted → both stakes refunded
+  winner: 'A' | 'B' | 'tie' | null;
   potNIGHT: string;
   nft: { tokenType: string; txHash: string } | null;
   disclosed: { A: string | null; B: string | null };

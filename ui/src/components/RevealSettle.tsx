@@ -1,8 +1,8 @@
 // The settle reveal — demo centerpiece. Three beats:
-//   1. "Winner + pot" (envelopes flip; the loser's number is never published)
+//   1. "Winner + pot" (envelopes flip; the comparison happened under seal)
 //   2. "Find the losing number" — the comparison appears with the loser masked
-//   3. "Athletes chose to disclose" — full comparison, honest framing: the
-//      ledger never revealed it; the athletes did.
+//   3. "Comparison disclosed" — both openings are revealed: the chain publishes
+//      them at settlement to decide the winner; they were sealed until then.
 
 import { useState } from 'react';
 import type { WagerSettleResult } from '../domain/types';
@@ -90,21 +90,20 @@ export const RevealSettle = ({ result }: { result: WagerSettleResult }) => {
 
       {phase === 'reveal' && (
         <Notice tone="info">
-          The chain compared two sealed distances and paid the winner — the room has seen{' '}
-          <strong>zero numbers</strong>. The losing value was never published to the ledger.
+          The chain compared two sealed distances and paid the winner — the values stayed sealed
+          until the deadline and were revealed only at settlement, never before.
         </Notice>
       )}
       {phase === 'room' && (
         <Notice tone="warn">
           <strong>Challenge the room:</strong> the winner ran {fmtKm(winnerValue)}. The losing
-          number is somewhere between — nobody can guess it, because nobody saw it.
+          number is somewhere between — nobody saw it before settlement.
         </Notice>
       )}
       {phase === 'disclosed' && (
         <Notice tone="success">
-          The athletes <strong>chose to disclose</strong> the comparison after settlement. The
-          ledger never revealed the losing input — this reveal is a social choice, not a chain
-          event. {fmtTnight(res.pot)} already moved under seal.
+          The comparison was <strong>revealed on-chain at settlement</strong> — both openings were
+          published to decide the winner. {fmtTnight(res.pot)} already moved under seal.
         </Notice>
       )}
 
@@ -124,7 +123,7 @@ export const RevealSettle = ({ result }: { result: WagerSettleResult }) => {
   );
 };
 
-const Masked = () => <span className="reveal-masked" title="never published to the ledger">▮▮▮▮</span>;
+const Masked = () => <span className="reveal-masked" title="revealed only at settlement">▮▮▮▮</span>;
 
 const Chip = () => (
   <span className="chip chip--provable">settled under seal</span>

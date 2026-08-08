@@ -1,8 +1,8 @@
-import { logError } from './logger';
 // On-chain registry facts for the notary strip, sourced from
 // packages/contract/deploy-output.json (copied to public/ by copy-keys so the
-// UI survives redeploys without a code change). Fetch fails at dev-time are
-// expected (fixture tests, cold start) — fall back to the last known values.
+// UI survives redeploys without a code change). A missing or malformed file is
+// a LOUD error — silently serving a stale hardcoded contract address would
+// submit transactions to the wrong chain (no-fallback rule).
 
 export interface DeployNotaryKey {
   id: string;
@@ -16,22 +16,6 @@ export interface DeployInfo {
   notaryKeys: DeployNotaryKey[];
 }
 
-// Last known values from packages/contract/deploy-output.json (redeployed
-// 2026-08-07 with 30-day freshness window; registry re-rotated to the running
-// instance keys). Redeploy → copy-keys refreshes public/deploy-output.json →
-// these constants only matter offline.
-const FALLBACK: DeployInfo = {
-  contractAddress: 'cf80ad421b2b85f6ca1b3c0ccfd140ae5f6fc0d5871426d7750df4d42944cbaf',
-  network: 'local-devnet',
-  notaryKeys: [
-    { id: 'notary-1', x: '0x3862022a87a469108254b4530e1455cb016835894834b8c05b181cdf35de5b4f', y: '0x43c040874581a4434744453744aca7c2fac2d04ff9340aa9cfe3f3268b26b365' },
-    { id: 'notary-2', x: '0x58da03745fe50613212d2f2ef4f07b5983260f978018d3a308bcc3316e932194', y: '0x6633c8b80640f2b5f3c7d38017af3008a93ce39b190c4025df5d772b9b4a7958' },
-    { id: 'notary-3', x: '0x6b58aa88e9c81548a41bad567257e2eeb3cb2b81b2b48082c655f093998b8a59', y: '0x19b59ef0dbf4b2a503d493ec7c29439384b3b38cfb29f0eed8e7ad5388d7747' },
-  ],
-};
-
-let cached: DeployInfo | null = null;
-
 const normalize = (raw: unknown): DeployInfo | null => {
   if (typeof raw !== 'object' || raw === null) return null;
   const obj = raw as Record<string, unknown>;
@@ -44,25 +28,32 @@ const normalize = (raw: unknown): DeployInfo | null => {
     const y = typeof pk.y === 'string' ? pk.y : '0x';
     return { id: typeof entry.id === 'string' ? entry.id : `notary-${index + 1}`, x, y };
   });
+  if (typeof obj.contractAddress !== 'string' || obj.contractAddress.length === 0) {
+    return null;
+  }
   return {
-    contractAddress: typeof obj.contractAddress === 'string' ? obj.contractAddress : FALLBACK.contractAddress,
+    contractAddress: obj.contractAddress,
     network: 'local-devnet',
     notaryKeys,
   };
 };
 
+let cached: DeployInfo | null = null;
+
 export const loadDeployInfo = async (): Promise<DeployInfo> => {
   if (cached) return cached;
-  try {
-    const res = await fetch('/deploy-output.json');
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const parsed = normalize(await res.json());
-    if (parsed) cached = parsed;
-    return parsed ?? FALLBACK;
-  } catch (err) {
-    logError('deploy-info.load', err);
-    return FALLBACK;
+  const res = await fetch('/deploy-output.json');
+  if (!res.ok) {
+    throw new Error(
+      `deploy-output.json missing (HTTP ${res.status}) — run copy-keys and restart the dev server`
+    );
   }
+  const parsed = normalize(await res.json());
+  if (!parsed) {
+    throw new Error('deploy-output.json is malformed — run copy-keys and restart the dev server');
+  }
+  cached = parsed;
+  return parsed;
 };
 
 export const shortContract = (address: string): string =>

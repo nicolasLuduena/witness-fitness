@@ -11,7 +11,7 @@ import { logError } from '../lib/logger';
 export const EmployerScreen = () => {
   const { badges, proofs, proveBadge, streak } = useDemo();
   const [badgeId, setBadgeId] = useState('1');
-  const [verifier, setVerifier] = useState(EMPLOYER.handle + '@northwind.example');
+  const [verifier, setVerifier] = useState(EMPLOYER.holderBinding);
   const [running, setRunning] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -55,8 +55,8 @@ export const EmployerScreen = () => {
             </select>
           </div>
           <div className="field">
-            <label>Verifier binding</label>
-            <input className="input" value={verifier} onChange={(e) => setVerifier(e.target.value)} />
+            <label>Verifier binding (0x + 64 hex — the third party's holder binding)</label>
+            <input className="input mono" value={verifier} onChange={(e) => setVerifier(e.target.value)} />
           </div>
           <Button tone="primary" block onClick={() => void submit()} disabled={running || !minted}>
             {running ? <span className="spin" /> : null}

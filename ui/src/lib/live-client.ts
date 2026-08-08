@@ -198,7 +198,7 @@ export class LiveClient implements WfClient {
     if (!settled) throw new Error(`wager ${id} not found after settle`);
 
     const winner: Athlete | undefined =
-      result.winner === 'tie'
+      result.winner === 'tie' || result.winner === null
         ? undefined
         : result.winner === 'A'
           ? ATHLETE_A
@@ -212,18 +212,27 @@ export class LiveClient implements WfClient {
       (challengerIsA ? result.disclosed.B : result.disclosed.A) ?? undefined,
       0
     );
+    // One disclosed value null + a winner = forfeit; both null = refund.
+    const forfeit =
+      result.winner !== null &&
+      result.winner !== 'tie' &&
+      (result.disclosed.A === null || result.disclosed.B === null);
 
-    const summary = result.winner === 'tie'
-      ? 'Dead heat — stakes returned'
-      : `${winner?.name} wins — the losing number stays sealed`;
+    const summary = result.winner === null
+      ? 'Neither submitted — both stakes refunded'
+      : result.winner === 'tie'
+        ? 'Dead heat — stakes returned'
+        : forfeit
+          ? `${winner?.name} wins by forfeit — the pot moves under seal`
+          : `${winner?.name} wins — sealed comparison revealed at settlement`;
 
     settled.result = {
       winner,
       tie: result.winner === 'tie',
-      forfeit: false,
+      forfeit,
       pot: nightToDisplay(toNumber(result.potNIGHT, 0)),
       currency: 'NIGHT',
-      disclosed: true,
+      disclosed: !forfeit && result.winner !== null && result.winner !== 'tie',
       challengerValue,
       opponentValue,
       nft: result.nft,
@@ -235,7 +244,7 @@ export class LiveClient implements WfClient {
       reveal: {
         sealedForRoom: true,
         comparison:
-          challengerValue > 0 || opponentValue > 0
+          !forfeit && (challengerValue > 0 || opponentValue > 0)
             ? { challengerValue, opponentValue }
             : undefined,
       },

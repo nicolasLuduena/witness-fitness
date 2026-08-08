@@ -121,6 +121,26 @@ export const WagersScreen = () => {
     return { locked: true, label: `settle in ${formatCountdown(left)}` };
   };
 
+  // Submissions close at the deadline (the contract enforces it — audit H1);
+  // the UI mirrors it so the button state never lies.
+  const submitLocked = (wager: WagerView): { locked: boolean; label: string } => {
+    if (wager.deadlineBlock <= 0n) return { locked: false, label: '' };
+    const left = Number(wager.deadlineBlock) * 1000 - now;
+    if (left <= 0) return { locked: true, label: 'submissions closed at the deadline' };
+    return { locked: false, label: `submissions close in ${formatCountdown(left)}` };
+  };
+
+  // The contract settles every outcome once the deadline + grace passes:
+  // both submitted → reveal the winner; one → forfeit; none → refund both.
+  const settleLabel = (wager: WagerView): string => {
+    const challengerSubmitted = wager.submissions.some((s) => s.athlete.handle === wager.challenger.handle);
+    const opponentSubmitted = wager.submissions.some((s) => s.athlete.handle === wager.opponent.handle);
+    if (challengerSubmitted && opponentSubmitted) return 'Settle — reveal winner';
+    if (challengerSubmitted) return `Settle — forfeit to ${wager.challenger.name}`;
+    if (opponentSubmitted) return `Settle — forfeit to ${wager.opponent.name}`;
+    return 'Settle — refund both (no submissions)';
+  };
+
   return (
     <div className="screen">
       <div className="screen-header">
@@ -204,8 +224,9 @@ export const WagersScreen = () => {
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
           {wagers.map((wager) => {
-            const readyToSettle = wager.status === 'submitted' && wager.submissions.length === 2;
+            const readyToSettle = wager.status === 'accepted' || wager.status === 'submitted';
             const lock = settleLocked(wager);
+            const submitLock = submitLocked(wager);
             return (
               <Card key={wager.id} title={`Wager #${wager.id} — ${wager.title}`} glow={wager.status !== 'settled'}>
                 <div className="row-between" style={{ marginBottom: 14 }}>
@@ -228,14 +249,14 @@ export const WagersScreen = () => {
                     label={wager.challenger.name}
                     sealed={!wager.submissions.some((s) => s.athlete.handle === wager.challenger.handle)}
                     commitment={wager.submissions.find((s) => s.athlete.handle === wager.challenger.handle)?.commitment}
-                    title="sealed submission — commitment on-chain, value never published"
+                    title="sealed submission — commitment on-chain; the value is revealed only at settlement"
                   />
                   <span className="faint mono">vs</span>
                   <Envelope
                     label={wager.opponent.name}
                     sealed={!wager.submissions.some((s) => s.athlete.handle === wager.opponent.handle)}
                     commitment={wager.submissions.find((s) => s.athlete.handle === wager.opponent.handle)?.commitment}
-                    title="sealed submission — commitment on-chain, value never published"
+                    title="sealed submission — commitment on-chain; the value is revealed only at settlement"
                   />
                 </div>
 
@@ -262,20 +283,22 @@ export const WagersScreen = () => {
                     <Button
                       tone="seal"
                       block
-                      disabled={busyId !== null || submittedBy(wager, wager.challenger)}
+                      disabled={busyId !== null || submittedBy(wager, wager.challenger) || submitLock.locked}
+                      title={submitLock.locked ? submitLock.label : undefined}
                       onClick={() => void run(wager.id, () => submitWorkout(wager.id, athleteOf(wager.challenger)))}
                     >
                       {busyId === wager.id ? <span className="spin" /> : null}
-                      {submittedBy(wager, wager.challenger) ? 'Sealed ✓' : `Seal ${wager.challenger.name}'s submission`}
+                      {submittedBy(wager, wager.challenger) ? 'Sealed ✓' : `Seal ${wager.challenger.name}'s submission${submitLock.locked ? ` — ${submitLock.label}` : ''}`}
                     </Button>
                     <Button
                       tone="seal"
                       block
-                      disabled={busyId !== null || submittedBy(wager, wager.opponent)}
+                      disabled={busyId !== null || submittedBy(wager, wager.opponent) || submitLock.locked}
+                      title={submitLock.locked ? submitLock.label : undefined}
                       onClick={() => void run(wager.id, () => submitWorkout(wager.id, athleteOf(wager.opponent)))}
                     >
                       {busyId === wager.id ? <span className="spin" /> : null}
-                      {submittedBy(wager, wager.opponent) ? 'Sealed ✓' : `Seal ${wager.opponent.name}'s submission`}
+                      {submittedBy(wager, wager.opponent) ? 'Sealed ✓' : `Seal ${wager.opponent.name}'s submission${submitLock.locked ? ` — ${submitLock.label}` : ''}`}
                     </Button>
                   </div>
                 ) : null}
@@ -284,20 +307,24 @@ export const WagersScreen = () => {
                   <Button
                     tone="seal"
                     block
-                    disabled={busyId !== null || submittedBy(wager, localSide(wager)) || !myCredentialId}
+                    disabled={busyId !== null || submittedBy(wager, localSide(wager)) || !myCredentialId || submitLock.locked}
                     title={
-                      myCredentialId
-                        ? 'Seals the latest attested workout — the value stays sealed until settle'
-                        : 'Attest a workout first (Connect tab)'
+                      submitLock.locked
+                        ? submitLock.label
+                        : myCredentialId
+                          ? 'Seals the latest attested workout — the value stays sealed until settle'
+                          : 'Attest a workout first (Connect tab)'
                     }
                     onClick={() => void run(wager.id, () => submitWorkout(wager.id, myCredentialId))}
                   >
                     {busyId === wager.id ? <span className="spin" /> : null}
                     {submittedBy(wager, localSide(wager))
                       ? 'Sealed ✓ — waiting for the opponent'
-                      : myCredentialId
-                        ? 'Seal my submission (latest attested workout)'
-                        : 'Attest a workout first'}
+                      : submitLock.locked
+                        ? `Submissions closed — ${submitLock.label}`
+                        : myCredentialId
+                          ? 'Seal my submission (latest attested workout)'
+                          : 'Attest a workout first'}
                   </Button>
                 ) : null}
 
@@ -313,7 +340,7 @@ export const WagersScreen = () => {
                     onClick={() => void run(wager.id, () => settleWager(wager.id))}
                   >
                     {busyId === wager.id ? <span className="spin" /> : null}
-                    Settle — reveal winner under seal{lock.locked ? ` (${lock.label})` : ''}
+                    {settleLabel(wager)} under seal{lock.locked ? ` (${lock.label})` : ''}
                   </Button>
                 ) : null}
 
@@ -321,7 +348,7 @@ export const WagersScreen = () => {
                   <Notice tone={wager.result.tie || wager.result.forfeit ? 'info' : 'success'}>
                     {wager.result.summary} · pot {fmtTnight(wager.result.pot)} {wager.result.currency} ·{' '}
                     {wager.result.disclosed
-                      ? 'athletes disclosed the comparison at settlement'
+                      ? 'the comparison was revealed on-chain at settlement'
                       : 'comparison not disclosed'}
                     {wager.result.nft ? ' · shielded NFT to the winner' : ''}
                   </Notice>
@@ -335,9 +362,10 @@ export const WagersScreen = () => {
       {session ? (
         <div style={{ marginTop: 18 }}>
           <Notice tone="info">
-            Sealed submission commitments land on-chain as <code className="mono">transientCommit</code>{' '}
-            envelopes — hover them: <code className="mono">{hexShort('0x' + '0'.repeat(64), 10, 8)}</code> style.
-            Only the athletes' openings can ever open them, and the losing opening is never published.
+            Sealed submission commitments land on-chain as <code className="mono">persistentCommit</code>{' '}
+            envelopes — hover them: <code className="mono">{hexShort('0x' + '0'.repeat(64), 10, 8)}</code>{' '}
+            style. The values stay sealed until the deadline; at settlement the chain reveals both
+            openings to decide the winner — never before.
           </Notice>
         </div>
       ) : null}
