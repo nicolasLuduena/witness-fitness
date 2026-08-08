@@ -100,8 +100,10 @@ export interface WalletWagerOpening {
   rand: Uint8Array;
 }
 
+// Points-era routing (Phase A v3): only the winner-NFT recipient's shielded
+// coin key — pinned at create/accept. Real-money payout addresses no longer
+// exist; wagers settle in points and withdrawals are admin-initiated.
 export interface WalletWagerRouting {
-  payout: Uint8Array;
   coinKey: { bytes: Uint8Array };
 }
 
@@ -334,10 +336,10 @@ export const createStubWalletBridge = (): WalletBridge => {
       createWager: async ({ opponentBinding, metricId, stake, deadlineBlock, routing }) => {
         // Strict-fake contract: mirror the api flow's flat input requirement
         // so client→bridge shape drift fails tests instead of silently
-        // passing undefined payout/coinKey to the real flow (audit P0-A).
-        if (!routing || !(routing.payout instanceof Uint8Array) || !routing.coinKey?.bytes) {
+        // passing undefined coinKey to the real flow (audit P0-A).
+        if (!routing || !routing.coinKey?.bytes) {
           throw new Error(
-            "createWager requires routing { payout: Uint8Array, coinKey: { bytes } } — the real flow reads payout/coinKey flat",
+            "createWager requires routing { coinKey: { bytes } } — the real flow reads coinKey flat",
           );
         }
         const id = nextWagerId;
@@ -704,21 +706,20 @@ export const adaptStrideSession = async (
       });
     },
     createWager: async (input) => {
-      // The api flow's input is FLAT (payout/coinKey at top level); the
-      // session surface carries them nested under `routing`. Never pass the
-      // client input whole — undefined payout/coinKey breaks the escrow.
+      // The api flow's input is FLAT (coinKey at top level); the session
+      // surface carries it nested under `routing`. Never pass the client
+      // input whole — undefined coinKey breaks the wager.
       const tx = await apiMod.createWagerFlow(ctx, {
         opponentBinding: input.opponentBinding,
         metricId: input.metricId,
         stake: input.stake,
         deadlineBlock: input.deadlineBlock,
-        payout: input.routing.payout,
         coinKey: input.routing.coinKey,
       });
       return { txHash: txHashOf(tx) };
     },
     acceptWager: async (id, routing) => {
-      const tx = await apiMod.acceptWagerFlow(ctx, id, routing);
+      const tx = await apiMod.acceptWagerFlow(ctx, id, routing.coinKey);
       return { txHash: txHashOf(tx) };
     },
     submitWorkout: async (wagerId, attestation, value) => {

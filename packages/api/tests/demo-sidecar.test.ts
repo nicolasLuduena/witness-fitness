@@ -7,7 +7,7 @@ import { createServer } from "node:http";
 import type { AddressInfo } from "node:net";
 import { pureCircuits } from "@witnessfitness/contract";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import type { Athlete, WagerPayoutRouting } from "../src/demo-sidecar.js";
+import type { Athlete } from "../src/demo-sidecar.js";
 import {
   createDemoSidecarWithDeps,
   type DemoSidecarConfig,
@@ -89,8 +89,6 @@ type FakeWager = {
   challengerSubmission: { is_some: boolean; value: bigint };
   opponentSubmission: { is_some: boolean; value: bigint };
   settled: boolean;
-  challengerPayout: Uint8Array;
-  opponentPayout: Uint8Array;
   challengerCoinKey: Uint8Array;
   opponentCoinKey: Uint8Array;
 };
@@ -103,6 +101,7 @@ const fakeState = (
     badges?: bigint[];
     wagers?: Map<bigint, FakeWager>;
     nextWagerId?: bigint;
+    balances?: Map<bigint, bigint>;
   },
 ): StrideDerivedState =>
   ({
@@ -115,6 +114,21 @@ const fakeState = (
       lookup: (k: bigint) => (opts.wagers ?? new Map()).get(k) as FakeWager,
       [Symbol.iterator]: () => (opts.wagers ?? new Map())[Symbol.iterator](),
     },
+    balances: {
+      isEmpty: () => (opts.balances ?? new Map()).size === 0,
+      size: () => BigInt((opts.balances ?? new Map()).size),
+      member: (k: bigint) => (opts.balances ?? new Map()).has(k),
+      lookup: (k: bigint) => (opts.balances ?? new Map()).get(k) ?? 0n,
+      [Symbol.iterator]: () => (opts.balances ?? new Map())[Symbol.iterator](),
+    },
+    payoutKeys: {
+      isEmpty: () => true,
+      size: () => 0n,
+      member: () => false,
+      lookup: () => ({ bytes: new Uint8Array(32) }),
+      [Symbol.iterator]: () => [][Symbol.iterator](),
+    },
+    treasuryKey: { bytes: new Uint8Array(32).fill(0xe5) },
     streaks: {
       isEmpty: () => false,
       size: () => (opts.streak === null ? 0n : 1n),
@@ -138,9 +152,8 @@ const fakeState = (
 
 const HOLDER_BINDING_B = pureCircuits.holderBinding(demoHolderSecret(config.genesisSeedB));
 
-const routingOf = (fill: number): WagerPayoutRouting => ({
-  payout: new Uint8Array(32).fill(fill),
-  coinKey: { bytes: new Uint8Array(32).fill(fill + 1) },
+const coinKeyOf = (fill: number): { bytes: Uint8Array } => ({
+  bytes: new Uint8Array(32).fill(fill),
 });
 
 const makeDeps = (
@@ -153,6 +166,8 @@ const makeDeps = (
     acceptWager: number;
     submitWorkout: number;
     settleWager: number;
+    deposit: number;
+    withdraw: number;
   },
 ): SidecarDeps & { staged: { athlete: Athlete; fields: Record<string, unknown> }[] } => {
   const ledger = {
@@ -160,8 +175,8 @@ const makeDeps = (
     nextWagerId: 0n,
   };
   const identities: SidecarDeps["identities"] = {
-    A: { holderBinding, routing: routingOf(1) },
-    B: { holderBinding: HOLDER_BINDING_B, routing: routingOf(3) },
+    A: { holderBinding, coinKey: coinKeyOf(1) },
+    B: { holderBinding: HOLDER_BINDING_B, coinKey: coinKeyOf(3) },
   };
   const staged: { athlete: Athlete; fields: Record<string, unknown> }[] = [];
   return {
@@ -190,20 +205,17 @@ const makeDeps = (
           challengerSubmission: { is_some: false, value: 0n },
           opponentSubmission: { is_some: false, value: 0n },
           settled: false,
-          challengerPayout: input.payout,
-          opponentPayout: new Uint8Array(32),
           challengerCoinKey: input.coinKey.bytes,
           opponentCoinKey: new Uint8Array(32),
         });
         return { public: { txHash: "0xcreate-tx" } };
       },
-      acceptWager: async (athlete, id, routing) => {
+      acceptWager: async (athlete, id, coinKey) => {
         calls.acceptWager += 1;
         const wager = ledger.wagers.get(id);
         if (!wager) throw new Error("no such wager");
         wager.accepted = true;
-        wager.opponentPayout = routing.payout;
-        wager.opponentCoinKey = routing.coinKey.bytes;
+        wager.opponentCoinKey = coinKey.bytes;
         return { public: { txHash: "0xaccept-tx" } };
       },
       submitWorkout: async (athlete, id) => {
@@ -237,6 +249,14 @@ const makeDeps = (
       proveBadge: async () => {
         calls.proveBadge += 1;
         return { public: { txHash: "0xprove-tx" } };
+      },
+      deposit: async () => {
+        calls.deposit += 1;
+        return { public: { txHash: "0xdeposit-tx" } };
+      },
+      withdraw: async () => {
+        calls.withdraw += 1;
+        return { public: { txHash: "0xwithdraw-tx" } };
       },
     },
     stagePrivateState: async (athlete, fields) => {
@@ -278,6 +298,8 @@ describe("demo sidecar wire contract", () => {
     acceptWager: 0,
     submitWorkout: 0,
     settleWager: 0,
+    deposit: 0,
+    withdraw: 0,
   };
 
   beforeAll(async () => {
@@ -310,6 +332,8 @@ describe("demo sidecar wire contract", () => {
       acceptWager: 0,
       submitWorkout: 0,
       settleWager: 0,
+      deposit: 0,
+      withdraw: 0,
     });
     const side = createDemoSidecarWithDeps(config, deps);
     await side.init();
@@ -429,10 +453,47 @@ describe("demo sidecar wire contract", () => {
     expect(res.status).toBe(404);
   });
 
-  it("GET /state lists vault/streaks/badges for the demo identity", async () => {
+  it("POST /points/deposit { athlete, amount } returns { athlete, amount, points, txHash }", async () => {
+    const res = await post("/points/deposit", { athlete: "A", amount: "0x3e8" });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({
+      athlete: "A",
+      amount: "0x3e8",
+      points: "0x0",
+      txHash: "0xdeposit-tx",
+    });
+    expect(calls.deposit).toBe(1);
+  });
+
+  it("POST /points/deposit with a missing/zero amount → 400", async () => {
+    const missing = await post("/points/deposit", { athlete: "A" });
+    expect(missing.status).toBe(400);
+    const zero = await post("/points/deposit", { athlete: "A", amount: "0x0" });
+    expect(zero.status).toBe(400);
+  });
+
+  it("POST /points/withdraw { athlete, amount } (admin-initiated) returns points remaining", async () => {
+    const res = await post("/points/withdraw", { athlete: "A", amount: "0x64" });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({
+      athlete: "A",
+      amount: "0x64",
+      points: "0x0",
+      txHash: "0xwithdraw-tx",
+    });
+    expect(calls.withdraw).toBe(1);
+  });
+
+  it("POST /points/withdraw with a malformed amount → 400", async () => {
+    const res = await post("/points/withdraw", { athlete: "A", amount: "100" });
+    expect(res.status).toBe(400);
+  });
+
+  it("GET /state lists vault/streaks/badges/points for the demo identity", async () => {
     const res = await fetch(`${baseUrl}/state`);
     expect(res.status).toBe(200);
     const body = (await res.json()) as Record<string, unknown>;
+    expect(body.points).toBe("0x0");
     expect(body.vault).toHaveLength(1);
     expect(body.vault[0]).toHaveProperty("vaultKey");
     expect(body.streaks).toEqual({ count: "0x1", lastDay: "0x50bf" });
@@ -450,6 +511,8 @@ describe("demo sidecar wire contract", () => {
         acceptWager: 0,
         submitWorkout: 0,
         settleWager: 0,
+        deposit: 0,
+        withdraw: 0,
       }),
     );
     await new Promise<void>((resolve) => cold.server.listen(0, resolve));

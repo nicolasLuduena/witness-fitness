@@ -1,7 +1,7 @@
 // Regression net for the REAL wallet bridge adapter (audit P0-A/P0-B, P1):
 // the stub bridge voids `routing` and `attestation` — the exact arguments
 // that, when wired wrongly, break the live browser path (createWager with
-// undefined payout/coinKey; submitWorkout staging assertion: undefined).
+// undefined coinKey; submitWorkout staging assertion: undefined).
 // This test drives adaptStrideSession against MOCKED api/browser+api+contract
 // modules and asserts the shapes the real flow functions receive.
 
@@ -122,16 +122,15 @@ afterEach(() => {
 });
 
 describe("wallet bridge real adapter (P0/P1 regression)", () => {
-  it("createWager flattens routing into flat payout/coinKey for createWagerFlow", async () => {
+  it("createWager flattens routing into flat coinKey for createWagerFlow", async () => {
     const session = await sessionOf();
-    const payout = bytes(1);
     const coinKey = { bytes: bytes(2) };
     await session.createWager({
       opponentBinding: 0x99n,
       metricId: 1n,
       stake: 10n ** 13n,
       deadlineBlock: 1754640090n,
-      routing: { payout, coinKey },
+      routing: { coinKey },
     });
 
     expect(mocks.flows.createWagerFlow).toHaveBeenCalledTimes(1);
@@ -141,7 +140,6 @@ describe("wallet bridge real adapter (P0/P1 regression)", () => {
       metricId: 1n,
       stake: 10n ** 13n,
       deadlineBlock: 1754640090n,
-      payout,
       coinKey,
     });
     expect(input).not.toHaveProperty("routing");

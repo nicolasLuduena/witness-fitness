@@ -34,17 +34,17 @@ const psB = (overrides: Partial<PrivateState> = {}): PrivateState => ({
 const bindingA = holderBindingOf(holderA);
 const bindingB = holderBindingOf(holderB);
 
-// Real-money payout routing: 32-byte UserAddress payloads (the compact
-// UserAddress type) + shielded coin keys for the winner NFT.
-const payoutOf = (seed: number): Uint8Array => {
-  const b = new Uint8Array(32);
-  b[0] = seed;
-  return b;
-};
-const payoutA = payoutOf(0xa1);
-const payoutB = payoutOf(0xb2);
-const coinKeyA = { bytes: payoutOf(0xc3) };
-const coinKeyB = { bytes: payoutOf(0xd4) };
+// Shielded treasury (Phase A v3): the deposit passthrough target + coin keys
+// for the winner NFT. Synthetic coins use the native (zero) color.
+const treasuryKey = { bytes: new Uint8Array(32).fill(0xe5) };
+const coinKeyA = { bytes: new Uint8Array(32).fill(0xc3) };
+const coinKeyB = { bytes: new Uint8Array(32).fill(0xd4) };
+const ZERO_COLOR = new Uint8Array(32);
+const nativeCoin = (value: bigint, nonce = randomBytes(32)) => ({
+  nonce,
+  color: ZERO_COLOR,
+  value,
+});
 
 let sim: StrideSim;
 
@@ -55,7 +55,19 @@ describe("stride contract", () => {
     for (let i = 0; i < 3; i += 1) {
       sim.call("registerNotary", psA(), notaryKeys[i].pk, BigInt(i));
     }
+    sim.call("setTreasuryKey", psA(), treasuryKey);
   });
+
+  // Deposit shielded NIGHT → points for the caller's binding.
+  const fund = (ps: PrivateState, amount: bigint, coinValue = amount): void => {
+    sim.call("depositPoints", ps, amount, nativeCoin(coinValue));
+  };
+
+  const balanceOf = (binding: bigint): bigint =>
+    sim.ledgerView().balances.member(binding) ? sim.ledgerView().balances.lookup(binding) : 0n;
+
+  // Platform fee = 2% of the stake (entryFee in stride.compact).
+  const feeFor = (stake: bigint): bigint => stake / 50n;
 
   const vaultCredential = (
     holderSecret: Uint8Array,
@@ -182,81 +194,198 @@ describe("stride contract", () => {
     });
   });
 
-  describe("wagers (real unshielded NIGHT pot)", () => {
+  describe("wagers (shielded points pot)", () => {
     const makeWager = (
       ps: PrivateState,
       stake: bigint,
       deadline: bigint,
-      payout = payoutA,
       coinKey = coinKeyA,
-    ) => sim.call("createWager", ps, bindingB, 1n, stake, deadline, payout, coinKey);
+    ) => sim.call("createWager", ps, bindingB, 1n, stake, deadline, coinKey);
 
-    it("escrows the challenger stake as a real unshielded receive", () => {
+    it("debits the challenger's points (stake + fee) and pins the NFT coin key", () => {
+      fund(psA(), 1000n + feeFor(1000n));
       makeWager(psA(), 1000n, nowSeconds() + 3600n);
-      expect(sim.unshieldedInputSum()).toBe(1000n);
+      expect(balanceOf(bindingA)).toBe(1000n);
+      expect(balanceOf(sim.ledgerView().adminSecret)).toBe(feeFor(1000n));
       expect(sim.ledgerView().wagers.member(0n)).toBe(true);
       const stored = sim.ledgerView().wagers.lookup(0n);
-      expect(Buffer.from(stored.challengerPayout)).toEqual(Buffer.from(payoutA));
       expect(stored.challengerCoinKey.bytes).toEqual(coinKeyA.bytes);
     });
 
-    it("escrows the opponent stake on accept and pins opponent payout + coin key", () => {
+    it("debits the opponent's points (stake + fee) on accept", () => {
+      fund(psA(), 1000n + feeFor(1000n));
+      fund(psB(), 1000n + feeFor(1000n));
       makeWager(psA(), 1000n, nowSeconds() + 3600n);
-      expect(sim.unshieldedInputSum()).toBe(1000n);
-      sim.call("acceptWager", psB(), 0n, payoutB, coinKeyB);
-      expect(sim.unshieldedInputSum()).toBe(1000n);
+      sim.call("acceptWager", psB(), 0n, coinKeyB);
+      expect(balanceOf(bindingA)).toBe(1000n);
+      expect(balanceOf(bindingB)).toBe(1000n);
+      expect(balanceOf(sim.ledgerView().adminSecret)).toBe(2n * feeFor(1000n));
       const stored = sim.ledgerView().wagers.lookup(0n);
       expect(stored.accepted).toBe(true);
-      expect(Buffer.from(stored.opponentPayout)).toEqual(Buffer.from(payoutB));
       expect(stored.opponentCoinKey.bytes).toEqual(coinKeyB.bytes);
-      expect(stored.challengerPayout).toEqual(stored.challengerPayout);
     });
 
-    it("refunds the challenger stake via an unshielded send on cancel", () => {
+    it("rejects create with insufficient points", () => {
+      fund(psA(), 1000n);
+      expect(() => makeWager(psA(), 1000n, nowSeconds() + 3600n)).toThrow("Insufficient points");
+    });
+
+    it("refunds the challenger's stake (not the fee) on cancel", () => {
+      fund(psA(), 1000n + feeFor(1000n));
       makeWager(psA(), 1000n, nowSeconds() + 3600n);
       sim.call("cancelWager", psA(), 0n);
-      expect(sim.unshieldedOutputSum()).toBe(1000n);
+      expect(balanceOf(bindingA)).toBe(1000n);
+      expect(balanceOf(sim.ledgerView().adminSecret)).toBe(feeFor(1000n));
       expect(sim.ledgerView().wagers.member(0n)).toBe(false);
     });
 
     it("refuses cancel after acceptance", () => {
+      fund(psA(), 1000n + feeFor(1000n));
+      fund(psB(), 1000n + feeFor(1000n));
       makeWager(psA(), 1000n, nowSeconds() + 3600n);
-      sim.call("acceptWager", psB(), 0n, payoutB, coinKeyB);
+      sim.call("acceptWager", psB(), 0n, coinKeyB);
       expect(() => sim.call("cancelWager", psA(), 0n)).toThrow("Wager already accepted");
     });
 
     it("rejects accept by a stranger", () => {
+      fund(psA(), 1000n + feeFor(1000n));
       makeWager(psA(), 1000n, nowSeconds() + 3600n);
-      expect(() => sim.call("acceptWager", psA(), 0n, payoutA, coinKeyA)).toThrow(
-        "Not the opponent",
-      );
+      expect(() => sim.call("acceptWager", psA(), 0n, coinKeyA)).toThrow("Not the opponent");
     });
 
     it("rejects re-accept and double escrow", () => {
+      fund(psA(), 1000n + feeFor(1000n));
+      fund(psB(), 1000n + feeFor(1000n));
       makeWager(psA(), 1000n, nowSeconds() + 3600n);
-      sim.call("acceptWager", psB(), 0n, payoutB, coinKeyB);
-      expect(() => sim.call("acceptWager", psB(), 0n, payoutB, coinKeyB)).toThrow(
+      sim.call("acceptWager", psB(), 0n, coinKeyB);
+      expect(() => sim.call("acceptWager", psB(), 0n, coinKeyB)).toThrow(
         "Wager already accepted",
       );
     });
 
-    it("pins the payout/coin-key args (a tamper at settle is impossible by construction)", () => {
-      makeWager(psA(), 1000n, nowSeconds() + 3600n, payoutA, coinKeyA);
-      sim.call("acceptWager", psB(), 0n, payoutB, coinKeyB);
+    it("pins the coin keys at create/accept (a tamper at settle is impossible by construction)", () => {
+      fund(psA(), 1000n + feeFor(1000n));
+      fund(psB(), 1000n + feeFor(1000n));
+      makeWager(psA(), 1000n, nowSeconds() + 3600n, coinKeyA);
+      sim.call("acceptWager", psB(), 0n, coinKeyB);
       const before = sim.ledgerView().wagers.lookup(0n);
-      // settleWager takes only the id — the routing args do not exist on it,
-      // so the stored payouts are what get paid. Verify the stored values.
-      expect(Buffer.from(before.challengerPayout)).toEqual(Buffer.from(payoutA));
-      expect(Buffer.from(before.opponentPayout)).toEqual(Buffer.from(payoutB));
+      // settleWager takes only the id — no payout/coin-key args exist on it.
       expect(before.challengerCoinKey.bytes).toEqual(coinKeyA.bytes);
       expect(before.opponentCoinKey.bytes).toEqual(coinKeyB.bytes);
     });
   });
 
+  describe("points deposit/withdraw (shielded treasury)", () => {
+    // receiveShielded also records a contract-receipt commitment output
+    // (recipient = the contract); filter to user/treasury recipients only.
+    const moneyOutputs = (): { value: bigint; recipient: Uint8Array }[] =>
+      sim
+        .zswapOutputs()
+        .filter((o) => o.recipient.is_left)
+        .map((o) => ({ value: o.coinInfo.value, recipient: o.recipient.left }))
+        .sort((a, b) => (a.value < b.value ? -1 : 1));
+
+    const receiptOutputs = (): number =>
+      sim.zswapOutputs().filter((o) => !o.recipient.is_left).length;
+
+    it("rejects deposits before the treasury is configured", () => {
+      const fresh = new StrideSim(psA());
+      expect(() =>
+        fresh.call("depositPoints", psA(), 1000n, nativeCoin(1000n)),
+      ).toThrow("Treasury not configured");
+    });
+
+    it("credits points, registers the payout key, and routes the coin to the treasury", () => {
+      sim.call("depositPoints", psA(), 1000n, nativeCoin(1000n));
+      expect(balanceOf(bindingA)).toBe(1000n);
+      expect(sim.ledgerView().payoutKeys.lookup(bindingA).bytes).toEqual(new Uint8Array(32));
+      expect(receiptOutputs()).toBe(1);
+      const outputs = moneyOutputs();
+      expect(outputs.length).toBe(1);
+      expect(outputs[0].value).toBe(1000n);
+      expect(outputs[0].recipient).toEqual(treasuryKey.bytes);
+    });
+
+    it("returns the change coin to the caller when the coin exceeds the deposit", () => {
+      sim.call("depositPoints", psA(), 800n, nativeCoin(1000n));
+      expect(balanceOf(bindingA)).toBe(800n);
+      const outputs = moneyOutputs();
+      expect(outputs.length).toBe(2);
+      expect(outputs[0]).toEqual({ value: 200n, recipient: new Uint8Array(32) }); // change → caller
+      expect(outputs[1]).toEqual({ value: 800n, recipient: treasuryKey.bytes }); // passthrough
+    });
+
+    it("rejects a non-native coin", () => {
+      expect(() =>
+        sim.call("depositPoints", psA(), 1000n, {
+          nonce: randomBytes(32),
+          color: new Uint8Array(32).fill(1),
+          value: 1000n,
+        }),
+      ).toThrow("Wrong asset");
+    });
+
+    it("rejects a coin smaller than the deposit amount and zero amounts", () => {
+      expect(() => sim.call("depositPoints", psA(), 1000n, nativeCoin(999n))).toThrow(
+        "Coin too small",
+      );
+      expect(() => sim.call("depositPoints", psA(), 0n, nativeCoin(1000n))).toThrow(
+        "Amount must be positive",
+      );
+    });
+
+    it("rejects withdrawals by a non-admin", () => {
+      sim.call("depositPoints", psA(), 1000n, nativeCoin(1000n));
+      expect(() =>
+        sim.call("withdrawPoints", psB(), bindingA, 100n, nativeCoin(100n)),
+      ).toThrow("Not the admin");
+    });
+
+    it("rejects withdrawals from an account without a payout key", () => {
+      // bindingB never deposited — no balance, no registered payout key.
+      expect(() =>
+        sim.call("withdrawPoints", psA(), bindingB, 100n, nativeCoin(100n)),
+      ).toThrow("No such account");
+    });
+
+    it("rejects insufficient points", () => {
+      sim.call("depositPoints", psA(), 100n, nativeCoin(100n));
+      expect(() =>
+        sim.call("withdrawPoints", psA(), bindingA, 200n, nativeCoin(200n)),
+      ).toThrow("Insufficient points");
+    });
+
+    it("debits points and routes the coin to the registered payout key (change to admin)", () => {
+      sim.call("depositPoints", psA(), 1000n, nativeCoin(1000n));
+      sim.call("withdrawPoints", psA(), bindingA, 400n, nativeCoin(1000n));
+      expect(balanceOf(bindingA)).toBe(600n);
+      const outputs = moneyOutputs();
+      expect(outputs.length).toBe(2);
+      expect(outputs[0]).toEqual({ value: 400n, recipient: new Uint8Array(32) }); // → payout key
+      expect(outputs[1]).toEqual({ value: 600n, recipient: new Uint8Array(32) }); // change → admin
+    });
+
+    it("withdraws an exact coin with no change", () => {
+      sim.call("depositPoints", psA(), 1000n, nativeCoin(1000n));
+      sim.call("withdrawPoints", psA(), bindingA, 1000n, nativeCoin(1000n));
+      expect(balanceOf(bindingA)).toBe(0n);
+      expect(moneyOutputs()).toEqual([{ value: 1000n, recipient: new Uint8Array(32) }]);
+    });
+
+    it("rejects a coin smaller than the withdrawal amount", () => {
+      sim.call("depositPoints", psA(), 1000n, nativeCoin(1000n));
+      expect(() =>
+        sim.call("withdrawPoints", psA(), bindingA, 400n, nativeCoin(300n)),
+      ).toThrow("Coin too small");
+    });
+  });
+
   describe("submitWorkout", () => {
     const openWager = (stake = 1000n, deadline = nowSeconds() + 3600n): bigint => {
-      sim.call("createWager", psA(), bindingB, 1n, stake, deadline, payoutA, coinKeyA);
-      sim.call("acceptWager", psB(), 0n, payoutB, coinKeyB);
+      fund(psA(), stake + feeFor(stake));
+      fund(psB(), stake + feeFor(stake));
+      sim.call("createWager", psA(), bindingB, 1n, stake, deadline, coinKeyA);
+      sim.call("acceptWager", psB(), 0n, coinKeyB);
       return 0n;
     };
 
@@ -276,8 +405,10 @@ describe("stride contract", () => {
         sim.call("submitWorkout", privateStateWith(psA(), att), id0, vaultKey, 12345n),
       ).toThrow("Workout already counted in this wager");
 
-      sim.call("createWager", psA(), bindingB, 1n, 1000n, nowSeconds() + 3600n, payoutA, coinKeyA);
-      sim.call("acceptWager", psB(), 1n, payoutB, coinKeyB);
+      fund(psA(), 1000n + feeFor(1000n));
+      fund(psB(), 1000n + feeFor(1000n));
+      sim.call("createWager", psA(), bindingB, 1n, 1000n, nowSeconds() + 3600n, coinKeyA);
+      sim.call("acceptWager", psB(), 1n, coinKeyB);
       sim.call("submitWorkout", privateStateWith(psA(), att), 1n, vaultKey, 12345n);
       expect(sim.ledgerView().wagers.lookup(1n).challengerSubmission.is_some).toBe(true);
     });
@@ -300,10 +431,12 @@ describe("stride contract", () => {
     });
   });
 
-  describe("settleWager (real payouts + winner NFT)", () => {
+  describe("settleWager (points payouts + winner NFT)", () => {
     const wagerFixture = (stake = 1000n, deadline = nowSeconds() + 3600n) => {
-      sim.call("createWager", psA(), bindingB, 1n, stake, deadline, payoutA, coinKeyA);
-      sim.call("acceptWager", psB(), 0n, payoutB, coinKeyB);
+      fund(psA(), stake + feeFor(stake));
+      fund(psB(), stake + feeFor(stake));
+      sim.call("createWager", psA(), bindingB, 1n, stake, deadline, coinKeyA);
+      sim.call("acceptWager", psB(), 0n, coinKeyB);
       return 0n;
     };
 
@@ -333,7 +466,7 @@ describe("stride contract", () => {
       sim.call("settleWager", { ...psA(), wagerOpenings: [v1, r1, v2, r2] }, 0n);
     };
 
-    it("pays the winner the whole pot (2x stake) and mints the winner NFT", () => {
+    it("credits the winner the whole pot (2x stake) and mints the winner NFT", () => {
       wagerFixture();
       const a = vaultCredential(
         holderA,
@@ -346,14 +479,15 @@ describe("stride contract", () => {
       const ra = submitAs(holderA, a.att, a.vaultKey, 15000n, 0n);
       const rb = submitAs(holderB, b.att, b.vaultKey, 9000n, 0n);
       settleWith(15000n, ra, 9000n, rb);
-      expect(sim.unshieldedOutputSum()).toBe(2000n);
+      expect(balanceOf(bindingA)).toBe(2000n);
+      expect(balanceOf(bindingB)).toBe(0n);
       const mints = sim.shieldedMints();
       expect(mints.size).toBe(1);
       expect([...mints.values()][0]).toBe(1n);
       expect(sim.ledgerView().wagers.lookup(0n).settled).toBe(true);
     });
 
-    it("refunds both on a tie and mints no NFT", () => {
+    it("refunds both stakes on a tie and mints no NFT", () => {
       wagerFixture();
       const a = vaultCredential(
         holderA,
@@ -366,7 +500,8 @@ describe("stride contract", () => {
       const ra = submitAs(holderA, a.att, a.vaultKey, 10000n, 0n);
       const rb = submitAs(holderB, b.att, b.vaultKey, 10000n, 0n);
       settleWith(10000n, ra, 10000n, rb);
-      expect(sim.unshieldedOutputSum()).toBe(2000n);
+      expect(balanceOf(bindingA)).toBe(1000n);
+      expect(balanceOf(bindingB)).toBe(1000n);
       expect(sim.shieldedMints().size).toBe(0);
       expect(sim.ledgerView().wagers.lookup(0n).settled).toBe(true);
     });
@@ -377,7 +512,7 @@ describe("stride contract", () => {
       submitAs(holderA, a.att, a.vaultKey, 12345n, 0n);
       afterDeadline();
       sim.call("settleWager", psA(), 0n);
-      expect(sim.unshieldedOutputSum()).toBe(2000n);
+      expect(balanceOf(bindingA)).toBe(2000n);
       const mints = sim.shieldedMints();
       expect(mints.size).toBe(1);
       expect([...mints.values()][0]).toBe(1n);
@@ -387,7 +522,8 @@ describe("stride contract", () => {
       wagerFixture();
       afterDeadline();
       sim.call("settleWager", psA(), 0n);
-      expect(sim.unshieldedOutputSum()).toBe(2000n);
+      expect(balanceOf(bindingA)).toBe(1000n);
+      expect(balanceOf(bindingB)).toBe(1000n);
       expect(sim.shieldedMints().size).toBe(0);
     });
 
@@ -400,8 +536,10 @@ describe("stride contract", () => {
       const firstMint = sim.shieldedMints();
 
       sim.now = null; // back to real time for the second wager's creation
-      sim.call("createWager", psA(), bindingB, 1n, 1000n, nowSeconds() + 3600n, payoutA, coinKeyA);
-      sim.call("acceptWager", psB(), 1n, payoutB, coinKeyB);
+      fund(psA(), 1000n + feeFor(1000n));
+      fund(psB(), 1000n + feeFor(1000n));
+      sim.call("createWager", psA(), bindingB, 1n, 1000n, nowSeconds() + 3600n, coinKeyA);
+      sim.call("acceptWager", psB(), 1n, coinKeyB);
       const a2 = vaultCredential(holderA);
       submitAs(holderA, a2.att, a2.vaultKey, 12345n, 1n);
       afterDeadline();
@@ -425,6 +563,7 @@ describe("stride contract", () => {
     // got a chance to submit and lost their stake to a forfeit. createWager
     // now requires a future deadline, so the exploit is closed at the root.
     it("AUDIT: rejects creating a wager whose deadline has already passed", () => {
+      fund(psA(), 1000n + feeFor(1000n));
       expect(() =>
         sim.call(
           "createWager",
@@ -433,21 +572,24 @@ describe("stride contract", () => {
           1n,
           1000n,
           nowSeconds() - 10000n,
-          payoutA,
           coinKeyA,
         ),
       ).toThrow("Deadline must be in the future");
     });
 
     it("rejects accepting after the deadline (wager closed)", () => {
-      sim.call("createWager", psA(), bindingB, 1n, 1000n, nowSeconds() + 3600n, payoutA, coinKeyA);
+      fund(psA(), 1000n + feeFor(1000n));
+      fund(psB(), 1000n + feeFor(1000n));
+      sim.call("createWager", psA(), bindingB, 1n, 1000n, nowSeconds() + 3600n, coinKeyA);
       sim.now = Number(nowSeconds()) + 3700;
-      expect(() => sim.call("acceptWager", psB(), 0n, payoutB, coinKeyB)).toThrow("Wager closed");
+      expect(() => sim.call("acceptWager", psB(), 0n, coinKeyB)).toThrow("Wager closed");
     });
 
     it("rejects submitting after the deadline (auction closed)", () => {
-      sim.call("createWager", psA(), bindingB, 1n, 1000n, nowSeconds() + 3600n, payoutA, coinKeyA);
-      sim.call("acceptWager", psB(), 0n, payoutB, coinKeyB);
+      fund(psA(), 1000n + feeFor(1000n));
+      fund(psB(), 1000n + feeFor(1000n));
+      sim.call("createWager", psA(), bindingB, 1n, 1000n, nowSeconds() + 3600n, coinKeyA);
+      sim.call("acceptWager", psB(), 0n, coinKeyB);
       const a = vaultCredential(holderA);
       submitAs(holderA, a.att, a.vaultKey, 12345n, 0n);
       // a different credential, submitted after the deadline
@@ -464,11 +606,12 @@ describe("stride contract", () => {
       submitAs(holderA, a.att, a.vaultKey, 12345n, 0n);
       sim.now = Number(nowSeconds()) + 3700;
       sim.call("settleWager", psA(), 0n);
-      expect(sim.unshieldedOutputSum()).toBe(2000n);
+      expect(balanceOf(bindingA)).toBe(2000n);
       expect(sim.ledgerView().wagers.lookup(0n).settled).toBe(true);
     });
 
     it("rejects a self-challenge (opponent == challenger)", () => {
+      fund(psA(), 1000n + feeFor(1000n));
       expect(() =>
         sim.call(
           "createWager",
@@ -477,7 +620,6 @@ describe("stride contract", () => {
           1n,
           1000n,
           nowSeconds() + 3600n,
-          payoutA,
           coinKeyA,
         ),
       ).toThrow("Cannot challenge yourself");
@@ -492,7 +634,6 @@ describe("stride contract", () => {
           1n,
           9223372036854775808n,
           nowSeconds() + 3600n,
-          payoutA,
           coinKeyA,
         ),
       ).toThrow("Stake too large");

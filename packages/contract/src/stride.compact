@@ -26,15 +26,9 @@ export struct Wager {
     challengerSubmission: Maybe<Bytes<32>>;
     opponentSubmission: Maybe<Bytes<32>>;
     settled: Boolean;
-    // Real-money payout routing, fixed at create/accept (contract law: settle
-    // pays ONLY these stored values — no caller-supplied payout args).
-    // 32-byte UserAddress payloads (encodeUserAddress of the wallet's
-    // unshielded address) — NOT bech32m (96-byte) strings: the kernel's
-    // sendUnshielded requires a UserAddress struct, which cannot be decoded
-    // from bech32m in-circuit.
-    challengerPayout: Bytes<32>;
-    opponentPayout: Bytes<32>;
-    challengerCoinKey: ZswapCoinPublicKey; // shielded NFT recipient (winner's coin key)
+    // Winner NFT recipients, fixed at create/accept (contract law: settle
+    // mints ONLY to these stored coin keys — no caller-supplied args).
+    challengerCoinKey: ZswapCoinPublicKey;
     opponentCoinKey: ZswapCoinPublicKey;
 }
 
@@ -53,6 +47,27 @@ export ledger streaks: Map<Field, Streak>;
 export ledger badges: Map<Field, Set<Uint<8>>>;
 export ledger nftCounter: Counter;
 export ledger nftNonce: Bytes<32>;
+// Shielded points + treasury (Phase A v3 — no unshielded tokens anywhere):
+//   treasuryKey = admin-set shielded coin key; every deposit passes the
+//                 received NIGHT straight through to it (sendImmediateShielded
+//                 spends only same-transaction coins — the contract never
+//                 holds value across txs).
+//   balances   = internal points per holder binding; wagers debit/credit
+//                points only, so no UTXOs move in-game (amounts are public
+//                per pseudonymous binding — hidden balance commitments are
+//                the ShieldedERC20-tier, which OpenZeppelin archived as
+//                "DO NOT USE IN PRODUCTION"; internal accounts keep the
+//                contract as the spend-enforcement authority instead).
+//   payoutKeys = the user's shielded coin key, registered at first deposit
+//                and pinned as the ONLY withdrawal recipient (the admin can
+//                stall but never redirect a payout).
+// Trust model: the treasury is custodial by construction (the admin wallet
+// holds the NIGHT and initiates withdrawals). Scale-up path to
+// user-initiated/trustless withdrawal: txpipe-shop/midnight-reference-app#49
+// (sponsor-service operator + indexer integration + tx-merge).
+export ledger treasuryKey: ZswapCoinPublicKey;
+export ledger balances: Map<Field, Uint<64>>;
+export ledger payoutKeys: Map<Field, ZswapCoinPublicKey>;
 
 witness adminSecretKey(): Bytes<32>;
 witness getHolderSecret(): Bytes<32>;
@@ -157,8 +172,6 @@ circuit markSettled(wager: Wager): Wager {
         challengerSubmission: wager.challengerSubmission,
         opponentSubmission: wager.opponentSubmission,
         settled: true,
-        challengerPayout: wager.challengerPayout,
-        opponentPayout: wager.opponentPayout,
         challengerCoinKey: wager.challengerCoinKey,
         opponentCoinKey: wager.opponentCoinKey
     };
@@ -184,23 +197,100 @@ circuit mintWinnerNft(winnerCoinKey: ZswapCoinPublicKey): [] {
     nftNonce = newNonce;
 }
 
-// Send unshielded NIGHT out of the contract's escrowed pot to a user address.
-circuit sendPayout(amount: Uint<64>, to: Bytes<32>): [] {
-    sendUnshielded(
-        nativeToken(),
-        disclose(amount) as Uint<128>,
-        right<ContractAddress, UserAddress>(UserAddress { bytes: disclose(to) })
-    );
+// --- Points accounting (shielded treasury, Phase A v3) ----------------------
+// Platform fee: 2% of the stake, charged at create/accept and credited to
+// the admin binding. Never refunded (cancel/tie return only the stake).
+circuit entryFee(stake: Uint<64>): Uint<64> {
+    return stake / 50;
 }
 
-// Winner takes the whole pot (2 * stake) + the winner NFT.
-circuit payWinnerPot(payout: Bytes<32>, coinKey: ZswapCoinPublicKey, stake: Uint<64>): [] {
-    sendPayout((2 * stake) as Uint<64>, payout);
+circuit creditBalance(binding: Field, amount: Uint<64>): [] {
+    const current = balances.member(binding) ? balances.lookup(binding) : 0;
+    balances.insert(disclose(binding), disclose((current + amount) as Uint<64>));
+}
+
+circuit debitBalance(binding: Field, amount: Uint<64>): [] {
+    const current = balances.member(binding) ? balances.lookup(binding) : 0;
+    assert(current >= amount, "Insufficient points");
+    balances.insert(disclose(binding), disclose((current - amount) as Uint<64>));
+}
+
+circuit creditWinner(binding: Field, coinKey: ZswapCoinPublicKey, stake: Uint<64>): [] {
+    creditBalance(binding, (2 * stake) as Uint<64>);
     mintWinnerNft(coinKey);
 }
 
-circuit refundPlayer(payout: Bytes<32>, stake: Uint<64>): [] {
-    sendPayout(stake, payout);
+// Pin the shielded treasury key (the deposit passthrough target). Admin-only.
+export circuit setTreasuryKey(key: ZswapCoinPublicKey): [] {
+    assert(isAdmin(), "Not the admin");
+    treasuryKey = disclose(key);
+}
+
+// Deposit shielded NIGHT: the caller's wallet offers a coin (ShieldedCoinInfo
+// arg — the wallet spends it as a shielded input addressed to this contract),
+// the SAME transaction passes it straight through to the treasury key, and
+// the caller's internal points balance is credited. coin.value may exceed
+// amount — the change coin returns to the caller (ownPublicKey is
+// prover-supplied; its only safe use is as the recipient of outgoing coins).
+// The whole circuit is a single atomic section (no kernel.checkpoint — the
+// partitioner may place it entirely in the guaranteed or fallible phase).
+export circuit depositPoints(amount: Uint<64>, coin: ShieldedCoinInfo): [] {
+    const caller = deriveHolderBinding(getHolderSecret());
+    const binding = disclose(caller);
+    const publicCoin = disclose(coin);
+    const treasury = disclose(treasuryKey);
+    assert(treasury != default<ZswapCoinPublicKey>, "Treasury not configured");
+    assert(disclose(amount) > 0, "Amount must be positive");
+    assert(publicCoin.color == nativeToken(), "Wrong asset");
+    assert(publicCoin.value >= (amount as Uint<128>), "Coin too small");
+    receiveShielded(publicCoin);
+    const send = sendImmediateShielded(
+        publicCoin,
+        left<ZswapCoinPublicKey, ContractAddress>(treasury),
+        amount as Uint<128>
+    );
+    if (send.change.is_some) {
+        sendImmediateShielded(
+            send.change.value,
+            left<ZswapCoinPublicKey, ContractAddress>(ownPublicKey()),
+            send.change.value.value
+        );
+    }
+    creditBalance(binding, amount);
+    payoutKeys.insert(binding, disclose(ownPublicKey()));
+}
+
+// Admin-initiated withdrawal: the admin wallet offers a treasury coin, the
+// contract checks the user's points balance, debits it, and routes the NIGHT
+// to the user's payout key registered at deposit (pinned — the admin cannot
+// redirect a payout, only stall it). Oversized coins return change to the
+// admin (ownPublicKey — the admin is the caller).
+export circuit withdrawPoints(binding: Field, amount: Uint<64>, coin: ShieldedCoinInfo): [] {
+    assert(isAdmin(), "Not the admin");
+    assert(disclose(amount) > 0, "Amount must be positive");
+    const b = disclose(binding);
+    assert(balances.member(b), "No such account");
+    assert(payoutKeys.member(b), "No payout key — deposit once to register one");
+    const bal = balances.lookup(b);
+    assert(bal >= amount, "Insufficient points");
+    const payoutKey = disclose(payoutKeys.lookup(b));
+    const publicCoin = disclose(coin);
+    assert(publicCoin.color == nativeToken(), "Wrong asset");
+    assert(publicCoin.value >= (amount as Uint<128>), "Coin too small");
+    receiveShielded(publicCoin);
+    const send = sendImmediateShielded(
+        publicCoin,
+        left<ZswapCoinPublicKey, ContractAddress>(payoutKey),
+        amount as Uint<128>
+    );
+    if (send.change.is_some) {
+        sendImmediateShielded(
+            send.change.value,
+            left<ZswapCoinPublicKey, ContractAddress>(ownPublicKey()),
+            send.change.value.value
+        );
+    }
+    balances.insert(b, disclose((bal - amount) as Uint<64>));
 }
 
 // The admin identity is pinned by the constructor at deploy; this circuit
@@ -240,15 +330,14 @@ export circuit blacklistNotary(index: Uint<8>): [] {
     registry = disclose([p0, p1, p2]);
 }
 
-// Real-money wager pot: the caller's wallet spends unshielded NIGHT UTXOs
-// into this contract (receiveUnshielded claims the stake; the transaction's
-// well-formedness rules require the wallet to fund the corresponding output).
+// Wager pot in POINTS: the challenger's internal balance is debited
+// (stake + platform fee) — no tokens move, nothing unshielded touches the
+// chain. The winner NFT recipient (coinKey) is pinned at create.
 export circuit createWager(
     opponentBinding: Field,
     metricId: Uint<8>,
     stake: Uint<64>,
     deadlineBlock: Uint<64>,
-    payout: Bytes<32>,
     coinKey: ZswapCoinPublicKey
 ): [] {
     const caller = deriveHolderBinding(getHolderSecret());
@@ -263,8 +352,11 @@ export circuit createWager(
     assert(disclose(opponentBinding) != binding, "Cannot challenge yourself");
     // Cap the stake so the settle payout (2 * stake) always fits Uint<64>
     // (audit L5) — an uncapped stake makes settle abort and the pot stuck.
+    // (stake + fee <= 2 * stake < 2^64, so the entry debit cannot wrap either.)
     assert(stake <= 0x7fffffffffffffff as Uint<64>, "Stake too large");
-    receiveUnshielded(nativeToken(), disclose(stake) as Uint<128>);
+    const fee = entryFee(stake);
+    debitBalance(binding, (stake + fee) as Uint<64>);
+    creditBalance(adminSecret, fee);
     wagers.insert(disclose(nextWagerId), Wager {
         challenger: binding,
         opponent: disclose(opponentBinding),
@@ -275,15 +367,13 @@ export circuit createWager(
         challengerSubmission: none<Bytes<32>>(),
         opponentSubmission: none<Bytes<32>>(),
         settled: false,
-        challengerPayout: disclose(payout),
-        opponentPayout: default<Bytes<32>>,
         challengerCoinKey: disclose(coinKey),
         opponentCoinKey: default<ZswapCoinPublicKey>
     });
     nextWagerId = (nextWagerId + 1) as Uint<64>;
 }
 
-export circuit acceptWager(id: Uint<64>, payout: Bytes<32>, coinKey: ZswapCoinPublicKey): [] {
+export circuit acceptWager(id: Uint<64>, coinKey: ZswapCoinPublicKey): [] {
     const caller = deriveHolderBinding(getHolderSecret());
     const binding = disclose(caller);
     const wid = disclose(id);
@@ -293,7 +383,9 @@ export circuit acceptWager(id: Uint<64>, payout: Bytes<32>, coinKey: ZswapCoinPu
     assert(!wager.accepted, "Wager already accepted");
     assert(wager.opponent == binding, "Not the opponent");
     assert(blockTimeLt(disclose(wager.deadlineBlock)), "Wager closed");
-    receiveUnshielded(nativeToken(), disclose(wager.stake) as Uint<128>);
+    const fee = entryFee(wager.stake);
+    debitBalance(binding, (wager.stake + fee) as Uint<64>);
+    creditBalance(adminSecret, fee);
     wagers.insert(wid, Wager {
         challenger: wager.challenger,
         opponent: wager.opponent,
@@ -304,15 +396,13 @@ export circuit acceptWager(id: Uint<64>, payout: Bytes<32>, coinKey: ZswapCoinPu
         challengerSubmission: wager.challengerSubmission,
         opponentSubmission: wager.opponentSubmission,
         settled: false,
-        challengerPayout: wager.challengerPayout,
-        opponentPayout: disclose(payout),
         challengerCoinKey: wager.challengerCoinKey,
         opponentCoinKey: disclose(coinKey)
     });
 }
 
-// Refund the challenger's escrowed stake (real NIGHT) if the opponent never
-// accepted. Refunds go to the payout address pinned at create.
+// Refund the challenger's escrowed stake (in points) if the opponent never
+// accepted. The platform fee is retained by the admin.
 export circuit cancelWager(id: Uint<64>): [] {
     const caller = deriveHolderBinding(getHolderSecret());
     const binding = disclose(caller);
@@ -323,7 +413,7 @@ export circuit cancelWager(id: Uint<64>): [] {
     assert(!wager.accepted, "Wager already accepted");
     assert(!wager.settled, "Wager settled");
     wagers.remove(wid);
-    sendPayout(wager.stake, wager.challengerPayout);
+    creditBalance(binding, wager.stake);
 }
 
 export circuit verifyAttestation(): [] {
@@ -393,8 +483,6 @@ export circuit submitWorkout(wagerId: Uint<64>, vaultKey: Bytes<32>, value: Uint
             challengerSubmission: some<Bytes<32>>(sealedValue),
             opponentSubmission: wager.opponentSubmission,
             settled: false,
-            challengerPayout: wager.challengerPayout,
-            opponentPayout: wager.opponentPayout,
             challengerCoinKey: wager.challengerCoinKey,
             opponentCoinKey: wager.opponentCoinKey
         }
@@ -408,18 +496,16 @@ export circuit submitWorkout(wagerId: Uint<64>, vaultKey: Bytes<32>, value: Uint
             challengerSubmission: wager.challengerSubmission,
             opponentSubmission: some<Bytes<32>>(sealedValue),
             settled: false,
-            challengerPayout: wager.challengerPayout,
-            opponentPayout: wager.opponentPayout,
             challengerCoinKey: wager.challengerCoinKey,
             opponentCoinKey: wager.opponentCoinKey
         };
     wagers.insert(wid, updated);
 }
 
-// Settle pays the stored payouts ONLY (no caller-supplied payout args — the
-// routing pinned at create/accept cannot be tampered with at settle). Winner
-// takes 2 * stake + the winner NFT; tie/none refund both; forfeit pays the
-// single submitter. The VM enforces that the escrowed pot covers the sends.
+// Settle pays the winner's POINTS balance (2 * stake) — no token movement,
+// no caller-supplied payout args. Winner takes 2 * stake + the winner NFT;
+// tie/none refund both stakes; forfeit pays the single submitter. The
+// platform fee was collected at create/accept and is never refunded.
 export circuit settleWager(id: Uint<64>): [] {
     const wid = disclose(id);
     assert(wagers.member(wid), "No such wager");
@@ -434,20 +520,20 @@ export circuit settleWager(id: Uint<64>): [] {
         assert(persistentCommit<Field>(v2, r2) == wager.opponentSubmission.value,
                "Bad opponent opening");
         if ((disclose(v1) as Uint<64>) > (disclose(v2) as Uint<64>)) {
-            payWinnerPot(wager.challengerPayout, wager.challengerCoinKey, wager.stake);
+            creditWinner(wager.challenger, wager.challengerCoinKey, wager.stake);
         } else if ((disclose(v2) as Uint<64>) > (disclose(v1) as Uint<64>)) {
-            payWinnerPot(wager.opponentPayout, wager.opponentCoinKey, wager.stake);
+            creditWinner(wager.opponent, wager.opponentCoinKey, wager.stake);
         } else {
-            refundPlayer(wager.challengerPayout, wager.stake);
-            refundPlayer(wager.opponentPayout, wager.stake);
+            creditBalance(wager.challenger, wager.stake);
+            creditBalance(wager.opponent, wager.stake);
         }
     } else if (wager.challengerSubmission.is_some) {
-        payWinnerPot(wager.challengerPayout, wager.challengerCoinKey, wager.stake);
+        creditWinner(wager.challenger, wager.challengerCoinKey, wager.stake);
     } else if (wager.opponentSubmission.is_some) {
-        payWinnerPot(wager.opponentPayout, wager.opponentCoinKey, wager.stake);
+        creditWinner(wager.opponent, wager.opponentCoinKey, wager.stake);
     } else {
-        refundPlayer(wager.challengerPayout, wager.stake);
-        refundPlayer(wager.opponentPayout, wager.stake);
+        creditBalance(wager.challenger, wager.stake);
+        creditBalance(wager.opponent, wager.stake);
     }
     wagers.insert(wid, markSettled(wager));
 }
