@@ -159,19 +159,20 @@
             <div class="receipt receipt--primary">
               <h3>Live wager, real value, both ledgers</h3>
               <p class="rline">A <b>3,545 m</b> vs B <b>2,426 m</b> · stake <b>10 NIGHT</b> each</p>
+              <p class="rline">sealed A <code class="hash">91f59aa0…</code> · B <code class="hash">3c105361…</code></p>
               <p class="rline">settle tx <code class="hash">fe0ca996…</code> → pot <b>20 NIGHT</b> to A</p>
               <div class="deltas">
                 <div class="delta delta--win"><span class="who">A</span><span class="val">248 → 258</span></div>
                 <div class="delta delta--lose"><span class="who">B</span><span class="val">250 → 240</span></div>
               </div>
               <p class="rfoot">prior E2E on <code class="hash">cf80ad42…</code> · measured on-chain</p>
-              <p class="rline">winner NFT <code class="hash">91f59aa0…</code> minted to A’s <b>shielded</b> key</p>
+              <p class="rline">winner NFT minted to A’s <b>shielded</b> key</p>
             </div>
             <div class="receipt">
               <h3>Attestation</h3>
               <p class="rline">Real Strava walk <b>3,900 m / 2,942 s</b></p>
-              <p class="rline">→ <code>verifyAttestation</code> <b>18.9 s</b> → tx <code class="hash">3c105361…</code></p>
-              <p class="rline denial"><code>mintBadge(2)</code> → <b>failed assert: Distance below threshold</b></p>
+              <p class="rline">→ <code>verifyAttestation</code> <b>18.9 s</b> → vaulted</p>
+              <p class="rline denial">Tried to mint a badge we hadn’t earned — contract said no.</p>
               <p class="rfoot">current deploy is <code class="hash">f4063dd7…</code></p>
             </div>
           </div>
@@ -224,7 +225,7 @@
           </div>
         </section>
 
-        <!-- =========================================================== 10 -->
+        <!-- ============================================================ 9 -->
         <section data-plan="9">
           <div class="cue">5:50</div>
           <div class="kicker">09 · Nobody has built this here</div>
@@ -236,47 +237,11 @@
           </ul>
         </section>
 
-        <!-- =========================================================== 11 -->
-        <section data-plan="10">
-          <div class="cue">6:10</div>
-          <div class="kicker">10 · Scope</div>
-          <h2>One primitive. Three predicates.</h2>
-          <p class="lead-p">The primitive: a credential provably derived from Strava.</p>
-          <div class="preds">
-            <div class="pred"><span class="pname">wager</span><span class="pdesc">compare two sealed values</span></div>
-            <div class="pred"><span class="pname">streak</span><span class="pdesc">day-continuity</span></div>
-            <div class="pred"><span class="pname">badge</span><span class="pdesc">threshold met</span></div>
-          </div>
-          <div style="height: 2.5em;"></div>
-    
-          <p class="foot">Out of scope on purpose: no token · no bridges · no public testnet yet</p>
-        </section>
-
-        <!-- =========================================================== 12 -->
-        <section data-plan="11">
-          <div class="cue">6:25</div>
-          <div class="kicker">11 · Roadmap</div>
-          <div class="road">
-            <div class="stage stage--now">
-              <span class="when">Now</span>
-              <span class="what"><b>215 tests</b> · live NIGHT wagers · two browser wallets · in-browser OAuth/ZK</span>
-            </div>
-            <div class="stage">
-              <span class="when">Weeks</span>
-              <span class="what">public testnet · hosted notaries · shielded stakes</span>
-            </div>
-            <div class="stage">
-              <span class="when">Months</span>
-              <span class="what">3 independent notaries · Garmin + Apple Health · employer &amp; race trials</span>
-            </div>
-          </div>
-        </section>
-
-        <!-- =========================================================== 13 -->
+        <!-- =========================================================== 10 -->
         <section>
-          <section data-plan="12">
-            <div class="cue">6:45</div>
-            <div class="kicker">12 · Who plays, who pays</div>
+          <section data-plan="10">
+            <div class="cue">6:10</div>
+            <div class="kicker">10 · Who plays, who pays</div>
             <h2>They already pay someone to check the numbers.</h2>
             <div class="two-col">
               <div class="card">
@@ -296,8 +261,8 @@
             <p class="foot">Corporate wellness <b>$55.1B</b> (Grand View, 2025) — we only need the slice that already pays humans to check numbers.</p>
           </section>
 
-          <section data-plan="12a">
-            <div class="kicker">↓ 12a · The counter-evidence, volunteered</div>
+          <section data-plan="10a">
+            <div class="kicker">↓ 10a · The counter-evidence, volunteered</div>
             <ul class="lead">
               <li><b>Illinois Workplace Wellness Study</b> (<em>QJE</em> 2019, RCT, ~5,000 employees): null on <b class="accent">40 of 42</b> outcomes, persisting to 30 months. CIs <b>rule out 84% of previous ROI estimates</b>.</li>
               <li><b>Song &amp; Baicker</b> (<em>JAMA</em> 2019, 32,974 employees): self-reported exercise <b class="accent">+8.3 points</b>, nothing on 10 clinical markers or 38 spending measures.</li>
@@ -305,8 +270,8 @@
             </ul>
           </section>
 
-          <section data-plan="12b">
-            <div class="kicker">↓ 12b · Sizing, honestly</div>
+          <section data-plan="10b">
+            <div class="kicker">↓ 10b · Sizing, honestly</div>
             <ul class="lead">
               <li>HIPAA/ACA permits wellness incentives up to <b>30% of coverage cost</b>.</li>
               <li>Average employer coverage <b>$17,496/employee</b> (Mercer, 2025).</li>
@@ -314,6 +279,42 @@
             </ul>
             <p class="punch">The incentive pool is <span class="accent">one to two orders of magnitude larger</span> than the verification budget.</p>
           </section>
+        </section>
+
+        <!-- =========================================================== 11 -->
+        <section data-plan="11">
+          <div class="cue">6:30</div>
+          <div class="kicker">11 · Scope</div>
+          <h2>One primitive. Three predicates.</h2>
+          <p class="lead-p">The primitive: a credential provably derived from Strava.</p>
+          <div class="preds">
+            <div class="pred"><span class="pname">wager</span><span class="pdesc">compare two sealed values</span></div>
+            <div class="pred"><span class="pname">streak</span><span class="pdesc">day-continuity</span></div>
+            <div class="pred"><span class="pname">badge</span><span class="pdesc">threshold met</span></div>
+          </div>
+          <div style="height: 2.5em;"></div>
+    
+          <p class="foot">Out of scope on purpose: no token · no bridges · no public testnet yet</p>
+        </section>
+
+        <!-- =========================================================== 12 -->
+        <section data-plan="12">
+          <div class="cue">6:45</div>
+          <div class="kicker">12 · Roadmap</div>
+          <div class="road">
+            <div class="stage stage--now">
+              <span class="when">Now</span>
+              <span class="what"><b>215 tests</b> · live NIGHT wagers · two browser wallets · in-browser OAuth/ZK</span>
+            </div>
+            <div class="stage">
+              <span class="when">Weeks</span>
+              <span class="what">public testnet · hosted notaries · shielded stakes</span>
+            </div>
+            <div class="stage">
+              <span class="when">Months</span>
+              <span class="what">3 independent notaries · Garmin + Apple Health · employer &amp; race trials</span>
+            </div>
+          </div>
         </section>
 
         <!-- =========================================================== 13 -->

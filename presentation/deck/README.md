@@ -40,10 +40,10 @@ is the answer to a question you were asked.** You never press `↓` during the s
 7   What Midnight does          ↓ 7a  Trust model
 8   Sealed is a better game
 9   Nobody has built this here
-10  Scope
-11  Roadmap
-12  Who plays, who pays         ↓ 12a Counter-evidence
-                                ↓ 12b Sizing, honestly
+10  Who plays, who pays         ↓ 10a Counter-evidence
+                                ↓ 10b Sizing, honestly
+11  Scope
+12  Roadmap
 13  Close
 ```
 

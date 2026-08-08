@@ -1078,15 +1078,19 @@ html[data-theme="light"] .deck-toggle__label[data-when="light"] {
 }
 
 .shot--full {
-  flex: 0 0 auto;
-  width: 100%;
+  margin: 0 auto;
+  text-align: center;
+  align-self: center;
 }
 
-.shot--full img {
-  max-height: 470px;
+/* Override `.reveal .shot img { width: 100% }` so full shots keep native ratio */
+.reveal .shot.shot--full img {
   width: auto;
   max-width: 100%;
+  height: auto;
+  max-height: 480px;
   margin: 0 auto;
+  object-fit: contain;
 }
 
 .shot--full.shot--missing figcaption {
@@ -1095,11 +1099,12 @@ html[data-theme="light"] .deck-toggle__label[data-when="light"] {
 
 .slide-handoff {
   justify-content: center !important;
+  align-items: center !important;
   text-align: center;
 }
 
 .reveal .handoff-line {
-  margin-top: 0.7em;
+  margin-top: 0.55em;
   font-size: 1.5em;
   font-weight: 600;
   max-width: none;
