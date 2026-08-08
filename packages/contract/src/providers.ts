@@ -1,3 +1,4 @@
+import path from "node:path";
 import type { Contract as CompactContract } from "@midnight-ntwrk/compact-js";
 import type { ContractProviders } from "@midnight-ntwrk/midnight-js-contracts";
 import { httpClientProofProvider } from "@midnight-ntwrk/midnight-js-http-client-proof-provider";
@@ -5,7 +6,6 @@ import { indexerPublicDataProvider } from "@midnight-ntwrk/midnight-js-indexer-p
 import { levelPrivateStateProvider } from "@midnight-ntwrk/midnight-js-level-private-state-provider";
 import { NodeZkConfigProvider } from "@midnight-ntwrk/midnight-js-node-zk-config-provider";
 import type { MidnightProvider, WalletProvider } from "@midnight-ntwrk/midnight-js-types";
-import path from "node:path";
 import type { StrideContractType } from "./index.js";
 import { createWalletAndMidnightProvider, type WalletContext } from "./wallet.js";
 
@@ -33,9 +33,7 @@ export const configureProviders = async (
       CompactContract.PrivateState<StrideContractType>
     >({
       privateStateStoreName: privateStateStoreName + "-midnight",
-      privateStoragePasswordProvider: function (): string | Promise<string> {
-        return "MyM1dnightPassword!";
-      },
+      privateStoragePasswordProvider: (): string | Promise<string> => "MyM1dnightPassword!",
       accountId: walletCtx.shieldedSecretKeys.coinPublicKey,
     }),
     publicDataProvider: indexerPublicDataProvider(config.indexer, config.indexerWS),

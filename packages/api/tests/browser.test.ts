@@ -1,23 +1,23 @@
+import { readFileSync } from "node:fs";
+import { createServer } from "node:http";
+import type { AddressInfo } from "node:net";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
+import type { ConnectedAPI } from "@midnight-ntwrk/dapp-connector-api";
 import { getNetworkId } from "@midnight-ntwrk/midnight-js-network-id";
+import { createPrivateState, type PrivateState } from "@witnessfitness/contract";
 // Track 0.1 browser-wallet provider stack tests: provider slot assembly,
 // export→import roundtrip (password-encrypted private state), wrong-password
 // rejection, and joinStrideFromBrowser readState against the devnet indexer
 // (timeboxed; skipped with a note if the devnet is unreachable).
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { createServer } from "node:http";
-import { readFileSync } from "node:fs";
-import { join, dirname } from "node:path";
-import { fileURLToPath } from "node:url";
-import type { AddressInfo } from "node:net";
-import type { ConnectedAPI } from "@midnight-ntwrk/dapp-connector-api";
-import { createPrivateState, type PrivateState } from "@witnessfitness/contract";
 import {
   browserPrivateStateProvider,
   deriveBrowserHolderSecret,
   exportPrivateState,
   importPrivateState,
-  inMemoryPrivateStateProvider,
   initializeProviders,
+  inMemoryPrivateStateProvider,
   joinStrideFromBrowser,
   resetPrivateState,
 } from "../src/browser.js";

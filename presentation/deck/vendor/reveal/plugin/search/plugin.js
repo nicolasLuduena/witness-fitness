@@ -50,7 +50,7 @@ const Plugin = () => {
 
     searchInput.addEventListener(
       "keyup",
-      function (event) {
+      (event) => {
         switch (event.keyCode) {
           case 13:
             event.preventDefault();
@@ -133,17 +133,16 @@ const Plugin = () => {
     var matchRegex = "";
     var matchingSlides = [];
 
-    this.setRegex = function (input) {
+    this.setRegex = (input) => {
       input = input.trim();
       matchRegex = new RegExp("(" + input + ")", "i");
     };
 
-    this.getRegex = function () {
-      return matchRegex
+    this.getRegex = () =>
+      matchRegex
         .toString()
         .replace(/^\/\\b\(|\)\\b\/i$/g, "")
         .replace(/\|/g, " ");
-    };
 
     // recursively apply word highlighting
     this.hiliteWords = function (node) {
@@ -194,7 +193,7 @@ const Plugin = () => {
     };
 
     // remove highlighting
-    this.remove = function () {
+    this.remove = () => {
       var arr = document.getElementsByTagName(hiliteTag);
       var el;
       while (arr.length && (el = arr[0])) {
@@ -221,7 +220,7 @@ const Plugin = () => {
 
       document.addEventListener(
         "keydown",
-        function (event) {
+        (event) => {
           if (event.key == "F" && (event.ctrlKey || event.metaKey)) {
             //Control+Shift+f
             event.preventDefault();

@@ -3,14 +3,16 @@
 // assertion, signs it, and returns { assertion, signature, notaryId }.
 // GET /health and GET /pubkey expose the instance's identity for the demo
 // "3 notary keys" strip.
-import dotenv from "dotenv";
+
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
+import dotenv from "dotenv";
 import { loadConfig, type NotaryConfig } from "./config.js";
 
 dotenv.config({ path: process.env.NOTARY_ENV_FILE ?? ".env" });
-import { normalizeArtifacts, verifyReclaimProof } from "./verify-reclaim.js";
+
 import { buildAssertion, metricLabel } from "./assert.js";
 import { publicKeyOf, secretKeyFromHex, signAssertion } from "./sign.js";
+import { normalizeArtifacts, verifyReclaimProof } from "./verify-reclaim.js";
 
 const readBody = (req: IncomingMessage, maxBytes: number): Promise<string> =>
   new Promise((resolve, reject) => {

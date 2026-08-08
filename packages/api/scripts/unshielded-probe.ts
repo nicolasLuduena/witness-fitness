@@ -4,15 +4,15 @@
 // unshielded offer input/signature counts at every stage, then submits and
 // reports the node-side error. Run: pnpm --filter @witnessfitness/api exec tsx scripts/unshielded-probe.ts
 import { randomBytes } from "node:crypto";
-import { firstValueFrom } from "rxjs";
-import { buildWallet, registerForDustGeneration } from "@witnessfitness/contract/wallet";
-import { configureProviders } from "@witnessfitness/contract/providers";
+import { encodeCoinPublicKey } from "@midnight-ntwrk/ledger-v8";
 import { getNetworkId } from "@midnight-ntwrk/midnight-js-network-id";
 import { UnshieldedAddress } from "@midnight-ntwrk/wallet-sdk-address-format";
-import { encodeCoinPublicKey } from "@midnight-ntwrk/ledger-v8";
+import { configureProviders } from "@witnessfitness/contract/providers";
+import { buildWallet, registerForDustGeneration } from "@witnessfitness/contract/wallet";
+import { firstValueFrom } from "rxjs";
 import {
-  StrideContract,
   createWagerFlow,
+  StrideContract,
   userAddressBytes,
   type WorkoutContext,
 } from "../src/index.js";

@@ -13,9 +13,9 @@ const t = () => {
       };
     return {
       id: "mathjax2",
-      init: function (a) {
+      init: (a) => {
         t = a;
-        let n = t.getConfig().mathjax2 || t.getConfig().math || {},
+        const n = t.getConfig().mathjax2 || t.getConfig().math || {},
           i = { ...e, ...n },
           s =
             (i.mathjax || "https://cdn.jsdelivr.net/npm/mathjax@2/MathJax.js") +
@@ -24,10 +24,10 @@ const t = () => {
         (i.tex2jax = { ...e.tex2jax, ...n.tex2jax }),
           (i.mathjax = i.config = null),
           (function (t, e) {
-            let a = document.querySelector("head"),
+            const a = document.querySelector("head"),
               n = document.createElement("script");
             (n.type = "text/javascript"), (n.src = t);
-            let i = () => {
+            const i = () => {
               "function" == typeof e && (e.call(), (e = null));
             };
             (n.onload = i),
@@ -35,11 +35,11 @@ const t = () => {
                 "loaded" === this.readyState && i();
               }),
               a.appendChild(n);
-          })(s, function () {
+          })(s, () => {
             MathJax.Hub.Config(i),
               MathJax.Hub.Queue(["Typeset", MathJax.Hub, t.getRevealElement()]),
               MathJax.Hub.Queue(t.layout),
-              t.on("slidechanged", function (t) {
+              t.on("slidechanged", (t) => {
                 MathJax.Hub.Queue(["Typeset", MathJax.Hub, t.currentSlide]);
               });
           });
@@ -77,10 +77,10 @@ var a = (Plugin = Object.assign(e(), {
       id: "katex",
       init: function (n) {
         t = n;
-        let i = t.getConfig().katex || {},
+        const i = t.getConfig().katex || {},
           s = { ...e, ...i };
         const { local: o, version: l, extensions: r, ...c } = s;
-        let d = s.local || "https://cdn.jsdelivr.net/npm/katex",
+        const d = s.local || "https://cdn.jsdelivr.net/npm/katex",
           p = s.local ? "" : "@" + s.version,
           u = d + p + "/dist/katex.min.css",
           h = d + p + "/dist/contrib/mhchem.min.js",
@@ -91,10 +91,10 @@ var a = (Plugin = Object.assign(e(), {
           renderMathInElement(n.getSlidesElement(), c), t.layout();
         };
         ((t) => {
-          let e = document.createElement("link");
+          const e = document.createElement("link");
           (e.rel = "stylesheet"), (e.href = t), document.head.appendChild(e);
         })(u),
-          (async function (t) {
+          (async (t) => {
             for (const e of t) await a(e);
           })(m).then(() => {
             t.isReady() ? f() : t.on("ready", f.bind(this));
@@ -124,18 +124,18 @@ var a = (Plugin = Object.assign(e(), {
       };
     return {
       id: "mathjax3",
-      init: function (a) {
+      init: (a) => {
         t = a;
-        let n = t.getConfig().mathjax3 || {},
+        const n = t.getConfig().mathjax3 || {},
           i = { ...e, ...n };
         (i.tex = { ...e.tex, ...n.tex }),
           (i.options = { ...e.options, ...n.options }),
           (i.startup = { ...e.startup, ...n.startup });
-        let s = i.mathjax || "https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js";
+        const s = i.mathjax || "https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js";
         (i.mathjax = null),
           (window.MathJax = i),
-          (function (t, e) {
-            let a = document.createElement("script");
+          ((t, e) => {
+            const a = document.createElement("script");
             (a.type = "text/javascript"),
               (a.id = "MathJax-script"),
               (a.src = t),
@@ -144,8 +144,8 @@ var a = (Plugin = Object.assign(e(), {
                 "function" == typeof e && (e.call(), (e = null));
               }),
               document.head.appendChild(a);
-          })(s, function () {
-            t.addEventListener("slidechanged", function (t) {
+          })(s, () => {
+            t.addEventListener("slidechanged", (t) => {
               MathJax.typeset();
             });
           });
@@ -153,4 +153,5 @@ var a = (Plugin = Object.assign(e(), {
     };
   },
 }));
+
 export { a as default };

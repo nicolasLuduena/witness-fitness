@@ -17,11 +17,12 @@ import { logError } from "./logger";
 
 import type { DemoMode } from "../config";
 import { NETWORK_ID, NOTARY_URLS } from "../config";
+import { ATHLETE_A, BADGES } from "../domain/story";
 import type {
   Athlete,
+  AttestationStage,
   AttestedCredential,
   AttestOutcome,
-  AttestationStage,
   BadgeProof,
   BadgeView,
   ClientSession,
@@ -35,27 +36,8 @@ import type {
   WagerView,
 } from "../domain/types";
 import { metricById } from "../domain/types";
-import { ATHLETE_A, BADGES } from "../domain/story";
-import { displayHash, hexShort } from "./format";
-import { notaryHealth } from "./notary-api";
-import { connectWallet, type WalletConnection } from "./wallet-connector";
-import {
-  loadWalletBridge,
-  type WalletAttestResult,
-  type WalletMetric,
-  type WalletStrideSession,
-  type WalletWagerRouting,
-  type WalletWagerView,
-} from "./wallet-bridge";
-import {
-  badgeViewsFrom,
-  credentialFromVaultEntry,
-  streakViewFrom,
-  vaultEntriesOf,
-} from "./state-mappers";
-import type { WfClient } from "./wf-client";
 import { attestStrava, proofToNotaryArtifacts } from "./attest/attest-browser";
-import { athleteIdentityFromExchange, type AthleteIdentity } from "./attest/identity";
+import { type AthleteIdentity, athleteIdentityFromExchange } from "./attest/identity";
 import {
   buildAuthUrl,
   emptyAccountGuard,
@@ -64,13 +46,31 @@ import {
   localStorageTokenStore,
   parseAuthCallback,
 } from "./attest/strava";
+import { displayHash, hexShort } from "./format";
+import { notaryHealth } from "./notary-api";
 import {
-  OPENING_RELAY_TIMEOUT,
+  badgeViewsFrom,
+  credentialFromVaultEntry,
+  streakViewFrom,
+  vaultEntriesOf,
+} from "./state-mappers";
+import {
   getWagerOpenings,
   hexOf as hexOfBigint,
+  OPENING_RELAY_TIMEOUT,
   postWagerOpening,
   waitForBothOpenings,
 } from "./wager-relay";
+import {
+  loadWalletBridge,
+  type WalletAttestResult,
+  type WalletMetric,
+  type WalletStrideSession,
+  type WalletWagerRouting,
+  type WalletWagerView,
+} from "./wallet-bridge";
+import { connectWallet, type WalletConnection } from "./wallet-connector";
+import type { WfClient } from "./wf-client";
 
 // Typed flow error the UI can branch on (Strava panel states).
 export class StravaFlowError extends Error {

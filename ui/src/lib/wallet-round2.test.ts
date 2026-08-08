@@ -28,10 +28,10 @@ const storageBacking = new Map<string, string>();
 };
 
 import type { ConnectedAPI, InitialAPI } from "@midnight-ntwrk/dapp-connector-api";
-import { createStubWalletBridge, type WalletBridge } from "./wallet-bridge";
-import { StravaFlowError, WalletClient } from "./wallet-client";
 import { attestStrava } from "./attest/attest-browser";
 import { localStorageTokenStore } from "./attest/strava";
+import { createStubWalletBridge, type WalletBridge } from "./wallet-bridge";
+import { StravaFlowError, WalletClient } from "./wallet-client";
 
 // A REAL bech32m unshielded address for the 'undeployed' network (32 bytes of
 // 0x07 — precomputed with UnshieldedAddress.codec.encode; hardcoded because

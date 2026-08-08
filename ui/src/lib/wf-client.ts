@@ -6,6 +6,7 @@
 // notary instances (8101-8103) → ≥2 signatures → contract via chain.ts.
 // Fixture mode = the same pipeline simulated in-memory, offline, deterministic.
 
+import type { DemoMode } from "../config";
 import type {
   AttestedCredential,
   AttestOutcome,
@@ -18,7 +19,6 @@ import type {
   WagerSettleResult,
   WagerView,
 } from "../domain/types";
-import type { DemoMode } from "../config";
 
 export type { AttestOutcome } from "../domain/types";
 

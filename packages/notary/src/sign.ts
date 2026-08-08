@@ -5,12 +5,12 @@
 import { randomBytes } from "node:crypto";
 import { ecMulGenerator } from "@midnight-ntwrk/compact-runtime";
 import {
-  JUBJUB_ORDER,
+  type A_Assertion,
   derivePublicKey,
   encodeAssertion,
-  schnorrChallenge,
-  type A_Assertion,
+  JUBJUB_ORDER,
   type SchnorrSignature,
+  schnorrChallenge,
 } from "@witnessfitness/contract";
 
 const TWO_248 = 1n << 248n;

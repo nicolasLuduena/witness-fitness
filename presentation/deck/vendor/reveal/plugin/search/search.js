@@ -1,11 +1,10 @@
-!(function (e, t) {
+!((e, t) => {
   "object" == typeof exports && "undefined" != typeof module
     ? (module.exports = t())
     : "function" == typeof define && define.amd
       ? define(t)
       : ((e = "undefined" != typeof globalThis ? globalThis : e || self).RevealSearch = t());
-})(this, function () {
-  "use strict";
+})(this, () => {
   /*!
    * Handles finding a text string anywhere in the slides and showing the next occurrence to the user
    * by navigatating to that slide and highlighting it.
@@ -36,10 +35,10 @@
         e.getRevealElement().appendChild(t),
         n.addEventListener(
           "keyup",
-          function (t) {
+          (t) => {
             if (13 === t.keyCode)
               t.preventDefault(),
-                (function () {
+                (() => {
                   if (l) {
                     var t = n.value;
                     "" === t
@@ -75,15 +74,14 @@
         a = 0,
         d = "",
         c = [];
-      (this.setRegex = function (e) {
+      (this.setRegex = (e) => {
         (e = e.trim()), (d = new RegExp("(" + e + ")", "i"));
       }),
-        (this.getRegex = function () {
-          return d
+        (this.getRegex = () =>
+          d
             .toString()
             .replace(/^\/\\b\(|\)\\b\/i$/g, "")
-            .replace(/\|/g, " ");
-        }),
+            .replace(/\|/g, " ")),
         (this.hiliteWords = function (t) {
           if (null != t && t && d && !l.test(t.nodeName)) {
             if (t.hasChildNodes())
@@ -108,7 +106,7 @@
               }
           }
         }),
-        (this.remove = function () {
+        (this.remove = () => {
           for (var e, t = document.getElementsByTagName(i); t.length && (e = t[0]); )
             e.parentNode.replaceChild(e.firstChild, e);
         }),
@@ -123,7 +121,7 @@
           e.registerKeyboardShortcut("CTRL + Shift + F", "Search"),
           document.addEventListener(
             "keydown",
-            function (e) {
+            (e) => {
               "F" == e.key && (e.ctrlKey || e.metaKey) && (e.preventDefault(), c());
             },
             !1,

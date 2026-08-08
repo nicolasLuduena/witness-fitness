@@ -3,10 +3,10 @@
 // while the streak data stays sealed).
 
 import { useState } from "react";
-import { useDemo } from "../state/DemoStore";
 import { Button, Card, Chip, Modal, Notice } from "../components/bits";
 import { EMPLOYER } from "../domain/story";
 import { logError } from "../lib/logger";
+import { useDemo } from "../state/DemoStore";
 
 export const StreaksScreen = () => {
   const { streak, badges, session, advanceStreak, mintBadge, proveBadge } = useDemo();
@@ -291,8 +291,13 @@ const EmployerModal = ({
 
       <div style={{ marginTop: 16 }}>
         <div className="field">
-          <label>Verifier identity (binding)</label>
-          <input className="input" value={verifier} onChange={(e) => setVerifier(e.target.value)} />
+          <label htmlFor="verifier-binding">Verifier identity (binding)</label>
+          <input
+            id="verifier-binding"
+            className="input"
+            value={verifier}
+            onChange={(e) => setVerifier(e.target.value)}
+          />
         </div>
         <div className="row-between">
           <Button tone="ghost" onClick={onClose}>

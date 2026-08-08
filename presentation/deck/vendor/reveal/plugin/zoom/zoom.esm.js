@@ -3,8 +3,8 @@
  */
 const e = {
   id: "zoom",
-  init: function (e) {
-    e.getRevealElement().addEventListener("mousedown", function (t) {
+  init: (e) => {
+    e.getRevealElement().addEventListener("mousedown", (t) => {
       var n = /Linux/.test(window.navigator.platform) ? "ctrl" : "alt",
         i = (e.getConfig().zoomKey ? e.getConfig().zoomKey : n) + "Key",
         d = e.getConfig().zoomLevel ? e.getConfig().zoomLevel : 2;
@@ -18,7 +18,7 @@ const e = {
   },
 };
 var t = () => e,
-  o = (function () {
+  o = (() => {
     var e = 1,
       t = 0,
       n = 0,
@@ -81,14 +81,14 @@ var t = () => e,
     }
     return (
       l && (document.body.style.transition = "transform 0.8s ease"),
-      document.addEventListener("keyup", function (t) {
+      document.addEventListener("keyup", (t) => {
         1 !== e && 27 === t.keyCode && o.out();
       }),
-      document.addEventListener("mousemove", function (o) {
+      document.addEventListener("mousemove", (o) => {
         1 !== e && ((t = o.clientX), (n = o.clientY));
       }),
       {
-        to: function (t) {
+        to: (t) => {
           if (1 !== e) o.out();
           else {
             if (((t.x = t.x || 0), (t.y = t.y || 0), t.element)) {
@@ -109,12 +109,12 @@ var t = () => e,
                 (t.y *= t.scale),
                 s(t, t.scale),
                 !1 !== t.pan &&
-                  (i = setTimeout(function () {
+                  (i = setTimeout(() => {
                     d = setInterval(c, 1e3 / 60);
                   }, 800)));
           }
         },
-        out: function () {
+        out: () => {
           clearTimeout(i), clearInterval(d), s({ x: 0, y: 0 }, 1), (e = 1);
         },
         magnify: function (e) {
@@ -123,12 +123,11 @@ var t = () => e,
         reset: function () {
           this.out();
         },
-        zoomLevel: function () {
-          return e;
-        },
+        zoomLevel: () => e,
       }
     );
   })();
+
 /*!
  * zoom.js 0.3 (modified for use with reveal.js)
  * http://lab.hakim.se/zoom-js

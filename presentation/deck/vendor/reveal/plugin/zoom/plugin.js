@@ -4,8 +4,8 @@
 const Plugin = {
   id: "zoom",
 
-  init: function (reveal) {
-    reveal.getRevealElement().addEventListener("mousedown", function (event) {
+  init: (reveal) => {
+    reveal.getRevealElement().addEventListener("mousedown", (event) => {
       var defaultModifier = /Linux/.test(window.navigator.platform) ? "ctrl" : "alt";
 
       var modifier =
@@ -39,7 +39,7 @@ export default () => Plugin;
  *
  * Copyright (C) 2011-2014 Hakim El Hattab, http://hakim.se
  */
-var zoom = (function () {
+var zoom = (() => {
   // The current zoom level (scale)
   var level = 1;
 
@@ -60,14 +60,14 @@ var zoom = (function () {
   }
 
   // Zoom out if the user hits escape
-  document.addEventListener("keyup", function (event) {
+  document.addEventListener("keyup", (event) => {
     if (level !== 1 && event.keyCode === 27) {
       zoom.out();
     }
   });
 
   // Monitor mouse movement for panning
-  document.addEventListener("mousemove", function (event) {
+  document.addEventListener("mousemove", (event) => {
     if (level !== 1) {
       mouseX = event.clientX;
       mouseY = event.clientY;
@@ -190,7 +190,7 @@ var zoom = (function () {
      *   - width/height: the portion of the screen to zoom in on
      *   - scale: can be used instead of width/height to explicitly set scale
      */
-    to: function (options) {
+    to: (options) => {
       // Due to an implementation limitation we can't zoom in
       // to another element without zooming out first
       if (level !== 1) {
@@ -200,7 +200,7 @@ var zoom = (function () {
         options.y = options.y || 0;
 
         // If an element is set, that takes precedence
-        if (!!options.element) {
+        if (options.element) {
           // Space around the zoomed in element to leave on screen
           var padding = 20;
           var bounds = options.element.getBoundingClientRect();
@@ -228,7 +228,7 @@ var zoom = (function () {
           if (options.pan !== false) {
             // Wait with engaging panning as it may conflict with the
             // zoom transition
-            panEngageTimeout = setTimeout(function () {
+            panEngageTimeout = setTimeout(() => {
               panUpdateInterval = setInterval(pan, 1000 / 60);
             }, 800);
           }
@@ -239,7 +239,7 @@ var zoom = (function () {
     /**
      * Resets the document zoom state to its default.
      */
-    out: function () {
+    out: () => {
       clearTimeout(panEngageTimeout);
       clearInterval(panUpdateInterval);
 
@@ -256,8 +256,6 @@ var zoom = (function () {
       this.out();
     },
 
-    zoomLevel: function () {
-      return level;
-    },
+    zoomLevel: () => level,
   };
 })();

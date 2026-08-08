@@ -1,4 +1,4 @@
-import { WitnessContext } from "@midnight-ntwrk/compact-runtime";
+import type { WitnessContext } from "@midnight-ntwrk/compact-runtime";
 import type {
   A_Assertion,
   Ledger,

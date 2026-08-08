@@ -5,8 +5,8 @@
 // This test drives adaptStrideSession against MOCKED api/browser+api+contract
 // modules and asserts the shapes the real flow functions receive.
 
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ConnectedAPI } from "@midnight-ntwrk/dapp-connector-api";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { adaptStrideSession, type WalletStrideSession } from "./wallet-bridge";
 
 const mocks = vi.hoisted(() => {

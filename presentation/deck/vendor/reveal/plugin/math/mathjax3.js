@@ -9,7 +9,7 @@ export const MathJax3 = () => {
   // The reveal.js instance this plugin is attached to
   let deck;
 
-  let defaultOptions = {
+  const defaultOptions = {
     tex: {
       inlineMath: [
         ["$", "$"],
@@ -30,7 +30,7 @@ export const MathJax3 = () => {
   };
 
   function loadScript(url, callback) {
-    let script = document.createElement("script");
+    const script = document.createElement("script");
     script.type = "text/javascript";
     script.id = "MathJax-script";
     script.src = url;
@@ -49,23 +49,23 @@ export const MathJax3 = () => {
 
   return {
     id: "mathjax3",
-    init: function (reveal) {
+    init: (reveal) => {
       deck = reveal;
 
-      let revealOptions = deck.getConfig().mathjax3 || {};
-      let options = { ...defaultOptions, ...revealOptions };
+      const revealOptions = deck.getConfig().mathjax3 || {};
+      const options = { ...defaultOptions, ...revealOptions };
       options.tex = { ...defaultOptions.tex, ...revealOptions.tex };
       options.options = { ...defaultOptions.options, ...revealOptions.options };
       options.startup = { ...defaultOptions.startup, ...revealOptions.startup };
 
-      let url = options.mathjax || "https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js";
+      const url = options.mathjax || "https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js";
       options.mathjax = null;
 
       window.MathJax = options;
 
-      loadScript(url, function () {
+      loadScript(url, () => {
         // Reprocess equations in slides when they turn visible
-        deck.addEventListener("slidechanged", function (event) {
+        deck.addEventListener("slidechanged", (event) => {
           MathJax.typeset();
         });
       });

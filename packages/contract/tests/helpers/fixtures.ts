@@ -1,7 +1,7 @@
 import { randomBytes } from "node:crypto";
-import { pureCircuits } from "../../src/managed/stride/contract/index.js";
 import type { A_Assertion } from "../../src/managed/stride/contract/index.js";
-import { derivePublicKey, signAssertion, type SchnorrSignature } from "../../src/offchain.js";
+import { pureCircuits } from "../../src/managed/stride/contract/index.js";
+import { derivePublicKey, type SchnorrSignature, signAssertion } from "../../src/offchain.js";
 import type { PrivateState } from "../../src/private-state.js";
 
 export const nowSeconds = (): bigint => BigInt(Math.floor(Date.now() / 1000));

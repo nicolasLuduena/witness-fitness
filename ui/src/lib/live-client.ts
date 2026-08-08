@@ -16,11 +16,12 @@
 
 import type { DemoMode } from "../config";
 import { NOTARY_URLS, SIDECAR_URL } from "../config";
+import { ATHLETE_A, ATHLETE_B, ATTESTATION_LOG, BADGES } from "../domain/story";
 import type {
   Athlete,
+  AttestationStage,
   AttestedCredential,
   AttestOutcome,
-  AttestationStage,
   BadgeProof,
   BadgeView,
   ClientSession,
@@ -32,19 +33,18 @@ import type {
   WagerSubmission,
   WagerView,
 } from "../domain/types";
-import { ATHLETE_A, ATHLETE_B, ATTESTATION_LOG, BADGES } from "../domain/story";
-import { displayHash, hexShort } from "./format";
-import { notaryHealth } from "./notary-api";
+import { metricById } from "../domain/types";
 import {
-  joinSidecar,
-  toNumber,
   type ArtifactsPayload,
+  joinSidecar,
   type SidecarHandle,
   type SidecarWagerEntry,
+  toNumber,
 } from "./chain";
-import type { WfClient } from "./wf-client";
+import { displayHash, hexShort } from "./format";
+import { notaryHealth } from "./notary-api";
 import { badgeViewsFrom, credentialFromVaultEntry, streakViewFrom } from "./state-mappers";
-import { metricById } from "../domain/types";
+import type { WfClient } from "./wf-client";
 
 // NIGHT base units on the devnet (api scripts convention: NIGHT = 10^12).
 const NIGHT_BASE = 10n ** 12n;

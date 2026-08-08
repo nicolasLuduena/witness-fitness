@@ -3,9 +3,10 @@
 // identity comes from admin-secret.local (gitignored; written by deploy.ts).
 //   pnpm --filter @witnessfitness/contract run rotate-notaries
 // Requires devnet up + 3 notary instances running (ports 8101-8103).
-import { writeFileSync, readFileSync } from "node:fs";
-import { findDeployedContract } from "@midnight-ntwrk/midnight-js-contracts";
+
 import { randomBytes } from "node:crypto";
+import { readFileSync, writeFileSync } from "node:fs";
+import { findDeployedContract } from "@midnight-ntwrk/midnight-js-contracts";
 import { firstValueFrom, timeout } from "rxjs";
 import {
   CompactCompiledContract,
@@ -13,8 +14,8 @@ import {
   type PrivateState,
   type StrideContractType,
 } from "../src/index.js";
-import { buildWallet, registerForDustGeneration } from "../src/wallet.js";
 import { configureProviders } from "../src/providers.js";
+import { buildWallet, registerForDustGeneration } from "../src/wallet.js";
 
 const INDEXER = process.env.INDEXER_URL ?? "http://127.0.0.1:8088/api/v3/graphql";
 const INDEXER_WS = process.env.INDEXER_WS_URL ?? "ws://127.0.0.1:8088/api/v3/graphql/ws";

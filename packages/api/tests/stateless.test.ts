@@ -3,15 +3,17 @@
 // (deposit/get/isolate/TTL), CORS on the new paths, and the extended /health
 // shape. The stateless endpoints bypass the ready gate, so cold sidecars are
 // used (no wallet init, no fake deps needed).
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+
 import type { AddressInfo } from "node:net";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 // The tests' own HTTP calls must NOT go through the per-test fetch mocks.
 const realFetch = globalThis.fetch;
+
 import {
   createDemoSidecarWithDeps,
-  loadSidecarConfig,
   type DemoSidecarConfig,
+  loadSidecarConfig,
 } from "../src/demo-sidecar.js";
 
 const baseConfig = (overrides: Partial<DemoSidecarConfig> = {}): DemoSidecarConfig => ({

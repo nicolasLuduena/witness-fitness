@@ -2,9 +2,10 @@
 //   pnpm build        (full ZK key generation — required before deploy)
 //   pnpm run deploy   (NOT `pnpm deploy` — collides with a pnpm builtin)
 // Requires devnet: pnpm devnet:up (node 9944, indexer 8088, proof server 6300).
+
+import { randomBytes } from "node:crypto";
 import { writeFileSync } from "node:fs";
 import { deployContract } from "@midnight-ntwrk/midnight-js-contracts";
-import { randomBytes } from "node:crypto";
 import { firstValueFrom, timeout } from "rxjs";
 import {
   CompactCompiledContract,
@@ -12,9 +13,9 @@ import {
   type PrivateState,
   type StrideContractType,
 } from "../src/index.js";
-import { buildWallet, registerForDustGeneration } from "../src/wallet.js";
-import { configureProviders } from "../src/providers.js";
 import { derivePublicKey } from "../src/offchain.js";
+import { configureProviders } from "../src/providers.js";
+import { buildWallet, registerForDustGeneration } from "../src/wallet.js";
 
 const INDEXER = process.env.INDEXER_URL ?? "http://127.0.0.1:8088/api/v3/graphql";
 const INDEXER_WS = process.env.INDEXER_WS_URL ?? "ws://127.0.0.1:8088/api/v3/graphql/ws";

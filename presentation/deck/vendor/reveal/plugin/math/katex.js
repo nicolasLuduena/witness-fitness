@@ -8,7 +8,7 @@
 export const KaTeX = () => {
   let deck;
 
-  let defaultOptions = {
+  const defaultOptions = {
     version: "latest",
     delimiters: [
       { left: "$$", right: "$$", display: true }, // Note: $$ has to come before $
@@ -20,7 +20,7 @@ export const KaTeX = () => {
   };
 
   const loadCss = (src) => {
-    let link = document.createElement("link");
+    const link = document.createElement("link");
     link.rel = "stylesheet";
     link.href = src;
     document.head.appendChild(link);
@@ -53,20 +53,20 @@ export const KaTeX = () => {
     init: function (reveal) {
       deck = reveal;
 
-      let revealOptions = deck.getConfig().katex || {};
+      const revealOptions = deck.getConfig().katex || {};
 
-      let options = { ...defaultOptions, ...revealOptions };
+      const options = { ...defaultOptions, ...revealOptions };
       const { local, version, extensions, ...katexOptions } = options;
 
-      let baseUrl = options.local || "https://cdn.jsdelivr.net/npm/katex";
-      let versionString = options.local ? "" : "@" + options.version;
+      const baseUrl = options.local || "https://cdn.jsdelivr.net/npm/katex";
+      const versionString = options.local ? "" : "@" + options.version;
 
-      let cssUrl = baseUrl + versionString + "/dist/katex.min.css";
-      let katexUrl = baseUrl + versionString + "/dist/katex.min.js";
-      let mhchemUrl = baseUrl + versionString + "/dist/contrib/mhchem.min.js";
-      let karUrl = baseUrl + versionString + "/dist/contrib/auto-render.min.js";
+      const cssUrl = baseUrl + versionString + "/dist/katex.min.css";
+      const katexUrl = baseUrl + versionString + "/dist/katex.min.js";
+      const mhchemUrl = baseUrl + versionString + "/dist/contrib/mhchem.min.js";
+      const karUrl = baseUrl + versionString + "/dist/contrib/auto-render.min.js";
 
-      let katexScripts = [katexUrl];
+      const katexScripts = [katexUrl];
       if (options.extensions && options.extensions.includes("mhchem")) {
         katexScripts.push(mhchemUrl);
       }

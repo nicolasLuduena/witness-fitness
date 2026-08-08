@@ -68,7 +68,7 @@ function h(e) {
         : "",
   );
 }
-const p = /(^|[^\[])\^/g;
+const p = /(^|[^[])\^/g;
 function u(e, t) {
   (e = "string" == typeof e ? e : e.source), (t = t || "");
   const n = {
@@ -92,7 +92,7 @@ function f(e, t, n) {
   }
   t &&
     !d.test(n) &&
-    (n = (function (e, t) {
+    (n = ((e, t) => {
       k[" " + e] || (x.test(e) ? (k[" " + e] = e + "/") : (k[" " + e] = y(e, "/", !0)));
       e = k[" " + e];
       const n = -1 === e.indexOf(":");
@@ -117,7 +117,7 @@ const k = {},
   x = /^[^:]+:\/*[^/]*$/,
   m = /^([^:]+:)[\s\S]*$/,
   b = /^([^:]+:\/*[^/]*)[\s\S]*$/;
-const w = { exec: function () {} };
+const w = { exec: () => {} };
 function _(e, t) {
   const n = e
     .replace(/\|/g, (e, t, n) => {
@@ -156,7 +156,7 @@ function $(e, t) {
 function z(e, t, n, s) {
   const r = t.href,
     i = t.title ? a(t.title) : null,
-    l = e[1].replace(/\\([\[\]])/g, "$1");
+    l = e[1].replace(/\\([[\]])/g, "$1");
   if ("!" !== e[0].charAt(0)) {
     s.state.inLink = !0;
     const e = { type: "link", raw: n, href: r, title: i, text: l, tokens: s.inlineTokens(l) };
@@ -188,7 +188,7 @@ class S {
     const t = this.rules.block.fences.exec(e);
     if (t) {
       const e = t[0],
-        n = (function (e, t) {
+        n = ((e, t) => {
           const n = e.match(/^(\s+)(?:```)/);
           if (null === n) return t;
           const s = n[1];
@@ -465,7 +465,7 @@ class S {
         const t = y(e.slice(0, -1), "\\");
         if ((e.length - t.length) % 2 == 0) return;
       } else {
-        const e = (function (e, t) {
+        const e = ((e, t) => {
           if (-1 === e.indexOf(t[1])) return -1;
           const n = e.length;
           let s = 0,
@@ -637,7 +637,7 @@ const R = {
   _paragraph:
     /^([^\n]+(?:\n(?!hr|heading|lheading|blockquote|fences|list|html|table| +\n)[^\n]+)*)/,
   text: /^[^\n]+/,
-  _label: /(?!\s*\])(?:\\.|[^\[\]\\])+/,
+  _label: /(?!\s*\])(?:\\.|[^[\]\\])+/,
   _title: /(?:"(?:\\"?|[^"\\])*"|'[^'\n]*(?:\n[^'\n]+)*\n?'|\([^()]*\))/,
 };
 (R.def = u(R.def).replace("label", R._label).replace("title", R._title).getRegex()),
@@ -726,7 +726,7 @@ const R = {
       .getRegex(),
   });
 const T = {
-  escape: /^\\([!"#$%&'()*+,\-./:;<=>?@\[\]\\^_`{|}~])/,
+  escape: /^\\([!"#$%&'()*+,\-./:;<=>?@[\]\\^_`{|}~])/,
   autolink: /^<(scheme:[^\s\x00-\x1f<>]*|email)>/,
   url: w,
   tag: "^comment|^</[a-zA-Z][\\w:-]*\\s*>|^<[a-zA-Z][\\w-]*(?:attribute)*?\\s*/?>|^<\\?[\\s\\S]*?\\?>|^<![a-zA-Z]+\\s[\\s\\S]*?>|^<!\\[CDATA\\[[\\s\\S]*?\\]\\]>",
@@ -737,23 +737,23 @@ const T = {
   emStrong: {
     lDelim: /^(?:\*+(?:([punct_])|[^\s*]))|^_+(?:([punct*])|([^\s_]))/,
     rDelimAst:
-      /^(?:[^_*\\]|\\.)*?\_\_(?:[^_*\\]|\\.)*?\*(?:[^_*\\]|\\.)*?(?=\_\_)|(?:[^*\\]|\\.)+(?=[^*])|[punct_](\*+)(?=[\s]|$)|(?:[^punct*_\s\\]|\\.)(\*+)(?=[punct_\s]|$)|[punct_\s](\*+)(?=[^punct*_\s])|[\s](\*+)(?=[punct_])|[punct_](\*+)(?=[punct_])|(?:[^punct*_\s\\]|\\.)(\*+)(?=[^punct*_\s])/,
+      /^(?:[^_*\\]|\\.)*?__(?:[^_*\\]|\\.)*?\*(?:[^_*\\]|\\.)*?(?=__)|(?:[^*\\]|\\.)+(?=[^*])|[punct_](\*+)(?=[\s]|$)|(?:[^punct*_\s\\]|\\.)(\*+)(?=[punct_\s]|$)|[punct_\s](\*+)(?=[^punct*_\s])|[\s](\*+)(?=[punct_])|[punct_](\*+)(?=[punct_])|(?:[^punct*_\s\\]|\\.)(\*+)(?=[^punct*_\s])/,
     rDelimUnd:
-      /^(?:[^_*\\]|\\.)*?\*\*(?:[^_*\\]|\\.)*?\_(?:[^_*\\]|\\.)*?(?=\*\*)|(?:[^_\\]|\\.)+(?=[^_])|[punct*](\_+)(?=[\s]|$)|(?:[^punct*_\s\\]|\\.)(\_+)(?=[punct*\s]|$)|[punct*\s](\_+)(?=[^punct*_\s])|[\s](\_+)(?=[punct*])|[punct*](\_+)(?=[punct*])/,
+      /^(?:[^_*\\]|\\.)*?\*\*(?:[^_*\\]|\\.)*?_(?:[^_*\\]|\\.)*?(?=\*\*)|(?:[^_\\]|\\.)+(?=[^_])|[punct*](_+)(?=[\s]|$)|(?:[^punct*_\s\\]|\\.)(_+)(?=[punct*\s]|$)|[punct*\s](_+)(?=[^punct*_\s])|[\s](_+)(?=[punct*])|[punct*](_+)(?=[punct*])/,
   },
   code: /^(`+)([^`]|[^`][\s\S]*?[^`])\1(?!`)/,
   br: /^( {2,}|\\)\n(?!\s*$)/,
   del: w,
-  text: /^(`+|[^`])(?:(?= {2,}\n)|[\s\S]*?(?:(?=[\\<!\[`*_]|\b_|$)|[^ ](?= {2,}\n)))/,
+  text: /^(`+|[^`])(?:(?= {2,}\n)|[\s\S]*?(?:(?=[\\<![`*_]|\b_|$)|[^ ](?= {2,}\n)))/,
   punctuation: /^([\spunctuation])/,
 };
 function A(e) {
   return e
     .replace(/---/g, "—")
     .replace(/--/g, "–")
-    .replace(/(^|[-\u2014/(\[{"\s])'/g, "$1‘")
+    .replace(/(^|[-\u2014/([{"\s])'/g, "$1‘")
     .replace(/'/g, "’")
-    .replace(/(^|[-\u2014/(\[{\u2018\s])"/g, "$1“")
+    .replace(/(^|[-\u2014/([{\u2018\s])"/g, "$1“")
     .replace(/"/g, "”")
     .replace(/\.{3}/g, "…");
 }
@@ -770,7 +770,7 @@ function E(e) {
   (T.punctuation = u(T.punctuation)
     .replace(/punctuation/g, T._punctuation)
     .getRegex()),
-  (T.blockSkip = /\[[^\]]*?\]\([^\)]*?\)|`[^`]*?`|<[^>]*?>/g),
+  (T.blockSkip = /\[[^\]]*?\]\([^)]*?\)|`[^`]*?`|<[^>]*?>/g),
   (T.escapedEmSt = /(?:^|[^\\])(?:\\\\)*\\[*_]/g),
   (T._comment = u(R._comment).replace("(?:--\x3e|$)", "--\x3e").getRegex()),
   (T.emStrong.lDelim = u(T.emStrong.lDelim).replace(/punct/g, T._punctuation).getRegex()),
@@ -780,14 +780,14 @@ function E(e) {
   (T.emStrong.rDelimUnd = u(T.emStrong.rDelimUnd, "g")
     .replace(/punct/g, T._punctuation)
     .getRegex()),
-  (T._escapes = /\\([!"#$%&'()*+,\-./:;<=>?@\[\]\\^_`{|}~])/g),
+  (T._escapes = /\\([!"#$%&'()*+,\-./:;<=>?@[\]\\^_`{|}~])/g),
   (T._scheme = /[a-zA-Z][a-zA-Z0-9+.-]{1,31}/),
   (T._email =
     /[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+(@)[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)+(?![-_])/),
   (T.autolink = u(T.autolink).replace("scheme", T._scheme).replace("email", T._email).getRegex()),
   (T._attribute = /\s+[a-zA-Z:_][\w.:-]*(?:\s*=\s*"[^"]*"|\s*=\s*'[^']*'|\s*=\s*[^\s"'=<>`]+)?/),
   (T.tag = u(T.tag).replace("comment", T._comment).replace("attribute", T._attribute).getRegex()),
-  (T._label = /(?:\[(?:\\.|[^\[\]\\])*\]|\\.|`[^`]*`|[^\[\]\\`])*?/),
+  (T._label = /(?:\[(?:\\.|[^[\]\\])*\]|\\.|`[^`]*`|[^[\]\\`])*?/),
   (T._href = /<(?:\\.|[^\n<>\\])+>|[^\s\x00-\x1f]*/),
   (T._title = /"(?:\\"?|[^"\\])*"|'(?:\\'?|[^'\\])*'|\((?:\\\)?|[^)\\])*\)/),
   (T.link = u(T.link)
@@ -827,10 +827,10 @@ function E(e) {
     ...T.normal,
     escape: u(T.escape).replace("])", "~|])").getRegex(),
     _extended_email: /[A-Za-z0-9._+-]+(@)[a-zA-Z0-9-_]+(?:\.[a-zA-Z0-9-_]*[a-zA-Z0-9])+(?![-_])/,
-    url: /^((?:ftp|https?):\/\/|www\.)(?:[a-zA-Z0-9\-]+\.?)+[^\s<]*|^email/,
+    url: /^((?:ftp|https?):\/\/|www\.)(?:[a-zA-Z0-9-]+\.?)+[^\s<]*|^email/,
     _backpedal: /(?:[^?!.,:;*_'"~()&]+|\([^)]*\)|&(?![a-zA-Z0-9]+;$)|[?!.,:;*_'"~)]+(?!$))+/,
     del: /^(~~?)(?=[^\s~])([\s\S]*?[^\s~])\1(?=[^~]|$)/,
-    text: /^([`~]+|[^`~])(?:(?= {2,}\n)|(?=[a-zA-Z0-9.!#$%&'*+\/=?_`{\|}~-]+@)|[\s\S]*?(?:(?=[\\<!\[`*~_]|\b_|https?:\/\/|ftp:\/\/|www\.|$)|[^ ](?= {2,}\n)|[^a-zA-Z0-9.!#$%&'*+\/=?_`{\|}~-](?=[a-zA-Z0-9.!#$%&'*+\/=?_`{\|}~-]+@)))/,
+    text: /^([`~]+|[^`~])(?:(?= {2,}\n)|(?=[a-zA-Z0-9.!#$%&'*+/=?_`{|}~-]+@)|[\s\S]*?(?:(?=[\\<![`*~_]|\b_|https?:\/\/|ftp:\/\/|www\.|$)|[^ ](?= {2,}\n)|[^a-zA-Z0-9.!#$%&'*+/=?_`{|}~-](?=[a-zA-Z0-9.!#$%&'*+/=?_`{|}~-]+@)))/,
   }),
   (T.gfm.url = u(T.gfm.url, "i").replace("email", T.gfm._extended_email).getRegex()),
   (T.breaks = {
@@ -1197,18 +1197,18 @@ class L {
     return e
       .toLowerCase()
       .trim()
-      .replace(/<[!\/a-z].*?>/gi, "")
+      .replace(/<[!/a-z].*?>/gi, "")
       .replace(/[\u2000-\u206F\u2E00-\u2E7F\\'!"#$%&()*+,./:;<=>?@[\]^`{|}~]/g, "")
       .replace(/\s/g, "-");
   }
   getNextSafeSlug(e, t) {
     let n = e,
       s = 0;
-    if (this.seen.hasOwnProperty(n)) {
+    if (Object.hasOwn(this.seen, n)) {
       s = this.seen[e];
       do {
         s++, (n = e + "-" + s);
-      } while (this.seen.hasOwnProperty(n));
+      } while (Object.hasOwn(this.seen, n));
     }
     return t || ((this.seen[e] = s), (this.seen[n] = 0)), n;
   }
@@ -1444,16 +1444,14 @@ function P(e, t) {
   return (n, s, r) => {
     "function" == typeof s && ((r = s), (s = null));
     const i = { ...s },
-      l = (function (e, t, n) {
-        return (s) => {
-          if (((s.message += "\nPlease report this to https://github.com/markedjs/marked."), e)) {
-            const e = "<p>An error occurred:</p><pre>" + a(s.message + "", !0) + "</pre>";
-            return t ? Promise.resolve(e) : n ? void n(null, e) : e;
-          }
-          if (t) return Promise.reject(s);
-          if (!n) throw s;
-          n(s);
-        };
+      l = ((e, t, n) => (s) => {
+        if (((s.message += "\nPlease report this to https://github.com/markedjs/marked."), e)) {
+          const e = "<p>An error occurred:</p><pre>" + a(s.message + "", !0) + "</pre>";
+          return t ? Promise.resolve(e) : n ? void n(null, e) : e;
+        }
+        if (t) return Promise.reject(s);
+        if (!n) throw s;
+        n(s);
       })((s = { ...M.defaults, ...i }).silent, s.async, r);
     if (null == n) return l(new Error("marked(): input parameter is undefined or null"));
     if ("string" != typeof n)
@@ -1465,7 +1463,7 @@ function P(e, t) {
         ),
       );
     if (
-      ((function (e) {
+      (((e) => {
         e &&
           e.sanitize &&
           !e.silent &&
@@ -1483,7 +1481,7 @@ function P(e, t) {
       } catch (e) {
         return l(e);
       }
-      const a = function (e) {
+      const a = (e) => {
         let n;
         if (!e)
           try {
@@ -1499,11 +1497,11 @@ function P(e, t) {
       if ((delete s.highlight, !o.length)) return a();
       let c = 0;
       return (
-        M.walkTokens(o, function (e) {
+        M.walkTokens(o, (e) => {
           "code" === e.type &&
             (c++,
             setTimeout(() => {
-              i(e.text, e.lang, function (t, n) {
+              i(e.text, e.lang, (t, n) => {
                 if (t) return a(t);
                 null != n && n !== e.text && ((e.text = n), (e.escaped = !0)), c--, 0 === c && a();
               });
@@ -1534,13 +1532,13 @@ function M(e, t, n) {
   return P(v.lex, C.parse)(e, t, n);
 }
 (M.options = M.setOptions =
-  function (e) {
+  (e) => {
     var n;
     return (M.defaults = { ...M.defaults, ...e }), (n = M.defaults), (t = n), M;
   }),
   (M.getDefaults = e),
   (M.defaults = t),
-  (M.use = function (...e) {
+  (M.use = (...e) => {
     const t = M.defaults.extensions || { renderers: {}, childTokens: {} };
     e.forEach((e) => {
       const n = { ...e };
@@ -1624,7 +1622,7 @@ function M(e, t, n) {
       M.setOptions(n);
     });
   }),
-  (M.walkTokens = function (e, t) {
+  (M.walkTokens = (e, t) => {
     let n = [];
     for (const s of e)
       switch (((n = n.concat(t.call(M, s))), s.type)) {
@@ -1639,7 +1637,7 @@ function M(e, t, n) {
           M.defaults.extensions &&
           M.defaults.extensions.childTokens &&
           M.defaults.extensions.childTokens[s.type]
-            ? M.defaults.extensions.childTokens[s.type].forEach(function (e) {
+            ? M.defaults.extensions.childTokens[s.type].forEach((e) => {
                 n = n.concat(M.walkTokens(s[e], t));
               })
             : s.tokens && (n = n.concat(M.walkTokens(s.tokens, t)));
@@ -1676,18 +1674,13 @@ const N = "__SCRIPT_END__",
     let e;
     function t(e) {
       let t = (e.querySelector("[data-template]") || e.querySelector("script") || e).textContent;
-      t = t.replace(new RegExp(N, "g"), "<\/script>");
+      t = t.replace(new RegExp(N, "g"), "</script>");
       const n = t.match(/^\n?(\s*)/)[1].length,
         s = t.match(/^\n?(\t*)/)[1].length;
       return (
         s > 0
-          ? (t = t.replace(new RegExp("\\n?\\t{" + s + "}(.*)", "g"), function (e, t) {
-              return "\n" + t;
-            }))
-          : n > 1 &&
-            (t = t.replace(new RegExp("\\n? {" + n + "}(.*)", "g"), function (e, t) {
-              return "\n" + t;
-            })),
+          ? (t = t.replace(new RegExp("\\n?\\t{" + s + "}(.*)", "g"), (e, t) => "\n" + t))
+          : n > 1 && (t = t.replace(new RegExp("\\n? {" + n + "}(.*)", "g"), (e, t) => "\n" + t)),
         t
       );
     }
@@ -1697,7 +1690,7 @@ const N = "__SCRIPT_END__",
       for (let e = 0, s = t.length; e < s; e++) {
         const s = t[e].name,
           r = t[e].value;
-        /data\-(markdown|separator|vertical|notes)/gi.test(s) ||
+        /data-(markdown|separator|vertical|notes)/gi.test(s) ||
           (r ? n.push(s + '="' + r + '"') : n.push(s));
       }
       return n.join(" ");
@@ -1717,7 +1710,7 @@ const N = "__SCRIPT_END__",
       const n = e.split(new RegExp(t.notesSeparator, "mgi"));
       return (
         2 === n.length && (e = n[0] + '<aside class="notes">' + M(n[1].trim()) + "</aside>"),
-        '<script type="text/template">' + (e = e.replace(/<\/script>/g, N)) + "<\/script>"
+        '<script type="text/template">' + (e = e.replace(/<\/script>/g, N)) + "</script>"
       );
     }
     function i(e, t) {
@@ -1745,7 +1738,7 @@ const N = "__SCRIPT_END__",
       for (let e = 0, n = p.length; e < n; e++)
         p[e] instanceof Array
           ? ((u += "<section " + t.attributes + ">"),
-            p[e].forEach(function (e) {
+            p[e].forEach((e) => {
               u += "<section data-markdown>" + r(e, t) + "</section>";
             }),
             (u += "</section>"))
@@ -1753,25 +1746,25 @@ const N = "__SCRIPT_END__",
       return u;
     }
     function l(e) {
-      return new Promise(function (s) {
+      return new Promise((s) => {
         const r = [];
         [].slice
           .call(e.querySelectorAll("section[data-markdown]:not([data-markdown-parsed])"))
-          .forEach(function (e, s) {
+          .forEach((e, s) => {
             e.getAttribute("data-markdown").length
               ? r.push(
-                  (function (e) {
-                    return new Promise(function (t, n) {
+                  ((e) =>
+                    new Promise(function (t, n) {
                       const s = new XMLHttpRequest(),
                         r = e.getAttribute("data-markdown"),
                         i = e.getAttribute("data-charset");
                       null !== i && "" !== i && s.overrideMimeType("text/html; charset=" + i),
-                        (s.onreadystatechange = function (e, s) {
+                        (s.onreadystatechange = ((e, s) => {
                           4 === s.readyState &&
                             ((s.status >= 200 && s.status < 300) || 0 === s.status
                               ? t(s, r)
                               : n(s, r));
-                        }.bind(this, e, s)),
+                        }).bind(this, e, s)),
                         s.open("GET", r, !0);
                       try {
                         s.send();
@@ -1784,9 +1777,8 @@ const N = "__SCRIPT_END__",
                         ),
                           t(s, r);
                       }
-                    });
-                  })(e).then(
-                    function (t, s) {
+                    }))(e).then(
+                    (t, s) => {
                       e.outerHTML = i(t.responseText, {
                         separator: e.getAttribute("data-separator"),
                         verticalSeparator: e.getAttribute("data-separator-vertical"),
@@ -1794,7 +1786,7 @@ const N = "__SCRIPT_END__",
                         attributes: n(e),
                       });
                     },
-                    function (t, n) {
+                    (t, n) => {
                       e.outerHTML =
                         '<section data-state="alert">ERROR: The attempt to fetch ' +
                         n +
@@ -1816,7 +1808,7 @@ const N = "__SCRIPT_END__",
     }
     function o(e, t, n) {
       const s = new RegExp(n, "mg"),
-        r = new RegExp('([^"= ]+?)="([^"]+?)"|(data-[^"= ]+?)(?=[" ])', "mg");
+        r = /([^"= ]+?)="([^"]+?)"|(data-[^"= ]+?)(?=[" ])/gm;
       let i,
         l,
         o = e.nodeValue;
@@ -1860,7 +1852,7 @@ const N = "__SCRIPT_END__",
         .getRevealElement()
         .querySelectorAll("[data-markdown]:not([data-markdown-parsed])");
       return (
-        [].slice.call(n).forEach(function (e) {
+        [].slice.call(n).forEach((e) => {
           e.setAttribute("data-markdown-parsed", !0);
           const n = e.querySelector("aside.notes"),
             s = t(e);
@@ -1883,7 +1875,7 @@ const N = "__SCRIPT_END__",
     }
     return {
       id: "markdown",
-      init: function (t) {
+      init: (t) => {
         e = t;
         let { renderer: n, animateLists: s, ...r } = e.getConfig().markdown || {};
         return (
@@ -1893,7 +1885,7 @@ const N = "__SCRIPT_END__",
               let n = "",
                 s = "";
               if (O.test(t)) {
-                let e = t.match(O)[2];
+                const e = t.match(O)[2];
                 e && (n = `data-ln-start-from="${e.trim()}"`),
                   (s = t.match(O)[3].trim()),
                   (s = `data-line-numbers="${s}"`),
@@ -1912,4 +1904,5 @@ const N = "__SCRIPT_END__",
       marked: M,
     };
   };
+
 export { B as default };

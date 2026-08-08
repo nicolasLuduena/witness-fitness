@@ -1,15 +1,15 @@
 // Simulator harness for the api package (mirrors contract + notary sims).
 import {
-  createConstructorContext,
   createCircuitContext,
+  createConstructorContext,
   dummyContractAddress,
 } from "@midnight-ntwrk/compact-runtime";
 import {
   Contract,
-  ledger,
-  witnesses,
   type Ledger,
+  ledger,
   type PrivateState,
+  witnesses,
 } from "@witnessfitness/contract";
 
 const ADDR = dummyContractAddress();

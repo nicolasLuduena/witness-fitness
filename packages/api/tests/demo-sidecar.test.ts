@@ -2,24 +2,25 @@
 // shapes the UI agent is wiring against, dedupe rules, wager lifecycle state
 // transitions (create → accept → submit ×2 → settle), opening recording, and
 // error mapping. The real gate is the live E2E; these tests pin the shapes.
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import type { AddressInfo } from "node:net";
+
 import { createServer } from "node:http";
+import type { AddressInfo } from "node:net";
+import { pureCircuits } from "@witnessfitness/contract";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import type { Athlete, WagerPayoutRouting } from "../src/demo-sidecar.js";
 import {
   createDemoSidecarWithDeps,
+  type DemoSidecarConfig,
+  DemoVault,
   dayOfTimestamp,
   demoHolderSecret,
-  DemoVault,
   loadSidecarConfig,
   metricsFromAssertion,
-  submissionRandFor,
-  type DemoSidecarConfig,
   type SidecarDeps,
   type StoredCredential,
+  submissionRandFor,
 } from "../src/demo-sidecar.js";
-import { pureCircuits } from "@witnessfitness/contract";
 import type { NotarizedAttestation, StrideDerivedState } from "../src/index.js";
-import type { Athlete, WagerPayoutRouting } from "../src/demo-sidecar.js";
 
 const config: DemoSidecarConfig = {
   ...loadSidecarConfig({}),

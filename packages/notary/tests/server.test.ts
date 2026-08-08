@@ -2,12 +2,12 @@
 // { assertion, signature, notaryId }; /health and /pubkey expose instance
 // identity. Tampered artifacts get a loud 400.
 import { readFileSync } from "node:fs";
-import { join, dirname } from "node:path";
+import type { AddressInfo } from "node:net";
+import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import type { AddressInfo } from "node:net";
-import { createNotaryServer, type NotaryServer } from "../src/index.js";
 import { DEFAULT_ALLOWED_HOSTS, loadConfig, type NotaryConfig } from "../src/config.js";
+import { createNotaryServer, type NotaryServer } from "../src/index.js";
 
 const FIXTURES_DIR = join(
   dirname(fileURLToPath(import.meta.url)),

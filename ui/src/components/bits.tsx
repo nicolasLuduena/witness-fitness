@@ -111,7 +111,22 @@ export const Modal = ({
 }) => {
   if (!open) return null;
   return (
-    <div className="modal-backdrop" onClick={onClose}>
+    // CSS-styled overlay — a <button> would inherit UA border/padding/font;
+    // the backdrop is keyboard-accessible via the keydown handler.
+    // biome-ignore lint/a11y/useSemanticElements: styled overlay, keyboard handler below
+    <div
+      className="modal-backdrop"
+      role="button"
+      tabIndex={-1}
+      aria-label="Close"
+      onClick={onClose}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") onClose();
+      }}
+    >
+      {/* click containment: stops backdrop clicks from closing the modal */}
+      {/* biome-ignore lint/a11y/noStaticElementInteractions: container with click containment only */}
+      {/* biome-ignore lint/a11y/useKeyWithClickEvents: container with click containment only */}
       <div className="modal" onClick={(e) => e.stopPropagation()}>
         {children}
       </div>

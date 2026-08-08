@@ -2,7 +2,7 @@ import {
   assertValidClaimSignatures,
   createAuthRequest,
   createClaimOnAttestor,
-  proto,
+  type proto,
 } from "@reclaimprotocol/attestor-core";
 import { setCryptoImplementation } from "@reclaimprotocol/tls";
 import { webcryptoCrypto } from "@reclaimprotocol/tls/webcrypto";

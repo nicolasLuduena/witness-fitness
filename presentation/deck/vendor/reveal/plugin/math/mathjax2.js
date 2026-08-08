@@ -8,7 +8,7 @@ export const MathJax2 = () => {
   // The reveal.js instance this plugin is attached to
   let deck;
 
-  let defaultOptions = {
+  const defaultOptions = {
     messageStyle: "none",
     tex2jax: {
       inlineMath: [
@@ -21,13 +21,13 @@ export const MathJax2 = () => {
   };
 
   function loadScript(url, callback) {
-    let head = document.querySelector("head");
-    let script = document.createElement("script");
+    const head = document.querySelector("head");
+    const script = document.createElement("script");
     script.type = "text/javascript";
     script.src = url;
 
     // Wrapper for callback to make sure it only fires once
-    let finish = () => {
+    const finish = () => {
       if (typeof callback === "function") {
         callback.call();
         callback = null;
@@ -50,21 +50,21 @@ export const MathJax2 = () => {
   return {
     id: "mathjax2",
 
-    init: function (reveal) {
+    init: (reveal) => {
       deck = reveal;
 
-      let revealOptions = deck.getConfig().mathjax2 || deck.getConfig().math || {};
+      const revealOptions = deck.getConfig().mathjax2 || deck.getConfig().math || {};
 
-      let options = { ...defaultOptions, ...revealOptions };
-      let mathjax = options.mathjax || "https://cdn.jsdelivr.net/npm/mathjax@2/MathJax.js";
-      let config = options.config || "TeX-AMS_HTML-full";
-      let url = mathjax + "?config=" + config;
+      const options = { ...defaultOptions, ...revealOptions };
+      const mathjax = options.mathjax || "https://cdn.jsdelivr.net/npm/mathjax@2/MathJax.js";
+      const config = options.config || "TeX-AMS_HTML-full";
+      const url = mathjax + "?config=" + config;
 
       options.tex2jax = { ...defaultOptions.tex2jax, ...revealOptions.tex2jax };
 
       options.mathjax = options.config = null;
 
-      loadScript(url, function () {
+      loadScript(url, () => {
         MathJax.Hub.Config(options);
 
         // Typeset followed by an immediate reveal.js layout since
@@ -73,7 +73,7 @@ export const MathJax2 = () => {
         MathJax.Hub.Queue(deck.layout);
 
         // Reprocess equations in slides when they turn visible
-        deck.on("slidechanged", function (event) {
+        deck.on("slidechanged", (event) => {
           MathJax.Hub.Queue(["Typeset", MathJax.Hub, event.currentSlide]);
         });
       });

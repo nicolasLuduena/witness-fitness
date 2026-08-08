@@ -2,10 +2,10 @@
 // what is PROVABLE (metric chips) — never raw values, except for the local
 // athlete's own last value (which lives only on their machine).
 
-import { useDemo } from "../state/DemoStore";
 import { Card, Chip, Notice } from "../components/bits";
 import { Envelope } from "../components/Envelope";
 import { fmtDate, fmtKm, fmtMinutes, timeAgo } from "../lib/format";
+import { useDemo } from "../state/DemoStore";
 
 export const VaultScreen = () => {
   const { credentials, session } = useDemo();

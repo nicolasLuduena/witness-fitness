@@ -7,9 +7,9 @@
 //   pnpm --filter @witnessfitness/api run e2e:wager
 // Requires: devnet up, notaries on 8101-8103, sidecar on :8200 (ready).
 import { readFileSync } from "node:fs";
-import { buildWallet } from "@witnessfitness/contract/wallet";
 import * as ledger from "@midnight-ntwrk/ledger-v8";
 import { UnshieldedAddress } from "@midnight-ntwrk/wallet-sdk-address-format";
+import { buildWallet } from "@witnessfitness/contract/wallet";
 
 const SIDECAR = process.env.SIDECAR_URL ?? "http://127.0.0.1:8200";
 const NIGHT = 10n ** 12n;

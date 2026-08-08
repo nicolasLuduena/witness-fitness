@@ -13,34 +13,34 @@
 import { createHash, randomBytes } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
-import { firstValueFrom } from "rxjs";
+import * as ledger from "@midnight-ntwrk/ledger-v8";
+import { encodeCoinPublicKey } from "@midnight-ntwrk/ledger-v8";
+import { getNetworkId } from "@midnight-ntwrk/midnight-js-network-id";
+import { UnshieldedAddress } from "@midnight-ntwrk/wallet-sdk-address-format";
 import { createAuthRequest } from "@reclaimprotocol/attestor-core";
+import { type A_Assertion, type PrivateState, pureCircuits } from "@witnessfitness/contract";
 import { configureProviders } from "@witnessfitness/contract/providers";
 import {
   buildWallet,
   registerForDustGeneration,
   type WalletContext,
 } from "@witnessfitness/contract/wallet";
-import { getNetworkId } from "@midnight-ntwrk/midnight-js-network-id";
-import { UnshieldedAddress } from "@midnight-ntwrk/wallet-sdk-address-format";
-import * as ledger from "@midnight-ntwrk/ledger-v8";
-import { encodeCoinPublicKey } from "@midnight-ntwrk/ledger-v8";
-import { pureCircuits, type A_Assertion, type PrivateState } from "@witnessfitness/contract";
 import { metricLabel } from "@witnessfitness/notary";
+import { firstValueFrom } from "rxjs";
 import {
-  NotaryClient,
-  StrideContract,
-  toHex,
+  acceptWagerFlow,
   advanceStreakFlow,
   attestWorkout,
   createWagerFlow,
-  acceptWagerFlow,
   mintBadgeFlow,
-  proveBadgeFlow,
-  userAddressBytes,
   type NotarizedAttestation,
+  NotaryClient,
+  proveBadgeFlow,
+  StrideContract,
   type StrideDerivedState,
   type StrideProviders,
+  toHex,
+  userAddressBytes,
   type WagerPayoutRouting,
   type WorkoutContext,
 } from "./index.js";

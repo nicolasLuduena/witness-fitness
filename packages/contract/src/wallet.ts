@@ -11,8 +11,8 @@ import {
   createKeystore,
   InMemoryTransactionHistoryStorage,
   PublicKey,
-  UnshieldedWallet,
   type UnshieldedKeystore,
+  UnshieldedWallet,
 } from "@midnight-ntwrk/wallet-sdk-unshielded-wallet";
 import * as Rx from "rxjs";
 

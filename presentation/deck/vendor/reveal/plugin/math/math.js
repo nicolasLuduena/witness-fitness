@@ -1,11 +1,10 @@
-!(function (t, e) {
+!((t, e) => {
   "object" == typeof exports && "undefined" != typeof module
     ? (module.exports = e())
     : "function" == typeof define && define.amd
       ? define(e)
       : ((t = "undefined" != typeof globalThis ? globalThis : t || self).RevealMath = e());
-})(this, function () {
-  "use strict";
+})(this, () => {
   const t = () => {
       let t,
         e = {
@@ -21,9 +20,9 @@
         };
       return {
         id: "mathjax2",
-        init: function (n) {
+        init: (n) => {
           t = n;
-          let a = t.getConfig().mathjax2 || t.getConfig().math || {},
+          const a = t.getConfig().mathjax2 || t.getConfig().math || {},
             i = { ...e, ...a },
             s =
               (i.mathjax || "https://cdn.jsdelivr.net/npm/mathjax@2/MathJax.js") +
@@ -32,10 +31,10 @@
           (i.tex2jax = { ...e.tex2jax, ...a.tex2jax }),
             (i.mathjax = i.config = null),
             (function (t, e) {
-              let n = document.querySelector("head"),
+              const n = document.querySelector("head"),
                 a = document.createElement("script");
               (a.type = "text/javascript"), (a.src = t);
-              let i = () => {
+              const i = () => {
                 "function" == typeof e && (e.call(), (e = null));
               };
               (a.onload = i),
@@ -43,11 +42,11 @@
                   "loaded" === this.readyState && i();
                 }),
                 n.appendChild(a);
-            })(s, function () {
+            })(s, () => {
               MathJax.Hub.Config(i),
                 MathJax.Hub.Queue(["Typeset", MathJax.Hub, t.getRevealElement()]),
                 MathJax.Hub.Queue(t.layout),
-                t.on("slidechanged", function (t) {
+                t.on("slidechanged", (t) => {
                   MathJax.Hub.Queue(["Typeset", MathJax.Hub, t.currentSlide]);
                 });
             });
@@ -81,10 +80,10 @@
         id: "katex",
         init: function (a) {
           t = a;
-          let i = t.getConfig().katex || {},
+          const i = t.getConfig().katex || {},
             s = { ...e, ...i };
           const { local: o, version: l, extensions: c, ...r } = s;
-          let d = s.local || "https://cdn.jsdelivr.net/npm/katex",
+          const d = s.local || "https://cdn.jsdelivr.net/npm/katex",
             u = s.local ? "" : "@" + s.version,
             p = d + u + "/dist/katex.min.css",
             h = d + u + "/dist/contrib/mhchem.min.js",
@@ -95,10 +94,10 @@
             renderMathInElement(a.getSlidesElement(), r), t.layout();
           };
           ((t) => {
-            let e = document.createElement("link");
+            const e = document.createElement("link");
             (e.rel = "stylesheet"), (e.href = t), document.head.appendChild(e);
           })(p),
-            (async function (t) {
+            (async (t) => {
               for (const e of t) await n(e);
             })(m).then(() => {
               t.isReady() ? f() : t.on("ready", f.bind(this));
@@ -128,18 +127,18 @@
         };
       return {
         id: "mathjax3",
-        init: function (n) {
+        init: (n) => {
           t = n;
-          let a = t.getConfig().mathjax3 || {},
+          const a = t.getConfig().mathjax3 || {},
             i = { ...e, ...a };
           (i.tex = { ...e.tex, ...a.tex }),
             (i.options = { ...e.options, ...a.options }),
             (i.startup = { ...e.startup, ...a.startup });
-          let s = i.mathjax || "https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js";
+          const s = i.mathjax || "https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js";
           (i.mathjax = null),
             (window.MathJax = i),
-            (function (t, e) {
-              let n = document.createElement("script");
+            ((t, e) => {
+              const n = document.createElement("script");
               (n.type = "text/javascript"),
                 (n.id = "MathJax-script"),
                 (n.src = t),
@@ -148,8 +147,8 @@
                   "function" == typeof e && (e.call(), (e = null));
                 }),
                 document.head.appendChild(n);
-            })(s, function () {
-              t.addEventListener("slidechanged", function (t) {
+            })(s, () => {
+              t.addEventListener("slidechanged", (t) => {
                 MathJax.typeset();
               });
             });

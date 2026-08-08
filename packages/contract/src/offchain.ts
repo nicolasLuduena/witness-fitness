@@ -8,8 +8,8 @@
 // - s     = (k + c * sk) mod JUBJUB_ORDER
 // Signature is (R = k*G, s); the circuit verifies s*G == R + c*pk.
 import { ecMulGenerator } from "@midnight-ntwrk/compact-runtime";
-import { pureCircuits } from "./managed/stride/contract/index.js";
 import type { A_Assertion, Schnorr_SchnorrSignature } from "./managed/stride/contract/index.js";
+import { pureCircuits } from "./managed/stride/contract/index.js";
 
 export const JUBJUB_ORDER = 0x0e7db4ea6533afa906673b0101343b00a6682093ccc81082d0970e5ed6f72cb7n;
 const TWO_248 = 1n << 248n;

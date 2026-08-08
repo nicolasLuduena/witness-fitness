@@ -7,13 +7,13 @@
 
 import { ATHLETE_A, BADGES } from "../domain/story";
 import {
-  metricById,
   type AttestedCredential,
   type BadgeView,
+  metricById,
   type StreakView,
 } from "../domain/types";
-import { displayHash, hexShort } from "./format";
 import { toEpochMs, toNumber } from "./chain";
+import { displayHash, hexShort } from "./format";
 
 export interface LedgerMetricLike {
   metricId?: number | string | bigint;

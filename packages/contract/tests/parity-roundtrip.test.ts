@@ -10,10 +10,10 @@
 // { announcement: {x, y}, response }.
 import { randomBytes } from "node:crypto";
 import { describe, expect, it } from "vitest";
-import { StrideSim } from "./helpers/sim.js";
-import { makeAssertion, makeNotaryKey, privateStateWith } from "./helpers/fixtures.js";
+import { derivePublicKey, JUBJUB_ORDER, signAssertion } from "../src/offchain.js";
 import { createPrivateState } from "../src/private-state.js";
-import { JUBJUB_ORDER, derivePublicKey, signAssertion } from "../src/offchain.js";
+import { makeAssertion, makeNotaryKey, privateStateWith } from "./helpers/fixtures.js";
+import { StrideSim } from "./helpers/sim.js";
 
 const adminSecret = randomBytes(32);
 const holderSecret = randomBytes(32);

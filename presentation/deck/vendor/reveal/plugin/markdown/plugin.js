@@ -8,9 +8,9 @@ import { marked } from "marked";
 
 const DEFAULT_SLIDE_SEPARATOR = "\r?\n---\r?\n",
   DEFAULT_VERTICAL_SEPARATOR = null,
-  DEFAULT_NOTES_SEPARATOR = "^\s*notes?:",
-  DEFAULT_ELEMENT_ATTRIBUTES_SEPARATOR = "\\\.element\\\s*?(.+?)$",
-  DEFAULT_SLIDE_ATTRIBUTES_SEPARATOR = "\\\.slide:\\\s*?(\\\S.+?)$";
+  DEFAULT_NOTES_SEPARATOR = "^s*notes?:",
+  DEFAULT_ELEMENT_ATTRIBUTES_SEPARATOR = "\\.element\\s*?(.+?)$",
+  DEFAULT_SLIDE_ATTRIBUTES_SEPARATOR = "\\.slide:\\s*?(\\S.+?)$";
 
 const SCRIPT_END_PLACEHOLDER = "__SCRIPT_END__";
 
@@ -48,13 +48,12 @@ const Plugin = () => {
       leadingTabs = text.match(/^\n?(\t*)/)[1].length;
 
     if (leadingTabs > 0) {
-      text = text.replace(new RegExp("\\n?\\t{" + leadingTabs + "}(.*)", "g"), function (m, p1) {
-        return "\n" + p1;
-      });
+      text = text.replace(
+        new RegExp("\\n?\\t{" + leadingTabs + "}(.*)", "g"),
+        (m, p1) => "\n" + p1,
+      );
     } else if (leadingWs > 1) {
-      text = text.replace(new RegExp("\\n? {" + leadingWs + "}(.*)", "g"), function (m, p1) {
-        return "\n" + p1;
-      });
+      text = text.replace(new RegExp("\\n? {" + leadingWs + "}(.*)", "g"), (m, p1) => "\n" + p1);
     }
 
     return text;
@@ -75,7 +74,7 @@ const Plugin = () => {
         value = attributes[i].value;
 
       // disregard attributes that are used for markdown loading/parsing
-      if (/data\-(markdown|separator|vertical|notes)/gi.test(name)) continue;
+      if (/data-(markdown|separator|vertical|notes)/gi.test(name)) continue;
 
       if (value) {
         result.push(name + '="' + value + '"');
@@ -184,7 +183,7 @@ const Plugin = () => {
       if (sectionStack[i] instanceof Array) {
         markdownSections += "<section " + options.attributes + ">";
 
-        sectionStack[i].forEach(function (child) {
+        sectionStack[i].forEach((child) => {
           markdownSections +=
             "<section data-markdown>" + createMarkdownSlide(child, options) + "</section>";
         });
@@ -209,17 +208,17 @@ const Plugin = () => {
    * handles loading of external markdown.
    */
   function processSlides(scope) {
-    return new Promise(function (resolve) {
+    return new Promise((resolve) => {
       const externalPromises = [];
 
       [].slice
         .call(scope.querySelectorAll("section[data-markdown]:not([data-markdown-parsed])"))
-        .forEach(function (section, i) {
+        .forEach((section, i) => {
           if (section.getAttribute("data-markdown").length) {
             externalPromises.push(
               loadExternalMarkdown(section).then(
                 // Finished loading external file
-                function (xhr, url) {
+                (xhr, url) => {
                   section.outerHTML = slidify(xhr.responseText, {
                     separator: section.getAttribute("data-separator"),
                     verticalSeparator: section.getAttribute("data-separator-vertical"),
@@ -229,7 +228,7 @@ const Plugin = () => {
                 },
 
                 // Failed to load markdown
-                function (xhr, url) {
+                (xhr, url) => {
                   section.outerHTML =
                     '<section data-state="alert">' +
                     "ERROR: The attempt to fetch " +
@@ -269,7 +268,7 @@ const Plugin = () => {
         xhr.overrideMimeType("text/html; charset=" + datacharset);
       }
 
-      xhr.onreadystatechange = function (section, xhr) {
+      xhr.onreadystatechange = ((section, xhr) => {
         if (xhr.readyState === 4) {
           // file protocol yields status code 0 (useful for local debug, mobile applications etc.)
           if ((xhr.status >= 200 && xhr.status < 300) || xhr.status === 0) {
@@ -278,7 +277,7 @@ const Plugin = () => {
             reject(xhr, url);
           }
         }
-      }.bind(this, section, xhr);
+      }).bind(this, section, xhr);
 
       xhr.open("GET", url, true);
 
@@ -307,7 +306,7 @@ const Plugin = () => {
    */
   function addAttributeInElement(node, elementTarget, separator) {
     const markdownClassesInElementsRegex = new RegExp(separator, "mg");
-    const markdownClassRegex = new RegExp('([^"= ]+?)="([^"]+?)"|(data-[^"= ]+?)(?=[" ])', "mg");
+    const markdownClassRegex = /([^"= ]+?)="([^"]+?)"|(data-[^"= ]+?)(?=[" ])/gm;
     let nodeValue = node.nodeValue;
     let matches, matchesClass;
     if ((matches = markdownClassesInElementsRegex.exec(nodeValue))) {
@@ -393,7 +392,7 @@ const Plugin = () => {
       .getRevealElement()
       .querySelectorAll("[data-markdown]:not([data-markdown-parsed])");
 
-    [].slice.call(sections).forEach(function (section) {
+    [].slice.call(sections).forEach((section) => {
       section.setAttribute("data-markdown-parsed", true);
 
       const notes = section.querySelector("aside.notes");
@@ -433,7 +432,7 @@ const Plugin = () => {
      * Starts processing and converting Markdown within the
      * current reveal.js deck.
      */
-    init: function (reveal) {
+    init: (reveal) => {
       deck = reveal;
 
       let { renderer, animateLists, ...markedOptions } = deck.getConfig().markdown || {};
@@ -454,7 +453,7 @@ const Plugin = () => {
           // ```javascript [25: 1,4-8]   start line numbering at 25,
           //                             highlights lines 1 (numbered as 25) and 4-8 (numbered as 28-32)
           if (CODE_LINE_NUMBER_REGEX.test(language)) {
-            let lineNumberOffsetMatch = language.match(CODE_LINE_NUMBER_REGEX)[2];
+            const lineNumberOffsetMatch = language.match(CODE_LINE_NUMBER_REGEX)[2];
             if (lineNumberOffsetMatch) {
               lineNumberOffset = `data-ln-start-from="${lineNumberOffsetMatch.trim()}"`;
             }

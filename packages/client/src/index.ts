@@ -1,15 +1,15 @@
 import "dotenv/config";
-import { readFileSync, writeFileSync, readdirSync, existsSync } from "node:fs";
-import { join, dirname } from "node:path";
-import { fileURLToPath } from "node:url";
+import { existsSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { createServer } from "node:http";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import {
+  type AttestResult,
   attestRequest,
   transformProof,
   verifyClaimSignatures,
-  type AttestResult,
 } from "./attest.ts";
-import { FIXTURES_DIR, saveFixture, verifyFixture, type FixtureFile } from "./fixtures.ts";
+import { FIXTURES_DIR, type FixtureFile, saveFixture, verifyFixture } from "./fixtures.ts";
 import {
   buildAuthUrl,
   exchangeCode,

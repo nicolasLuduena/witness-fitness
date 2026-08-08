@@ -8,10 +8,12 @@ import { afterEach, describe, expect, it } from "vitest";
 // Vitest runs in node; the connector + tests touch window.midnight only.
 const windowShim = {} as Window & { midnight?: Record<string, InitialAPI> };
 (globalThis as { window?: unknown }).window = windowShim;
+
 import type { ConnectedAPI, InitialAPI } from "@midnight-ntwrk/dapp-connector-api";
-import { connectWallet, discoverWalletSummaries, WalletUnavailableError } from "./wallet-connector";
+import { vaultEntriesOf } from "./state-mappers";
 import { createStubWalletBridge } from "./wallet-bridge";
 import { walletStoreName } from "./wallet-client";
+import { connectWallet, discoverWalletSummaries, WalletUnavailableError } from "./wallet-connector";
 import {
   hasStoredBackup,
   performRestore,
@@ -20,7 +22,6 @@ import {
   storeBackupPayload,
   walletBackupKey,
 } from "./wallet-restore";
-import { vaultEntriesOf } from "./state-mappers";
 
 interface StubWalletOptions {
   apiVersion?: string;

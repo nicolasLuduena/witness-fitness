@@ -18,21 +18,23 @@
 // The three persistence functions operate on the module-level singleton
 // provider — the SAME map initializeProviders/joinStrideFromBrowser use — so
 // a backup captured at any point covers whatever the wallet flow has stored.
+
+import type { Contract as CompactContract } from "@midnight-ntwrk/compact-js";
+import { fromHex, toHex } from "@midnight-ntwrk/compact-runtime";
+import type { ConnectedAPI } from "@midnight-ntwrk/dapp-connector-api";
+import {
+  type Binding,
+  type FinalizedTransaction,
+  type Proof,
+  type SignatureEnabled,
+  Transaction,
+  type TransactionId,
+} from "@midnight-ntwrk/ledger-v8";
 import { FetchZkConfigProvider } from "@midnight-ntwrk/midnight-js-fetch-zk-config-provider";
 import { httpClientProofProvider } from "@midnight-ntwrk/midnight-js-http-client-proof-provider";
 import { indexerPublicDataProvider } from "@midnight-ntwrk/midnight-js-indexer-public-data-provider";
-import { fromHex, toHex } from "@midnight-ntwrk/compact-runtime";
-import {
-  Binding,
-  FinalizedTransaction,
-  Proof,
-  SignatureEnabled,
-  Transaction,
-  TransactionId,
-} from "@midnight-ntwrk/ledger-v8";
-import type { Contract as CompactContract } from "@midnight-ntwrk/compact-js";
+import { setNetworkId } from "@midnight-ntwrk/midnight-js-network-id";
 import type { UnboundTransaction } from "@midnight-ntwrk/midnight-js-types";
-import type { ConnectedAPI } from "@midnight-ntwrk/dapp-connector-api";
 import {
   createPrivateState,
   type PrivateState,
@@ -40,7 +42,6 @@ import {
 } from "@witnessfitness/contract";
 import { inMemoryPrivateStateProvider } from "./in-memory-private-state-provider.js";
 import { StrideContract, type StrideProviders } from "./index.js";
-import { setNetworkId } from "@midnight-ntwrk/midnight-js-network-id";
 
 export { inMemoryPrivateStateProvider } from "./in-memory-private-state-provider.js";
 

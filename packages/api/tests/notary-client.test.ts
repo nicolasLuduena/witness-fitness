@@ -5,14 +5,14 @@
 // remaining 2; inconsistent assertions across instances are rejected.
 import { randomBytes } from "node:crypto";
 import { readFileSync } from "node:fs";
-import { join, dirname } from "node:path";
-import { fileURLToPath } from "node:url";
 import type { AddressInfo } from "node:net";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { createPrivateState, type PrivateState } from "@witnessfitness/contract";
 import { createNotaryServer } from "@witnessfitness/notary";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { type NotarizedAttestation, NotaryClient } from "../src/index.js";
 import { StrideSim } from "./helpers/sim.js";
-import { NotaryClient, type NotarizedAttestation } from "../src/index.js";
 
 const FIXTURES_DIR = join(
   dirname(fileURLToPath(import.meta.url)),

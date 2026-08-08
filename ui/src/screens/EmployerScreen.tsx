@@ -3,10 +3,10 @@
 // data stays sealed. This screen reads nothing the chain didn't publish.
 
 import { useState } from "react";
-import { useDemo } from "../state/DemoStore";
 import { Button, Card, Notice } from "../components/bits";
 import { EMPLOYER } from "../domain/story";
 import { logError } from "../lib/logger";
+import { useDemo } from "../state/DemoStore";
 
 export const EmployerScreen = () => {
   const { badges, proofs, proveBadge, streak } = useDemo();
@@ -45,8 +45,13 @@ export const EmployerScreen = () => {
       <div className="grid-2">
         <Card title="Verifier terminal" glow>
           <div className="field">
-            <label>Badge to verify</label>
-            <select className="select" value={badgeId} onChange={(e) => setBadgeId(e.target.value)}>
+            <label htmlFor="employer-badge">Badge to verify</label>
+            <select
+              id="employer-badge"
+              className="select"
+              value={badgeId}
+              onChange={(e) => setBadgeId(e.target.value)}
+            >
               {badges.map((b) => (
                 <option key={b.id} value={b.id} disabled={!b.minted}>
                   {b.label} {b.minted ? "(minted)" : "(not minted)"}
@@ -55,8 +60,11 @@ export const EmployerScreen = () => {
             </select>
           </div>
           <div className="field">
-            <label>Verifier binding (0x + 64 hex — the third party's holder binding)</label>
+            <label htmlFor="employer-verifier">
+              Verifier binding (0x + 64 hex — the third party's holder binding)
+            </label>
             <input
+              id="employer-verifier"
               className="input mono"
               value={verifier}
               onChange={(e) => setVerifier(e.target.value)}

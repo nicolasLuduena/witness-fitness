@@ -8,8 +8,8 @@
 // override) — vault/streak/badges/wagers must all map without throwing and
 // filter by holder binding.
 
-import { afterEach, describe, expect, it, vi } from "vitest";
 import type { ConnectedAPI, InitialAPI } from "@midnight-ntwrk/dapp-connector-api";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import type { LedgerMapLike } from "./state-mappers";
 import type { WalletBridge, WalletStrideSession, WalletWagerView } from "./wallet-bridge";
 import { WalletClient } from "./wallet-client";

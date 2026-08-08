@@ -5,18 +5,18 @@
 // drives the pipeline with the notary's own modules.
 import { randomBytes } from "node:crypto";
 import { readFileSync } from "node:fs";
-import { join, dirname } from "node:path";
+import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { describe, expect, it } from "vitest";
 import {
   createPrivateState,
   type PrivateState,
   type SchnorrSignature,
 } from "@witnessfitness/contract";
-import { StrideSim } from "./helpers/sim.js";
-import { verifyReclaimProof, type ProofArtifacts } from "../src/verify-reclaim.js";
+import { describe, expect, it } from "vitest";
 import { buildAssertion } from "../src/assert.js";
 import { publicKeyOf, signAssertion } from "../src/sign.js";
+import { type ProofArtifacts, verifyReclaimProof } from "../src/verify-reclaim.js";
+import { StrideSim } from "./helpers/sim.js";
 
 const FIXTURES_DIR = join(
   dirname(fileURLToPath(import.meta.url)),

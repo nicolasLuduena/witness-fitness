@@ -4,7 +4,7 @@
 // (demo-sidecar.ts) — same request/response shapes, hex wire format.
 
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { LiveClient, hexOf, nightToDisplay } from "./live-client";
+import { hexOf, LiveClient, nightToDisplay } from "./live-client";
 import { challengeIdOf, formatCountdown, settleReadyAtMs } from "./wager-countdown";
 
 const NIGHT_BASE = 10n ** 12n;

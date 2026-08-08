@@ -14,7 +14,7 @@
 // branch (verified against all 3 notary instances).
 
 import type { proto } from "@reclaimprotocol/attestor-core";
-import { ATTESTOR_WS_URL, ATTEST_SERVICE_URL } from "./config";
+import { ATTEST_SERVICE_URL, ATTESTOR_WS_URL } from "./config";
 import { browserStwoOperators } from "./stwo-browser";
 
 // The attestor-core + tls stack is LAZY-loaded (attest-time only): it

@@ -32,13 +32,14 @@ vi.mock("@reclaimprotocol/attestor-core", () => ({
 }));
 
 import {
+  type AttestResult,
   attestStrava,
   fetchAuthRequest,
   getOrCreateOwnerKey,
   proofToNotaryArtifacts,
   transformProof,
-  type AttestResult,
 } from "./attest-browser";
+import { athleteIdentityFromExchange } from "./identity";
 import {
   buildAuthUrl,
   emptyAccountGuard,
@@ -48,10 +49,9 @@ import {
   localStorageTokenStore,
   parseAuthCallback,
   refreshAccessToken,
-  shouldRefresh,
   type StoredTokens,
+  shouldRefresh,
 } from "./strava";
-import { athleteIdentityFromExchange } from "./identity";
 import { initStwoFromBytes, makeStwoZkOperator } from "./stwo-browser";
 
 const jsonResponse = (body: unknown, status = 200): Response =>

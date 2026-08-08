@@ -1,8 +1,8 @@
 import { mkdirSync, writeFileSync } from "node:fs";
-import { join, dirname } from "node:path";
+import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { assertValidClaimSignatures, proto } from "@reclaimprotocol/attestor-core";
-import { transformProof, type AttestResult } from "./attest.ts";
+import { assertValidClaimSignatures, type proto } from "@reclaimprotocol/attestor-core";
+import type { AttestResult, transformProof } from "./attest.ts";
 
 type ProviderClaimData = proto.ProviderClaimData;
 type ClaimTunnelResponse = proto.ClaimTunnelResponse;

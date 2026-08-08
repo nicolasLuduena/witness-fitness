@@ -3,12 +3,12 @@
 // instances must sign the IDENTICAL assertion for the 2-of-3 threshold to
 // work on-chain.
 import { readFileSync } from "node:fs";
-import { join, dirname } from "node:path";
+import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { type A_Assertion, encodeAssertion } from "@witnessfitness/contract";
 import { describe, expect, it } from "vitest";
-import { encodeAssertion, type A_Assertion } from "@witnessfitness/contract";
-import { verifyReclaimProof, type ProofArtifacts } from "../src/verify-reclaim.js";
 import { buildAssertion, METRIC_DISTANCE } from "../src/assert.js";
+import { type ProofArtifacts, verifyReclaimProof } from "../src/verify-reclaim.js";
 
 const FIXTURES_DIR = join(
   dirname(fileURLToPath(import.meta.url)),

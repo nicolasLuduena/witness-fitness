@@ -29,10 +29,10 @@ const e = () => {
       e.getRevealElement().appendChild(t),
       n.addEventListener(
         "keyup",
-        function (t) {
+        (t) => {
           if (13 === t.keyCode)
             t.preventDefault(),
-              (function () {
+              (() => {
                 if (i) {
                   var t = n.value;
                   "" === t
@@ -68,15 +68,14 @@ const e = () => {
       a = 0,
       d = "",
       c = [];
-    (this.setRegex = function (e) {
+    (this.setRegex = (e) => {
       (e = e.trim()), (d = new RegExp("(" + e + ")", "i"));
     }),
-      (this.getRegex = function () {
-        return d
+      (this.getRegex = () =>
+        d
           .toString()
           .replace(/^\/\\b\(|\)\\b\/i$/g, "")
-          .replace(/\|/g, " ");
-      }),
+          .replace(/\|/g, " ")),
       (this.hiliteWords = function (t) {
         if (null != t && t && d && !i.test(t.nodeName)) {
           if (t.hasChildNodes())
@@ -100,7 +99,7 @@ const e = () => {
             }
         }
       }),
-      (this.remove = function () {
+      (this.remove = () => {
         for (var e, t = document.getElementsByTagName(o); t.length && (e = t[0]); )
           e.parentNode.replaceChild(e.firstChild, e);
       }),
@@ -115,7 +114,7 @@ const e = () => {
         e.registerKeyboardShortcut("CTRL + Shift + F", "Search"),
         document.addEventListener(
           "keydown",
-          function (e) {
+          (e) => {
             "F" == e.key && (e.ctrlKey || e.metaKey) && (e.preventDefault(), c());
           },
           !1,
@@ -126,4 +125,5 @@ const e = () => {
     toggle: c,
   };
 };
+
 export { e as default };

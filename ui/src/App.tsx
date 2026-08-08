@@ -3,13 +3,13 @@
 // navigation, screens, and the always-visible notary trust strip.
 
 import { useState } from "react";
-import { DemoProvider, useDemo } from "./state/DemoStore";
 import { NotaryStrip } from "./components/NotaryStrip";
 import { ConnectScreen } from "./screens/ConnectScreen";
+import { EmployerScreen } from "./screens/EmployerScreen";
+import { StreaksScreen } from "./screens/StreaksScreen";
 import { VaultScreen } from "./screens/VaultScreen";
 import { WagersScreen } from "./screens/WagersScreen";
-import { StreaksScreen } from "./screens/StreaksScreen";
-import { EmployerScreen } from "./screens/EmployerScreen";
+import { DemoProvider, useDemo } from "./state/DemoStore";
 
 type Tab = "connect" | "vault" | "wagers" | "streaks" | "employer";
 
@@ -54,6 +54,7 @@ const Shell = () => {
         {TABS.map((t) => (
           <button
             key={t.id}
+            type="button"
             className={`tab ${tab === t.id ? "tab--active" : ""}`}
             onClick={() => setTab(t.id)}
           >

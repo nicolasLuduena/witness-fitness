@@ -9,16 +9,16 @@
 // comparison appears only when the athletes choose to show it.
 
 import { useEffect, useState } from "react";
-import { useDemo } from "../state/DemoStore";
 import { Button, Card, Chip, Modal, Notice } from "../components/bits";
 import { Envelope } from "../components/Envelope";
 import { RevealSettle } from "../components/RevealSettle";
 import { ATHLETE_A, ATHLETE_B } from "../domain/story";
-import { METRICS } from "../domain/types";
 import type { Athlete, WagerCreateRequest, WagerView } from "../domain/types";
+import { METRICS } from "../domain/types";
 import { fmtTnight, hexShort } from "../lib/format";
-import { challengeIdOf, formatCountdown, settleReadyAtMs } from "../lib/wager-countdown";
 import { logError } from "../lib/logger";
+import { challengeIdOf, formatCountdown, settleReadyAtMs } from "../lib/wager-countdown";
+import { useDemo } from "../state/DemoStore";
 
 const statusLabel: Record<WagerView["status"], string> = {
   open: "open — waiting for opponent",
@@ -198,6 +198,7 @@ export const WagersScreen = () => {
                   <span style={{ fontWeight: 700 }}>{entry.athlete.name}</span>
                   <span className="faint">challenge ID</span>
                   <button
+                    type="button"
                     className="copy-id-btn"
                     title="copy challenge ID"
                     onClick={() => void copyChallengeId(entry.athlete.holderBinding)}
@@ -528,12 +529,13 @@ const CreateWagerModal = ({
     <Modal open={open} onClose={onClose}>
       <h3 className="card-title">Create wager</h3>
       <div className="field">
-        <label>
+        <label htmlFor="wager-opponent">
           {isWallet
             ? "Opponent — their holder-binding challenge ID (0x + 64 hex, from their Connect tab)"
             : "Opponent — challenge by ID (A = Ava, B = Milo)"}
         </label>
         <input
+          id="wager-opponent"
           className="input"
           placeholder={
             isWallet ? "0x4f8c… (paste the opponent\u2019s challenge ID)" : "Challenge ID, e.g. B"
@@ -548,8 +550,13 @@ const CreateWagerModal = ({
         ) : null}
       </div>
       <div className="field">
-        <label>Metric</label>
-        <select className="select" value={metricId} onChange={(e) => setMetricId(e.target.value)}>
+        <label htmlFor="wager-metric">Metric</label>
+        <select
+          id="wager-metric"
+          className="select"
+          value={metricId}
+          onChange={(e) => setMetricId(e.target.value)}
+        >
           {METRICS.map((m) => (
             <option key={m.id.toString()} value={m.id.toString()}>
               {m.label} ({m.unit})
@@ -558,8 +565,9 @@ const CreateWagerModal = ({
         </select>
       </div>
       <div className="field">
-        <label>Stake (NIGHT)</label>
+        <label htmlFor="wager-stake">Stake (NIGHT)</label>
         <input
+          id="wager-stake"
           className="input"
           type="number"
           min={1}
@@ -568,8 +576,9 @@ const CreateWagerModal = ({
         />
       </div>
       <div className="field">
-        <label>Deadline (seconds from now)</label>
+        <label htmlFor="wager-deadline">Deadline (seconds from now)</label>
         <input
+          id="wager-deadline"
           className="input"
           type="number"
           min={1}

@@ -2,15 +2,15 @@
 // same SDK that produced them) and rejects tampered artifacts; host and
 // response sanity checks fail loudly.
 import { readFileSync } from "node:fs";
-import { join, dirname } from "node:path";
+import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import {
   assertAllowedHost,
   normalizeArtifacts,
+  type ProofArtifacts,
   parseResponseBody,
   verifyReclaimProof,
-  type ProofArtifacts,
 } from "../src/verify-reclaim.js";
 
 const FIXTURES_DIR = join(

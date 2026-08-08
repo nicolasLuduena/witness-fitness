@@ -1,6 +1,6 @@
 import { randomBytes } from "node:crypto";
 import { beforeEach, describe, expect, it } from "vitest";
-import { StrideSim } from "./helpers/sim.js";
+import { createPrivateState, type PrivateState } from "../src/private-state.js";
 import {
   holderBindingOf,
   makeAssertion,
@@ -10,7 +10,7 @@ import {
   signAttestation,
   vaultKeyOf,
 } from "./helpers/fixtures.js";
-import { createPrivateState, type PrivateState } from "../src/private-state.js";
+import { StrideSim } from "./helpers/sim.js";
 
 const DAY = 86400n;
 const STALE_WINDOW = 2592000n; // 30 days — matches freshnessWindow() in stride.compact

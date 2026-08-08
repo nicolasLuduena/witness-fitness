@@ -1,17 +1,16 @@
-!(function (e, t) {
+!((e, t) => {
   "object" == typeof exports && "undefined" != typeof module
     ? (module.exports = t())
     : "function" == typeof define && define.amd
       ? define(t)
       : ((e = "undefined" != typeof globalThis ? globalThis : e || self).RevealZoom = t());
-})(this, function () {
-  "use strict";
+})(this, () => {
   /*!
    * reveal.js Zoom plugin
    */ const e = {
     id: "zoom",
-    init: function (e) {
-      e.getRevealElement().addEventListener("mousedown", function (o) {
+    init: (e) => {
+      e.getRevealElement().addEventListener("mousedown", (o) => {
         var n = /Linux/.test(window.navigator.platform) ? "ctrl" : "alt",
           i = (e.getConfig().zoomKey ? e.getConfig().zoomKey : n) + "Key",
           d = e.getConfig().zoomLevel ? e.getConfig().zoomLevel : 2;
@@ -24,7 +23,7 @@
       t.reset();
     },
   };
-  var t = (function () {
+  var t = (() => {
     var e = 1,
       o = 0,
       n = 0,
@@ -87,14 +86,14 @@
     }
     return (
       l && (document.body.style.transition = "transform 0.8s ease"),
-      document.addEventListener("keyup", function (o) {
+      document.addEventListener("keyup", (o) => {
         1 !== e && 27 === o.keyCode && t.out();
       }),
-      document.addEventListener("mousemove", function (t) {
+      document.addEventListener("mousemove", (t) => {
         1 !== e && ((o = t.clientX), (n = t.clientY));
       }),
       {
-        to: function (o) {
+        to: (o) => {
           if (1 !== e) t.out();
           else {
             if (((o.x = o.x || 0), (o.y = o.y || 0), o.element)) {
@@ -115,12 +114,12 @@
                 (o.y *= o.scale),
                 s(o, o.scale),
                 !1 !== o.pan &&
-                  (i = setTimeout(function () {
+                  (i = setTimeout(() => {
                     d = setInterval(c, 1e3 / 60);
                   }, 800)));
           }
         },
-        out: function () {
+        out: () => {
           clearTimeout(i), clearInterval(d), s({ x: 0, y: 0 }, 1), (e = 1);
         },
         magnify: function (e) {
@@ -129,9 +128,7 @@
         reset: function () {
           this.out();
         },
-        zoomLevel: function () {
-          return e;
-        },
+        zoomLevel: () => e,
       }
     );
   })();

@@ -3,8 +3,8 @@
 // while the attest workstream's flow replaces the (now removed) fixture log.
 
 import { describe, expect, it } from "vitest";
-import { LiveClient } from "./live-client";
 import { joinSidecar, SidecarOfflineError } from "./chain";
+import { LiveClient } from "./live-client";
 
 const DEAD_PORT = "http://127.0.0.1:1";
 

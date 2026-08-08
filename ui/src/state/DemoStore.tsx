@@ -6,18 +6,16 @@ import { logError } from "../lib/logger";
 
 import {
   createContext,
+  type ReactNode,
   useCallback,
   useContext,
   useEffect,
   useMemo,
   useRef,
   useState,
-  type ReactNode,
 } from "react";
-import { INITIAL_MODE } from "../config";
 import type { DemoMode } from "../config";
-import { createWfClient } from "../lib/wf-factory";
-import type { WfClient } from "../lib/wf-client";
+import { INITIAL_MODE } from "../config";
 import type {
   AttestedCredential,
   AttestOutcome,
@@ -30,6 +28,8 @@ import type {
   WagerSettleResult,
   WagerView,
 } from "../domain/types";
+import type { WfClient } from "../lib/wf-client";
+import { createWfClient } from "../lib/wf-factory";
 
 export interface DemoState {
   mode: DemoMode;
@@ -216,35 +216,28 @@ export const DemoProvider = ({ children }: { children: ReactNode }) => {
     [client],
   );
 
-  const backupPrivateState = client.backupPrivateState
-    ? useCallback(
-        (password: string) => {
-          if (!client.backupPrivateState)
-            return Promise.reject(new Error("not supported in this mode"));
-          return client.backupPrivateState(password);
-        },
-        [client],
-      )
-    : undefined;
+  const backupPrivateState = useCallback(
+    (password: string) => {
+      if (!client.backupPrivateState)
+        return Promise.reject(new Error("not supported in this mode"));
+      return client.backupPrivateState(password);
+    },
+    [client],
+  );
 
-  const restorePrivateState = client.restorePrivateState
-    ? useCallback(
-        (password: string, payload: string) => {
-          if (!client.restorePrivateState)
-            return Promise.reject(new Error("not supported in this mode"));
-          return client.restorePrivateState(password, payload);
-        },
-        [client],
-      )
-    : undefined;
+  const restorePrivateState = useCallback(
+    (password: string, payload: string) => {
+      if (!client.restorePrivateState)
+        return Promise.reject(new Error("not supported in this mode"));
+      return client.restorePrivateState(password, payload);
+    },
+    [client],
+  );
 
-  const resetPrivateState = client.resetPrivateState
-    ? useCallback(() => {
-        if (!client.resetPrivateState)
-          return Promise.reject(new Error("not supported in this mode"));
-        return client.resetPrivateState();
-      }, [client])
-    : undefined;
+  const resetPrivateState = useCallback(() => {
+    if (!client.resetPrivateState) return Promise.reject(new Error("not supported in this mode"));
+    return client.resetPrivateState();
+  }, [client]);
 
   const value: DemoState = {
     mode,

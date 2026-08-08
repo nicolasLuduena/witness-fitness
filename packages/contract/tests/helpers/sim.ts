@@ -1,12 +1,12 @@
 import {
-  createConstructorContext,
   createCircuitContext,
+  createConstructorContext,
   dummyContractAddress,
   type Effects,
 } from "@midnight-ntwrk/compact-runtime";
-import { Contract, ledger, type Ledger } from "../../src/managed/stride/contract/index.js";
-import { witnesses } from "../../src/witnesses.js";
+import { Contract, type Ledger, ledger } from "../../src/managed/stride/contract/index.js";
 import type { PrivateState } from "../../src/private-state.js";
+import { witnesses } from "../../src/witnesses.js";
 
 const ADDR = dummyContractAddress();
 const COIN_PK = "0".repeat(64);

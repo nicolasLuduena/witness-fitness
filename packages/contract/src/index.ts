@@ -23,14 +23,14 @@ export const CompactCompiledContract = CompiledContract.make<StrideContractType,
 );
 
 export * from "./managed/stride/contract/index.js";
-export { witnesses } from "./witnesses.js";
-export { createPrivateState, type PrivateState, type SchnorrSignature } from "./private-state.js";
 export {
-  JUBJUB_ORDER,
-  derivePublicKey,
   deriveNonce,
+  derivePublicKey,
   encodeAssertion,
+  JUBJUB_ORDER,
+  type JubjubPoint,
   schnorrChallenge,
   signAssertion,
-  type JubjubPoint,
 } from "./offchain.js";
+export { createPrivateState, type PrivateState, type SchnorrSignature } from "./private-state.js";
+export { witnesses } from "./witnesses.js";

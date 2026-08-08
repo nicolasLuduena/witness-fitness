@@ -9,9 +9,9 @@
 // source once the OAuth step lands).
 import { randomBytes } from "node:crypto";
 import { readFileSync } from "node:fs";
+import { pureCircuits } from "@witnessfitness/contract";
 import { configureProviders } from "@witnessfitness/contract/providers";
 import { buildWallet, registerForDustGeneration } from "@witnessfitness/contract/wallet";
-import { pureCircuits } from "@witnessfitness/contract";
 import { NotaryClient, StrideContract, toHex } from "../src/index.js";
 
 const INDEXER = process.env.INDEXER_URL ?? "http://127.0.0.1:8088/api/v3/graphql";

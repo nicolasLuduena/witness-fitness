@@ -2,16 +2,16 @@
 // notary roundtrip gate (ARCHITECTURE.md §4) runs the SAME compiled contract
 // + witnesses through the compact-runtime simulator.
 import {
-  createConstructorContext,
   createCircuitContext,
+  createConstructorContext,
   dummyContractAddress,
 } from "@midnight-ntwrk/compact-runtime";
 import {
   Contract,
-  ledger,
-  witnesses,
   type Ledger,
+  ledger,
   type PrivateState,
+  witnesses,
 } from "@witnessfitness/contract";
 
 const ADDR = dummyContractAddress();

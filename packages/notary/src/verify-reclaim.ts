@@ -3,8 +3,8 @@
 // that produced the proofs is the SDK that verifies them. Then claim-level
 // sanity: host allowlist + response parses. Fails loudly otherwise.
 import { createHash } from "node:crypto";
-import { assertValidClaimSignatures } from "@reclaimprotocol/attestor-core";
 import type { proto } from "@reclaimprotocol/attestor-core";
+import { assertValidClaimSignatures } from "@reclaimprotocol/attestor-core";
 
 type ProviderClaimData = proto.ProviderClaimData;
 type ClaimTunnelResponse = proto.ClaimTunnelResponse;

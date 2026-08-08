@@ -3,12 +3,12 @@
 // Two modes: wallet (Lace DApp Connector — the default) and live (demo
 // sidecar :8200, maintainer debug via ?mode=live).
 
-import { useEffect, useRef, useState } from "react";
-import { useDemo } from "../state/DemoStore";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Button, Card, Chip, Notice, Stat } from "../components/bits";
 import { StatusLine } from "../components/StatusLine";
 import { EMPLOYER } from "../domain/story";
 import { hexShort } from "../lib/format";
+import { logError } from "../lib/logger";
 import { discoverWalletSummaries, type WalletSummary } from "../lib/wallet-connector";
 import {
   hasStoredBackup,
@@ -17,7 +17,7 @@ import {
   storeBackupPayload,
   walletBackupKey,
 } from "../lib/wallet-restore";
-import { logError } from "../lib/logger";
+import { useDemo } from "../state/DemoStore";
 
 export const ConnectScreen = () => {
   const {
@@ -115,8 +115,7 @@ export const ConnectScreen = () => {
     return () => {
       cancelled = true;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isWallet, session?.walletAddress]);
+  }, [isWallet, session, client]);
 
   const handleAttest = async () => {
     setAttestError(null);
@@ -151,12 +150,12 @@ export const ConnectScreen = () => {
     }
   };
 
-  const openRestorePrompt = (mode: "restore" | "resume") => {
+  const openRestorePrompt = useCallback((mode: "restore" | "resume") => {
     setRestoreNotice(null);
     setRestorePassword("");
     setRestoreMode(mode);
     setRestoreOpen(true);
-  };
+  }, []);
 
   const handleRestore = async () => {
     if (!restorePrivateState || !restorePassword || restoreBusy) return;
@@ -196,8 +195,7 @@ export const ConnectScreen = () => {
       resumePrompted.current = true;
       openRestorePrompt("resume");
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isWallet, session?.walletAddress, credentials.length]);
+  }, [isWallet, session, credentials.length, openRestorePrompt]);
 
   return (
     <div className="screen">
@@ -229,6 +227,7 @@ export const ConnectScreen = () => {
                     <span className="hash">
                       {hexShort(session.athlete.holderBinding, 12, 10)}{" "}
                       <button
+                        type="button"
                         className="copy-id-btn"
                         title="copy challenge ID to share"
                         onClick={() => void handleCopyBinding()}
@@ -370,15 +369,15 @@ export const ConnectScreen = () => {
                       }}
                     >
                       <div className="field">
-                        <label>
+                        <label htmlFor="restore-password">
                           {restoreMode === "resume"
                             ? "Enter password to resume"
                             : "Enter backup password"}
                         </label>
                         <input
+                          id="restore-password"
                           className="input"
                           type="password"
-                          autoFocus
                           value={restorePassword}
                           onChange={(e) => setRestorePassword(e.target.value)}
                           onKeyDown={(e) => {
@@ -431,6 +430,7 @@ export const ConnectScreen = () => {
                 <div style={{ display: "grid", gap: 8, marginBottom: 12 }}>
                   {wallets.map((w) => (
                     <button
+                      type="button"
                       key={w.rdns}
                       className={pickedRdns === w.rdns ? "wallet-pick selected" : "wallet-pick"}
                       onClick={() => handlePickWallet(w.rdns)}

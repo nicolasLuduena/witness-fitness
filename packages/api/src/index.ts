@@ -3,25 +3,26 @@
 // proof artifact and package the verifyAttestation transaction. Demo flows
 // (attest → wager → settle; streak → badge → proveBadge) are exposed as
 // callable functions for the UI agent.
-import {
-  deployContract,
-  findDeployedContract,
-  type ContractProviders,
-  type FoundContract,
-} from "@midnight-ntwrk/midnight-js-contracts";
+
 import { encodeUserAddress } from "@midnight-ntwrk/compact-runtime";
-import { map, type Observable } from "rxjs";
 import {
+  type ContractProviders,
+  deployContract,
+  type FoundContract,
+  findDeployedContract,
+} from "@midnight-ntwrk/midnight-js-contracts";
+import {
+  type A_Assertion,
   CompactCompiledContract,
   createPrivateState,
-  ledger,
-  pureCircuits,
-  type A_Assertion,
   type Ledger,
+  ledger,
   type PrivateState,
+  pureCircuits,
   type SchnorrSignature,
   type StrideContractType,
 } from "@witnessfitness/contract";
+import { map, type Observable } from "rxjs";
 
 export type StrideProviders = ContractProviders<StrideContractType>;
 
