@@ -3,11 +3,11 @@
 // UI-shaped: values that the ledger never reveals are optional and only ever
 // populated for the local athlete's own data.
 
-import type { DemoMode } from '../config';
+import type { DemoMode } from "../config";
 
 export type { DemoMode };
 
-export type AthleteRole = 'local' | 'opponent' | 'other';
+export type AthleteRole = "local" | "opponent" | "other";
 
 export interface Athlete {
   name: string;
@@ -24,18 +24,27 @@ export interface Metric {
 }
 
 export const METRICS: Metric[] = [
-  { id: 1n, label: 'Distance', unit: 'km', provableChip: (v) => `distance ≥ ${(v / 1000).toFixed(1)} km` },
-  { id: 2n, label: 'Moving time', unit: 'min', provableChip: (v) => `moving time ≥ ${Math.round(v / 60)} min` },
+  {
+    id: 1n,
+    label: "Distance",
+    unit: "km",
+    provableChip: (v) => `distance ≥ ${(v / 1000).toFixed(1)} km`,
+  },
+  {
+    id: 2n,
+    label: "Moving time",
+    unit: "min",
+    provableChip: (v) => `moving time ≥ ${Math.round(v / 60)} min`,
+  },
 ];
 
-export const metricById = (id: bigint): Metric =>
-  METRICS.find((m) => m.id === id) ?? METRICS[0];
+export const metricById = (id: bigint): Metric => METRICS.find((m) => m.id === id) ?? METRICS[0];
 
 export interface AttestationStage {
   id: string;
   label: string;
   detail: string;
-  state: 'pending' | 'active' | 'done' | 'error';
+  state: "pending" | "active" | "done" | "error";
 }
 
 export interface AttestOutcome {
@@ -47,7 +56,7 @@ export interface AttestOutcome {
 export interface AttestedCredential {
   id: string; // vault key (hex) — on-chain commitment id
   athlete: Athlete;
-  source: 'live-session' | 'fixture-replay' | 'demo-story';
+  source: "live-session" | "fixture-replay" | "demo-story";
   metric: Metric;
   value: number; // raw value, ONLY on the local athlete's machine
   commitment: string; // persistentCommit(assertion, rand) hex
@@ -58,7 +67,7 @@ export interface AttestedCredential {
   assertionId: string; // first bytes of the encoded assertion hash
 }
 
-export type WagerStatus = 'open' | 'accepted' | 'submitted' | 'settled' | 'cancelled';
+export type WagerStatus = "open" | "accepted" | "submitted" | "settled" | "cancelled";
 
 export interface WagerSubmission {
   athlete: Athlete;
@@ -77,7 +86,7 @@ export interface WagerResult {
   tie: boolean;
   forfeit: boolean;
   pot: number; // display units (tNIGHT in fixture mode, NIGHT in live mode)
-  currency: 'tNIGHT' | 'NIGHT';
+  currency: "tNIGHT" | "NIGHT";
   disclosed: boolean; // did the athletes choose to reveal the comparison?
   challengerValue?: number;
   opponentValue?: number;

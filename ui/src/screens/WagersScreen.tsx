@@ -8,24 +8,24 @@
 // the winner receives a shielded WitnessFitness NFT, and the disclosed
 // comparison appears only when the athletes choose to show it.
 
-import { useEffect, useState } from 'react';
-import { useDemo } from '../state/DemoStore';
-import { Button, Card, Chip, Modal, Notice } from '../components/bits';
-import { Envelope } from '../components/Envelope';
-import { RevealSettle } from '../components/RevealSettle';
-import { ATHLETE_A, ATHLETE_B } from '../domain/story';
-import { METRICS } from '../domain/types';
-import type { Athlete, WagerCreateRequest, WagerView } from '../domain/types';
-import { fmtTnight, hexShort } from '../lib/format';
-import { challengeIdOf, formatCountdown, settleReadyAtMs } from '../lib/wager-countdown';
-import { logError } from '../lib/logger';
+import { useEffect, useState } from "react";
+import { useDemo } from "../state/DemoStore";
+import { Button, Card, Chip, Modal, Notice } from "../components/bits";
+import { Envelope } from "../components/Envelope";
+import { RevealSettle } from "../components/RevealSettle";
+import { ATHLETE_A, ATHLETE_B } from "../domain/story";
+import { METRICS } from "../domain/types";
+import type { Athlete, WagerCreateRequest, WagerView } from "../domain/types";
+import { fmtTnight, hexShort } from "../lib/format";
+import { challengeIdOf, formatCountdown, settleReadyAtMs } from "../lib/wager-countdown";
+import { logError } from "../lib/logger";
 
-const statusLabel: Record<WagerView['status'], string> = {
-  open: 'open — waiting for opponent',
-  accepted: 'accepted — awaiting submissions',
-  submitted: 'submissions sealed',
-  settled: 'settled',
-  cancelled: 'cancelled',
+const statusLabel: Record<WagerView["status"], string> = {
+  open: "open — waiting for opponent",
+  accepted: "accepted — awaiting submissions",
+  submitted: "submissions sealed",
+  settled: "settled",
+  cancelled: "cancelled",
 };
 
 export const WagersScreen = () => {
@@ -49,14 +49,16 @@ export const WagersScreen = () => {
   const [now, setNow] = useState(() => Date.now());
   const [copied, setCopied] = useState<string | null>(null);
 
-  const isLive = mode === 'live';
-  const isWallet = mode === 'wallet';
+  const isLive = mode === "live";
+  const isWallet = mode === "wallet";
 
   // Poll while ANY wager is mid-flight (open/accepted/submitted) — discovery
   // of opponent actions (accept, seal) is indexer-lag-bound; also covers the
   // post-create read-back window (audit P1-5).
   useEffect(() => {
-    const awaiting = wagers.some((w) => w.status === 'open' || w.status === 'accepted' || w.status === 'submitted');
+    const awaiting = wagers.some(
+      (w) => w.status === "open" || w.status === "accepted" || w.status === "submitted",
+    );
     if (!awaiting) return;
     const timer = window.setInterval(() => void refresh(), 3_000);
     return () => window.clearInterval(timer);
@@ -65,7 +67,7 @@ export const WagersScreen = () => {
   // 1 s tick while any wager is accepted/submitted but not settled — drives
   // the settle countdown (both live and wallet modes carry real deadlines).
   useEffect(() => {
-    const needsTick = wagers.some((w) => w.status !== 'settled' && w.status !== 'open');
+    const needsTick = wagers.some((w) => w.status !== "settled" && w.status !== "open");
     if (!needsTick) return;
     const timer = window.setInterval(() => setNow(Date.now()), 1_000);
     return () => window.clearInterval(timer);
@@ -81,8 +83,8 @@ export const WagersScreen = () => {
     try {
       await fn();
     } catch (err) {
-      logError('WagersScreen.action', err);
-      setActionError(err instanceof Error ? err.message : 'action failed');
+      logError("WagersScreen.action", err);
+      setActionError(err instanceof Error ? err.message : "action failed");
     } finally {
       setBusyId(null);
     }
@@ -94,8 +96,8 @@ export const WagersScreen = () => {
       await createWager(req);
       setCreateOpen(false);
     } catch (err) {
-      logError('WagersScreen.create', err);
-      setActionError(err instanceof Error ? err.message : 'wager create failed');
+      logError("WagersScreen.create", err);
+      setActionError(err instanceof Error ? err.message : "wager create failed");
     }
   };
 
@@ -105,8 +107,8 @@ export const WagersScreen = () => {
       setCopied(id);
       window.setTimeout(() => setCopied(null), 1_500);
     } catch (err) {
-      logError('WagersScreen.copyChallengeId', err);
-      setActionError('clipboard unavailable');
+      logError("WagersScreen.copyChallengeId", err);
+      setActionError("clipboard unavailable");
     }
   };
 
@@ -114,31 +116,35 @@ export const WagersScreen = () => {
     wager.submissions.some((s) => s.athlete.handle === athlete.handle);
 
   const settleLocked = (wager: WagerView): { locked: boolean; label: string } => {
-    if (wager.deadlineBlock <= 0n) return { locked: false, label: '' };
+    if (wager.deadlineBlock <= 0n) return { locked: false, label: "" };
     const readyAt = settleReadyAtMs(wager.deadlineBlock);
     const left = readyAt - now;
-    if (left <= 0) return { locked: false, label: 'settle unlocked' };
+    if (left <= 0) return { locked: false, label: "settle unlocked" };
     return { locked: true, label: `settle in ${formatCountdown(left)}` };
   };
 
   // Submissions close at the deadline (the contract enforces it — audit H1);
   // the UI mirrors it so the button state never lies.
   const submitLocked = (wager: WagerView): { locked: boolean; label: string } => {
-    if (wager.deadlineBlock <= 0n) return { locked: false, label: '' };
+    if (wager.deadlineBlock <= 0n) return { locked: false, label: "" };
     const left = Number(wager.deadlineBlock) * 1000 - now;
-    if (left <= 0) return { locked: true, label: 'submissions closed at the deadline' };
+    if (left <= 0) return { locked: true, label: "submissions closed at the deadline" };
     return { locked: false, label: `submissions close in ${formatCountdown(left)}` };
   };
 
   // The contract settles every outcome once the deadline + grace passes:
   // both submitted → reveal the winner; one → forfeit; none → refund both.
   const settleLabel = (wager: WagerView): string => {
-    const challengerSubmitted = wager.submissions.some((s) => s.athlete.handle === wager.challenger.handle);
-    const opponentSubmitted = wager.submissions.some((s) => s.athlete.handle === wager.opponent.handle);
-    if (challengerSubmitted && opponentSubmitted) return 'Settle — reveal winner';
+    const challengerSubmitted = wager.submissions.some(
+      (s) => s.athlete.handle === wager.challenger.handle,
+    );
+    const opponentSubmitted = wager.submissions.some(
+      (s) => s.athlete.handle === wager.opponent.handle,
+    );
+    if (challengerSubmitted && opponentSubmitted) return "Settle — reveal winner";
     if (challengerSubmitted) return `Settle — forfeit to ${wager.challenger.name}`;
     if (opponentSubmitted) return `Settle — forfeit to ${wager.opponent.name}`;
-    return 'Settle — refund both (no submissions)';
+    return "Settle — refund both (no submissions)";
   };
 
   return (
@@ -154,7 +160,12 @@ export const WagersScreen = () => {
           </div>
           {session ? (
             <div className="row" style={{ gap: 10 }}>
-              <Button tone="ghost" size="sm" onClick={() => void refresh()} title="Re-read wagers from the chain">
+              <Button
+                tone="ghost"
+                size="sm"
+                onClick={() => void refresh()}
+                title="Re-read wagers from the chain"
+              >
                 ↻ Refresh
               </Button>
               <Button tone="seal" onClick={() => setCreateOpen(true)}>
@@ -174,12 +185,16 @@ export const WagersScreen = () => {
       {isLive && session ? (
         <div style={{ marginBottom: 16 }}>
           <Card title="Roster — challenge IDs">
-            <div className="row" style={{ gap: 10, flexWrap: 'wrap' }}>
+            <div className="row" style={{ gap: 10, flexWrap: "wrap" }}>
               {[
-                { id: 'A', athlete: ATHLETE_A, note: 'seed ONE' },
-                { id: 'B', athlete: ATHLETE_B, note: 'seed TWO' },
+                { id: "A", athlete: ATHLETE_A, note: "seed ONE" },
+                { id: "B", athlete: ATHLETE_B, note: "seed TWO" },
               ].map((entry) => (
-                <div key={entry.id} className="chip chip--gold" style={{ padding: '6px 12px', gap: 8 }}>
+                <div
+                  key={entry.id}
+                  className="chip chip--gold"
+                  style={{ padding: "6px 12px", gap: 8 }}
+                >
                   <span style={{ fontWeight: 700 }}>{entry.athlete.name}</span>
                   <span className="faint">challenge ID</span>
                   <button
@@ -187,7 +202,7 @@ export const WagersScreen = () => {
                     title="copy challenge ID"
                     onClick={() => void copyChallengeId(entry.athlete.holderBinding)}
                   >
-                    {copied === entry.athlete.holderBinding ? 'Copied ✓' : 'Copy ID'}
+                    {copied === entry.athlete.holderBinding ? "Copied ✓" : "Copy ID"}
                   </button>
                   <span className="faint">{entry.note}</span>
                 </div>
@@ -214,59 +229,85 @@ export const WagersScreen = () => {
 
       {wagers.length === 0 ? (
         <div className="empty-state">
-          No wagers yet.{' '}
+          No wagers yet.{" "}
           {session
             ? isWallet
-              ? 'Challenge another wallet by its holder-binding ID (their Connect tab) — real NIGHT moves on-chain; the winner takes the pot plus a shielded NFT.'
-              : 'Create one — both athletes are sidecar identities (A/B); the winner takes the pot plus a shielded NFT.'
-            : 'Enter the demo on the Connect tab first.'}
+              ? "Challenge another wallet by its holder-binding ID (their Connect tab) — real NIGHT moves on-chain; the winner takes the pot plus a shielded NFT."
+              : "Create one — both athletes are sidecar identities (A/B); the winner takes the pot plus a shielded NFT."
+            : "Enter the demo on the Connect tab first."}
         </div>
       ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
           {wagers.map((wager) => {
-            const readyToSettle = wager.status === 'accepted' || wager.status === 'submitted';
+            const readyToSettle = wager.status === "accepted" || wager.status === "submitted";
             const lock = settleLocked(wager);
             const submitLock = submitLocked(wager);
             return (
-              <Card key={wager.id} title={`Wager #${wager.id} — ${wager.title}`} glow={wager.status !== 'settled'}>
+              <Card
+                key={wager.id}
+                title={`Wager #${wager.id} — ${wager.title}`}
+                glow={wager.status !== "settled"}
+              >
                 <div className="row-between" style={{ marginBottom: 14 }}>
-                  <div className="row" style={{ gap: 14, flexWrap: 'wrap' }}>
+                  <div className="row" style={{ gap: 14, flexWrap: "wrap" }}>
                     <Chip>{wager.metric.label}</Chip>
                     <Chip tone="gold">
-                      {fmtTnight(wager.stake)} {wager.result?.currency ?? 'NIGHT'} stake
+                      {fmtTnight(wager.stake)} {wager.result?.currency ?? "NIGHT"} stake
                     </Chip>
                     <Chip>
                       settle unlocks {formatCountdown(settleReadyAtMs(wager.deadlineBlock) - now)}
                     </Chip>
                   </div>
-                  <Chip tone={wager.status === 'settled' ? 'provable' : wager.status === 'submitted' ? 'seal' : 'default'}>
+                  <Chip
+                    tone={
+                      wager.status === "settled"
+                        ? "provable"
+                        : wager.status === "submitted"
+                          ? "seal"
+                          : "default"
+                    }
+                  >
                     {statusLabel[wager.status]}
                   </Chip>
                 </div>
 
-                <div className="row" style={{ gap: 22, justifyContent: 'center', margin: '18px 0' }}>
+                <div
+                  className="row"
+                  style={{ gap: 22, justifyContent: "center", margin: "18px 0" }}
+                >
                   <Envelope
                     label={wager.challenger.name}
-                    sealed={!wager.submissions.some((s) => s.athlete.handle === wager.challenger.handle)}
-                    commitment={wager.submissions.find((s) => s.athlete.handle === wager.challenger.handle)?.commitment}
+                    sealed={
+                      !wager.submissions.some((s) => s.athlete.handle === wager.challenger.handle)
+                    }
+                    commitment={
+                      wager.submissions.find((s) => s.athlete.handle === wager.challenger.handle)
+                        ?.commitment
+                    }
                     title="sealed submission — commitment on-chain; the value is revealed only at settlement"
                   />
                   <span className="faint mono">vs</span>
                   <Envelope
                     label={wager.opponent.name}
-                    sealed={!wager.submissions.some((s) => s.athlete.handle === wager.opponent.handle)}
-                    commitment={wager.submissions.find((s) => s.athlete.handle === wager.opponent.handle)?.commitment}
+                    sealed={
+                      !wager.submissions.some((s) => s.athlete.handle === wager.opponent.handle)
+                    }
+                    commitment={
+                      wager.submissions.find((s) => s.athlete.handle === wager.opponent.handle)
+                        ?.commitment
+                    }
                     title="sealed submission — commitment on-chain; the value is revealed only at settlement"
                   />
                 </div>
 
-                {wager.status === 'open' && wager.challenger.role === 'local' ? (
-                  <Notice tone="info" >
-                    Waiting for the opponent to accept — their wallet must accept this challenge (ID {wager.id}).
+                {wager.status === "open" && wager.challenger.role === "local" ? (
+                  <Notice tone="info">
+                    Waiting for the opponent to accept — their wallet must accept this challenge (ID{" "}
+                    {wager.id}).
                   </Notice>
                 ) : null}
 
-                {wager.status === 'open' && (isLive || wager.opponent.role === 'local') ? (
+                {wager.status === "open" && (isLive || wager.opponent.role === "local") ? (
                   <Button
                     tone="primary"
                     block
@@ -278,57 +319,78 @@ export const WagersScreen = () => {
                   </Button>
                 ) : null}
 
-                {isLive && wager.status === 'accepted' ? (
+                {isLive && wager.status === "accepted" ? (
                   <div className="row" style={{ gap: 10 }}>
                     <Button
                       tone="seal"
                       block
-                      disabled={busyId !== null || submittedBy(wager, wager.challenger) || submitLock.locked}
+                      disabled={
+                        busyId !== null || submittedBy(wager, wager.challenger) || submitLock.locked
+                      }
                       title={submitLock.locked ? submitLock.label : undefined}
-                      onClick={() => void run(wager.id, () => submitWorkout(wager.id, athleteOf(wager.challenger)))}
+                      onClick={() =>
+                        void run(wager.id, () =>
+                          submitWorkout(wager.id, athleteOf(wager.challenger)),
+                        )
+                      }
                     >
                       {busyId === wager.id ? <span className="spin" /> : null}
-                      {submittedBy(wager, wager.challenger) ? 'Sealed ✓' : `Seal ${wager.challenger.name}'s submission${submitLock.locked ? ` — ${submitLock.label}` : ''}`}
+                      {submittedBy(wager, wager.challenger)
+                        ? "Sealed ✓"
+                        : `Seal ${wager.challenger.name}'s submission${submitLock.locked ? ` — ${submitLock.label}` : ""}`}
                     </Button>
                     <Button
                       tone="seal"
                       block
-                      disabled={busyId !== null || submittedBy(wager, wager.opponent) || submitLock.locked}
+                      disabled={
+                        busyId !== null || submittedBy(wager, wager.opponent) || submitLock.locked
+                      }
                       title={submitLock.locked ? submitLock.label : undefined}
-                      onClick={() => void run(wager.id, () => submitWorkout(wager.id, athleteOf(wager.opponent)))}
+                      onClick={() =>
+                        void run(wager.id, () => submitWorkout(wager.id, athleteOf(wager.opponent)))
+                      }
                     >
                       {busyId === wager.id ? <span className="spin" /> : null}
-                      {submittedBy(wager, wager.opponent) ? 'Sealed ✓' : `Seal ${wager.opponent.name}'s submission${submitLock.locked ? ` — ${submitLock.label}` : ''}`}
+                      {submittedBy(wager, wager.opponent)
+                        ? "Sealed ✓"
+                        : `Seal ${wager.opponent.name}'s submission${submitLock.locked ? ` — ${submitLock.label}` : ""}`}
                     </Button>
                   </div>
                 ) : null}
 
-                {isWallet && wager.status === 'accepted' ? (
+                {isWallet && wager.status === "accepted" ? (
                   <Button
                     tone="seal"
                     block
-                    disabled={busyId !== null || submittedBy(wager, localSide(wager)) || !myCredentialId || submitLock.locked}
+                    disabled={
+                      busyId !== null ||
+                      submittedBy(wager, localSide(wager)) ||
+                      !myCredentialId ||
+                      submitLock.locked
+                    }
                     title={
                       submitLock.locked
                         ? submitLock.label
                         : myCredentialId
-                          ? 'Seals the latest attested workout — the value stays sealed until settle'
-                          : 'Attest a workout first (Connect tab)'
+                          ? "Seals the latest attested workout — the value stays sealed until settle"
+                          : "Attest a workout first (Connect tab)"
                     }
-                    onClick={() => void run(wager.id, () => submitWorkout(wager.id, myCredentialId))}
+                    onClick={() =>
+                      void run(wager.id, () => submitWorkout(wager.id, myCredentialId))
+                    }
                   >
                     {busyId === wager.id ? <span className="spin" /> : null}
                     {submittedBy(wager, localSide(wager))
-                      ? 'Sealed ✓ — waiting for the opponent'
+                      ? "Sealed ✓ — waiting for the opponent"
                       : submitLock.locked
                         ? `Submissions closed — ${submitLock.label}`
                         : myCredentialId
-                          ? 'Seal my submission (latest attested workout)'
-                          : 'Attest a workout first'}
+                          ? "Seal my submission (latest attested workout)"
+                          : "Attest a workout first"}
                   </Button>
                 ) : null}
 
-                {wager.status === 'accepted' && wager.submissions.length === 1 ? (
+                {wager.status === "accepted" && wager.submissions.length === 1 ? (
                   <Notice tone="info">Waiting for the other athlete's sealed submission…</Notice>
                 ) : null}
 
@@ -340,17 +402,18 @@ export const WagersScreen = () => {
                     onClick={() => void run(wager.id, () => settleWager(wager.id))}
                   >
                     {busyId === wager.id ? <span className="spin" /> : null}
-                    {settleLabel(wager)} under seal{lock.locked ? ` (${lock.label})` : ''}
+                    {settleLabel(wager)} under seal{lock.locked ? ` (${lock.label})` : ""}
                   </Button>
                 ) : null}
 
-                {wager.status === 'settled' && wager.result ? (
-                  <Notice tone={wager.result.tie || wager.result.forfeit ? 'info' : 'success'}>
-                    {wager.result.summary} · pot {fmtTnight(wager.result.pot)} {wager.result.currency} ·{' '}
+                {wager.status === "settled" && wager.result ? (
+                  <Notice tone={wager.result.tie || wager.result.forfeit ? "info" : "success"}>
+                    {wager.result.summary} · pot {fmtTnight(wager.result.pot)}{" "}
+                    {wager.result.currency} ·{" "}
                     {wager.result.disclosed
-                      ? 'the comparison was revealed on-chain at settlement'
-                      : 'comparison not disclosed'}
-                    {wager.result.nft ? ' · shielded NFT to the winner' : ''}
+                      ? "the comparison was revealed on-chain at settlement"
+                      : "comparison not disclosed"}
+                    {wager.result.nft ? " · shielded NFT to the winner" : ""}
                   </Notice>
                 ) : null}
               </Card>
@@ -362,10 +425,11 @@ export const WagersScreen = () => {
       {session ? (
         <div style={{ marginTop: 18 }}>
           <Notice tone="info">
-            Sealed submission commitments land on-chain as <code className="mono">persistentCommit</code>{' '}
-            envelopes — hover them: <code className="mono">{hexShort('0x' + '0'.repeat(64), 10, 8)}</code>{' '}
-            style. The values stay sealed until the deadline; at settlement the chain reveals both
-            openings to decide the winner — never before.
+            Sealed submission commitments land on-chain as{" "}
+            <code className="mono">persistentCommit</code> envelopes — hover them:{" "}
+            <code className="mono">{hexShort("0x" + "0".repeat(64), 10, 8)}</code> style. The values
+            stay sealed until the deadline; at settlement the chain reveals both openings to decide
+            the winner — never before.
           </Notice>
         </div>
       ) : null}
@@ -376,22 +440,22 @@ export const WagersScreen = () => {
         onCreate={handleCreate}
         isWallet={isWallet}
       />
-
     </div>
   );
 };
 
-const athleteOf = (athlete: Athlete): 'A' | 'B' => (athlete.handle === ATHLETE_B.handle ? 'B' : 'A');
+const athleteOf = (athlete: Athlete): "A" | "B" =>
+  athlete.handle === ATHLETE_B.handle ? "B" : "A";
 
 // Wallet mode: the athlete object of MY side (the client maps the local role).
 const localSide = (wager: WagerView): Athlete =>
-  wager.challenger.role === 'local' ? wager.challenger : wager.opponent;
+  wager.challenger.role === "local" ? wager.challenger : wager.opponent;
 
 // Wallet mode challenge input: the opponent's 64-hex holder binding
 // (their challenge ID, copied from their Connect tab). Accepts bare hex.
 const normalizeChallengeBinding = (input: string): string | null => {
-  const hex = input.trim().replace(/^0x/, '');
-  return /^[0-9a-fA-F]{64}$/.test(hex) ? '0x' + hex.toLowerCase() : null;
+  const hex = input.trim().replace(/^0x/, "");
+  return /^[0-9a-fA-F]{64}$/.test(hex) ? "0x" + hex.toLowerCase() : null;
 };
 
 const CreateWagerModal = ({
@@ -405,18 +469,18 @@ const CreateWagerModal = ({
   onCreate: (req: WagerCreateRequest) => Promise<void>;
   isWallet: boolean;
 }) => {
-  const [metricId, setMetricId] = useState<string>('1');
-  const [stake, setStake] = useState('10');
-  const [deadline, setDeadline] = useState('90');
-  const [challengeId, setChallengeId] = useState<string>('');
+  const [metricId, setMetricId] = useState<string>("1");
+  const [stake, setStake] = useState("10");
+  const [deadline, setDeadline] = useState("90");
+  const [challengeId, setChallengeId] = useState<string>("");
   const [challengeError, setChallengeError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
   const opponentOf = (): Athlete => {
     if (!isWallet) {
       const parsed = challengeIdOf(challengeId);
-      if (parsed === 'B') return ATHLETE_B;
-      if (parsed === 'A') return ATHLETE_A;
+      if (parsed === "B") return ATHLETE_B;
+      if (parsed === "A") return ATHLETE_A;
       return ATHLETE_B;
     }
     const binding = normalizeChallengeBinding(challengeId);
@@ -424,7 +488,7 @@ const CreateWagerModal = ({
     return {
       name: `Athlete ${hexShort(binding, 8, 6)}`,
       handle: hexShort(binding, 8, 6),
-      role: 'opponent',
+      role: "opponent",
       holderBinding: binding,
     };
   };
@@ -432,11 +496,13 @@ const CreateWagerModal = ({
   const validateChallenge = (): boolean => {
     if (isWallet) {
       if (normalizeChallengeBinding(challengeId) === null) {
-        setChallengeError('challenge ID must be the opponent\u2019s 64-hex holder binding (their Connect tab)');
+        setChallengeError(
+          "challenge ID must be the opponent\u2019s 64-hex holder binding (their Connect tab)",
+        );
         return false;
       }
     } else if (challengeIdOf(challengeId) === null) {
-      setChallengeError('unknown challenge ID — the roster IDs are A (Ava) and B (Milo)');
+      setChallengeError("unknown challenge ID — the roster IDs are A (Ava) and B (Milo)");
       return false;
     }
     setChallengeError(null);
@@ -464,12 +530,14 @@ const CreateWagerModal = ({
       <div className="field">
         <label>
           {isWallet
-            ? 'Opponent — their holder-binding challenge ID (0x + 64 hex, from their Connect tab)'
-            : 'Opponent — challenge by ID (A = Ava, B = Milo)'}
+            ? "Opponent — their holder-binding challenge ID (0x + 64 hex, from their Connect tab)"
+            : "Opponent — challenge by ID (A = Ava, B = Milo)"}
         </label>
         <input
           className="input"
-          placeholder={isWallet ? '0x4f8c… (paste the opponent\u2019s challenge ID)' : 'Challenge ID, e.g. B'}
+          placeholder={
+            isWallet ? "0x4f8c… (paste the opponent\u2019s challenge ID)" : "Challenge ID, e.g. B"
+          }
           value={challengeId}
           onChange={(e) => setChallengeId(e.target.value)}
         />
@@ -491,11 +559,23 @@ const CreateWagerModal = ({
       </div>
       <div className="field">
         <label>Stake (NIGHT)</label>
-        <input className="input" type="number" min={1} value={stake} onChange={(e) => setStake(e.target.value)} />
+        <input
+          className="input"
+          type="number"
+          min={1}
+          value={stake}
+          onChange={(e) => setStake(e.target.value)}
+        />
       </div>
       <div className="field">
         <label>Deadline (seconds from now)</label>
-        <input className="input" type="number" min={1} value={deadline} onChange={(e) => setDeadline(e.target.value)} />
+        <input
+          className="input"
+          type="number"
+          min={1}
+          value={deadline}
+          onChange={(e) => setDeadline(e.target.value)}
+        />
       </div>
       <div className="row-between">
         <Button tone="ghost" onClick={onClose}>

@@ -84,7 +84,12 @@ html::before {
   background:
     radial-gradient(ellipse 80% 55% at 12% 18%, var(--atmosphere-glow), transparent 58%),
     radial-gradient(ellipse 70% 50% at 88% 82%, var(--atmosphere-glow-2), transparent 55%),
-    linear-gradient(180deg, color-mix(in srgb, var(--bg) 88%, #1a2433) 0%, var(--bg) 48%, color-mix(in srgb, var(--bg) 92%, #000) 100%);
+    linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--bg) 88%, #1a2433) 0%,
+      var(--bg) 48%,
+      color-mix(in srgb, var(--bg) 92%, #000) 100%
+    );
 }
 
 html[data-theme="light"]::before {
@@ -121,10 +126,30 @@ html[data-atmosphere="track"]::after {
 /* 2) seal — concentric rings (commitment / vault) */
 html[data-atmosphere="seal"]::after {
   background-image:
-    radial-gradient(circle at 50% 48%, transparent 18%, var(--atmosphere-line) 18.5%, transparent 19%),
-    radial-gradient(circle at 50% 48%, transparent 32%, var(--atmosphere-line-strong) 32.5%, transparent 33.2%),
-    radial-gradient(circle at 50% 48%, transparent 48%, var(--atmosphere-line) 48.5%, transparent 49.2%),
-    radial-gradient(circle at 50% 48%, transparent 66%, var(--atmosphere-dot) 66.5%, transparent 67.2%);
+    radial-gradient(
+      circle at 50% 48%,
+      transparent 18%,
+      var(--atmosphere-line) 18.5%,
+      transparent 19%
+    ),
+    radial-gradient(
+      circle at 50% 48%,
+      transparent 32%,
+      var(--atmosphere-line-strong) 32.5%,
+      transparent 33.2%
+    ),
+    radial-gradient(
+      circle at 50% 48%,
+      transparent 48%,
+      var(--atmosphere-line) 48.5%,
+      transparent 49.2%
+    ),
+    radial-gradient(
+      circle at 50% 48%,
+      transparent 66%,
+      var(--atmosphere-dot) 66.5%,
+      transparent 67.2%
+    );
   opacity: 1;
   mask-image: radial-gradient(circle at 50% 48%, #000 10%, transparent 72%);
   -webkit-mask-image: radial-gradient(circle at 50% 48%, #000 10%, transparent 72%);
@@ -134,7 +159,12 @@ html[data-atmosphere="seal"]::after {
 html[data-atmosphere="grain"]::before {
   background:
     radial-gradient(ellipse 90% 40% at 50% 0%, var(--atmosphere-glow), transparent 60%),
-    linear-gradient(180deg, color-mix(in srgb, var(--bg) 70%, #243044) 0%, var(--bg) 42%, color-mix(in srgb, var(--bg) 85%, #000) 100%);
+    linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--bg) 70%, #243044) 0%,
+      var(--bg) 42%,
+      color-mix(in srgb, var(--bg) 85%, #000) 100%
+    );
 }
 
 html[data-theme="light"][data-atmosphere="grain"]::before {
@@ -223,7 +253,10 @@ html[data-atmosphere="grain"]::after {
   border-radius: 999px;
   cursor: pointer;
   backdrop-filter: blur(8px);
-  transition: color 120ms ease, border-color 120ms ease, background 120ms ease;
+  transition:
+    color 120ms ease,
+    border-color 120ms ease,
+    background 120ms ease;
 }
 
 .deck-toggle:hover,

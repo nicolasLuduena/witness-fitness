@@ -18,10 +18,10 @@
 // The three persistence functions operate on the module-level singleton
 // provider — the SAME map initializeProviders/joinStrideFromBrowser use — so
 // a backup captured at any point covers whatever the wallet flow has stored.
-import { FetchZkConfigProvider } from '@midnight-ntwrk/midnight-js-fetch-zk-config-provider';
-import { httpClientProofProvider } from '@midnight-ntwrk/midnight-js-http-client-proof-provider';
-import { indexerPublicDataProvider } from '@midnight-ntwrk/midnight-js-indexer-public-data-provider';
-import { fromHex, toHex } from '@midnight-ntwrk/compact-runtime';
+import { FetchZkConfigProvider } from "@midnight-ntwrk/midnight-js-fetch-zk-config-provider";
+import { httpClientProofProvider } from "@midnight-ntwrk/midnight-js-http-client-proof-provider";
+import { indexerPublicDataProvider } from "@midnight-ntwrk/midnight-js-indexer-public-data-provider";
+import { fromHex, toHex } from "@midnight-ntwrk/compact-runtime";
 import {
   Binding,
   FinalizedTransaction,
@@ -29,16 +29,20 @@ import {
   SignatureEnabled,
   Transaction,
   TransactionId,
-} from '@midnight-ntwrk/ledger-v8';
-import type { Contract as CompactContract } from '@midnight-ntwrk/compact-js';
-import type { UnboundTransaction } from '@midnight-ntwrk/midnight-js-types';
-import type { ConnectedAPI } from '@midnight-ntwrk/dapp-connector-api';
-import { createPrivateState, type PrivateState, type StrideContractType } from '@witnessfitness/contract';
-import { inMemoryPrivateStateProvider } from './in-memory-private-state-provider.js';
-import { StrideContract, type StrideProviders } from './index.js';
-import { setNetworkId } from '@midnight-ntwrk/midnight-js-network-id';
+} from "@midnight-ntwrk/ledger-v8";
+import type { Contract as CompactContract } from "@midnight-ntwrk/compact-js";
+import type { UnboundTransaction } from "@midnight-ntwrk/midnight-js-types";
+import type { ConnectedAPI } from "@midnight-ntwrk/dapp-connector-api";
+import {
+  createPrivateState,
+  type PrivateState,
+  type StrideContractType,
+} from "@witnessfitness/contract";
+import { inMemoryPrivateStateProvider } from "./in-memory-private-state-provider.js";
+import { StrideContract, type StrideProviders } from "./index.js";
+import { setNetworkId } from "@midnight-ntwrk/midnight-js-network-id";
 
-export { inMemoryPrivateStateProvider } from './in-memory-private-state-provider.js';
+export { inMemoryPrivateStateProvider } from "./in-memory-private-state-provider.js";
 
 // Page-load singleton: one map for the provider stack AND the backup/restore
 // surface (P0-3). Do not create providers per call.
@@ -50,7 +54,7 @@ export const exportPrivateState = (password: string, storeName: string): Promise
 export const importPrivateState = (
   password: string,
   storeName: string,
-  payload: string
+  payload: string,
 ): Promise<void> => browserPrivateStateProvider.importPrivateState(password, storeName, payload);
 
 export const resetPrivateState = (storeName: string): Promise<void> =>
@@ -66,7 +70,7 @@ export const initializeProviders = async (connectedAPI: ConnectedAPI): Promise<S
   // must configure it before ANY wallet/contract operation — otherwise every
   // circuit call throws "Network ID has not been configured. Call
   // setNetworkId() before any wallet or contract operation."
-  setNetworkId(config.networkId ?? 'undeployed');
+  setNetworkId(config.networkId ?? "undeployed");
   const shieldedAddresses = await connectedAPI.getShieldedAddresses();
   return {
     privateStateProvider: browserPrivateStateProvider,
@@ -85,10 +89,10 @@ export const initializeProviders = async (connectedAPI: ConnectedAPI): Promise<S
         const serializedTx = toHex(tx.serialize());
         const received = await connectedAPI.balanceUnsealedTransaction(serializedTx);
         return Transaction.deserialize<SignatureEnabled, Proof, Binding>(
-          'signature',
-          'proof',
-          'binding',
-          fromHex(received.tx)
+          "signature",
+          "proof",
+          "binding",
+          fromHex(received.tx),
         );
       },
     },
@@ -104,7 +108,8 @@ export const initializeProviders = async (connectedAPI: ConnectedAPI): Promise<S
 
 // Random 32-byte app identity — never derived from wallet keys. The UI stores
 // it alongside the exported private state so a user can resume on any device.
-export const deriveBrowserHolderSecret = (): Uint8Array => crypto.getRandomValues(new Uint8Array(32));
+export const deriveBrowserHolderSecret = (): Uint8Array =>
+  crypto.getRandomValues(new Uint8Array(32));
 
 // Convenience join for the browser: fresh providers + a fresh holder secret.
 // The admin secret is zeroed — the contract's isAdmin circuit requires
@@ -113,13 +118,13 @@ export const deriveBrowserHolderSecret = (): Uint8Array => crypto.getRandomValue
 export const joinStrideFromBrowser = async (
   connectedAPI: ConnectedAPI,
   contractAddress: string,
-  privateStateId: string
+  privateStateId: string,
 ): Promise<StrideContract> => {
   const providers = await initializeProviders(connectedAPI);
   return StrideContract.join(
     providers,
     contractAddress,
     privateStateId,
-    createPrivateState(new Uint8Array(32), deriveBrowserHolderSecret())
+    createPrivateState(new Uint8Array(32), deriveBrowserHolderSecret()),
   );
 };

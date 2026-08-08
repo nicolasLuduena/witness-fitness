@@ -9,9 +9,9 @@
 // this module is part of the browser bundle. The wire payloads are self-
 // contained (salt/iv travel with the ciphertext); a wrong password fails
 // AES-GCM authentication with a clear error.
-import type { Contract } from '@midnight-ntwrk/compact-js';
-import type { SigningKey } from '@midnight-ntwrk/compact-runtime';
-import type { ContractAddress } from '@midnight-ntwrk/ledger-v8';
+import type { Contract } from "@midnight-ntwrk/compact-js";
+import type { SigningKey } from "@midnight-ntwrk/compact-runtime";
+import type { ContractAddress } from "@midnight-ntwrk/ledger-v8";
 import {
   ExportDecryptionError,
   type ExportPrivateStatesOptions,
@@ -30,7 +30,7 @@ import {
   type PrivateStateProvider,
   type SigningKeyExport,
   SigningKeyExportError,
-} from '@midnight-ntwrk/midnight-js-types';
+} from "@midnight-ntwrk/midnight-js-types";
 
 const PBKDF2_ITERATIONS = 100_000;
 const KEY_LENGTH_BITS = 256;
@@ -58,7 +58,7 @@ const encoder = new TextEncoder();
 const decoder = new TextDecoder();
 
 const bytesToBase64 = (bytes: Uint8Array): string => {
-  let binary = '';
+  let binary = "";
   for (let i = 0; i < bytes.length; i += 0x8000) {
     binary += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
   }
@@ -76,11 +76,11 @@ const base64ToBytes = (base64: string): Uint8Array => {
 
 const bytesToHex = (bytes: Uint8Array): string =>
   Array.from(bytes)
-    .map((b) => b.toString(16).padStart(2, '0'))
-    .join('');
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
 
 const hexToBytes = (hex: string): Uint8Array => {
-  const clean = hex.replace(/^0x/, '');
+  const clean = hex.replace(/^0x/, "");
   const bytes = new Uint8Array(clean.length / 2);
   for (let i = 0; i < bytes.length; i += 1) {
     bytes[i] = Number.parseInt(clean.slice(i * 2, i * 2 + 2), 16);
@@ -91,7 +91,7 @@ const hexToBytes = (hex: string): Uint8Array => {
 // PrivateState carries bigints and Uint8Arrays, which JSON.stringify cannot
 // serialize directly — tag them so the import can revive the exact shapes.
 const serializeValue = (value: unknown): unknown => {
-  if (typeof value === 'bigint') {
+  if (typeof value === "bigint") {
     return { $bigint: value.toString(16) };
   }
   if (value instanceof Uint8Array) {
@@ -100,9 +100,9 @@ const serializeValue = (value: unknown): unknown => {
   if (Array.isArray(value)) {
     return value.map(serializeValue);
   }
-  if (value !== null && typeof value === 'object') {
+  if (value !== null && typeof value === "object") {
     return Object.fromEntries(
-      Object.entries(value as Record<string, unknown>).map(([k, v]) => [k, serializeValue(v)])
+      Object.entries(value as Record<string, unknown>).map(([k, v]) => [k, serializeValue(v)]),
     );
   }
   return value;
@@ -112,45 +112,47 @@ const deserializeValue = (value: unknown): unknown => {
   if (Array.isArray(value)) {
     return value.map(deserializeValue);
   }
-  if (value !== null && typeof value === 'object') {
+  if (value !== null && typeof value === "object") {
     const record = value as Record<string, unknown>;
-    if (typeof record.$bigint === 'string') {
-      return BigInt('0x' + record.$bigint);
+    if (typeof record.$bigint === "string") {
+      return BigInt("0x" + record.$bigint);
     }
-    if (typeof record.$bytes === 'string') {
+    if (typeof record.$bytes === "string") {
       return hexToBytes(record.$bytes);
     }
-    return Object.fromEntries(
-      Object.entries(record).map(([k, v]) => [k, deserializeValue(v)])
-    );
+    return Object.fromEntries(Object.entries(record).map(([k, v]) => [k, deserializeValue(v)]));
   }
   return value;
 };
 
 const deriveKey = async (password: string, salt: Uint8Array): Promise<CryptoKey> => {
-  const material = await crypto.subtle.importKey('raw', encoder.encode(password), 'PBKDF2', false, [
-    'deriveKey',
+  const material = await crypto.subtle.importKey("raw", encoder.encode(password), "PBKDF2", false, [
+    "deriveKey",
   ]);
   // Uint8Array is a valid BufferSource at runtime; the DOM lib's generic
   // Uint8Array<ArrayBufferLike> typing is stricter than WebCrypto accepts.
   return crypto.subtle.deriveKey(
-    { name: 'PBKDF2', salt: salt as BufferSource, iterations: PBKDF2_ITERATIONS, hash: 'SHA-256' },
+    { name: "PBKDF2", salt: salt as BufferSource, iterations: PBKDF2_ITERATIONS, hash: "SHA-256" },
     material,
-    { name: 'AES-GCM', length: KEY_LENGTH_BITS },
+    { name: "AES-GCM", length: KEY_LENGTH_BITS },
     false,
-    ['encrypt', 'decrypt']
+    ["encrypt", "decrypt"],
   );
 };
 
-const encrypt = async (plaintext: string, password: string, salt: Uint8Array): Promise<Uint8Array> => {
+const encrypt = async (
+  plaintext: string,
+  password: string,
+  salt: Uint8Array,
+): Promise<Uint8Array> => {
   const key = await deriveKey(password, salt);
   const iv = crypto.getRandomValues(new Uint8Array(IV_LENGTH));
   const data = new Uint8Array(
     await crypto.subtle.encrypt(
-      { name: 'AES-GCM', iv: iv as BufferSource },
+      { name: "AES-GCM", iv: iv as BufferSource },
       key,
-      encoder.encode(plaintext)
-    )
+      encoder.encode(plaintext),
+    ),
   );
   return new Uint8Array([iv.length, ...iv, ...data]);
 };
@@ -161,9 +163,9 @@ const decrypt = async (blob: Uint8Array, password: string, salt: Uint8Array): Pr
   const data = blob.subarray(1 + ivLength);
   const key = await deriveKey(password, salt);
   const plaintext = await crypto.subtle.decrypt(
-    { name: 'AES-GCM', iv: iv as BufferSource },
+    { name: "AES-GCM", iv: iv as BufferSource },
     key,
-    data as BufferSource
+    data as BufferSource,
   );
   return decoder.decode(plaintext);
 };
@@ -196,7 +198,7 @@ export const inMemoryPrivateStateProvider = <
   const getScopedKey = (key: PSI): string => {
     if (contractAddress === null) {
       throw new Error(
-        'Contract address not set. Call setContractAddress() before accessing private state.'
+        "Contract address not set. Call setContractAddress() before accessing private state.",
       );
     }
     return `${contractAddress}:${key}`;
@@ -204,18 +206,21 @@ export const inMemoryPrivateStateProvider = <
 
   const exportPayload = async (
     password: string,
-    storeName: string
+    storeName: string,
   ): Promise<{ salt: Uint8Array; iv: Uint8Array; data: Uint8Array; plaintext: string }> => {
-    validatePassword(password, 'exportPrivateState');
+    validatePassword(password, "exportPrivateState");
     if (record.size === 0) {
-      throw new Error('No private states to export');
+      throw new Error("No private states to export");
     }
     const payload: PrivateStatePayload<PSI> = {
       version: CURRENT_EXPORT_VERSION,
       exportedAt: new Date().toISOString(),
       stateCount: record.size,
       states: Object.fromEntries(
-        Array.from(record.entries()).map(([key, value]) => [key, JSON.stringify(serializeValue(value))])
+        Array.from(record.entries()).map(([key, value]) => [
+          key,
+          JSON.stringify(serializeValue(value)),
+        ]),
       ) as Record<PSI, string>,
     };
     const plaintext = JSON.stringify({ store: storeName, ...payload });
@@ -279,7 +284,7 @@ export const inMemoryPrivateStateProvider = <
     },
 
     async importPrivateState(password: string, storeName: string, payload: string): Promise<void> {
-      validatePassword(password, 'importPrivateState');
+      validatePassword(password, "importPrivateState");
       let parsed: { salt?: unknown; iv?: unknown; data?: unknown };
       try {
         parsed = JSON.parse(payload) as typeof parsed;
@@ -287,18 +292,22 @@ export const inMemoryPrivateStateProvider = <
         throw new ExportDecryptionError();
       }
       if (
-        typeof parsed.salt !== 'string' ||
-        typeof parsed.iv !== 'string' ||
-        typeof parsed.data !== 'string'
+        typeof parsed.salt !== "string" ||
+        typeof parsed.iv !== "string" ||
+        typeof parsed.data !== "string"
       ) {
-        throw new InvalidExportFormatError('Malformed payload: expected { salt, iv, data }');
+        throw new InvalidExportFormatError("Malformed payload: expected { salt, iv, data }");
       }
       let plaintext: string;
       try {
         plaintext = await decrypt(
-          new Uint8Array([base64ToBytes(parsed.iv).length, ...base64ToBytes(parsed.iv), ...base64ToBytes(parsed.data)]),
+          new Uint8Array([
+            base64ToBytes(parsed.iv).length,
+            ...base64ToBytes(parsed.iv),
+            ...base64ToBytes(parsed.data),
+          ]),
           password,
-          base64ToBytes(parsed.salt)
+          base64ToBytes(parsed.salt),
         );
       } catch {
         throw new ExportDecryptionError();
@@ -312,8 +321,8 @@ export const inMemoryPrivateStateProvider = <
       const states = imported.states as Record<string, string> | undefined;
       if (
         states === null ||
-        typeof states !== 'object' ||
-        typeof imported.stateCount !== 'number' ||
+        typeof states !== "object" ||
+        typeof imported.stateCount !== "number" ||
         imported.stateCount !== Object.keys(states).length
       ) {
         throw new ExportDecryptionError();
@@ -343,15 +352,15 @@ export const inMemoryPrivateStateProvider = <
     async exportPrivateStates(options?: ExportPrivateStatesOptions): Promise<PrivateStateExport> {
       const maxStates = options?.maxStates ?? MAX_EXPORT_STATES;
       if (!options?.password) {
-        throw new PrivateStateExportError('Password is required for in-memory provider export');
+        throw new PrivateStateExportError("Password is required for in-memory provider export");
       }
-      validatePassword(options.password, 'exportPrivateStates');
+      validatePassword(options.password, "exportPrivateStates");
       if (record.size === 0) {
-        throw new PrivateStateExportError('No private states to export');
+        throw new PrivateStateExportError("No private states to export");
       }
       if (record.size > maxStates) {
         throw new PrivateStateExportError(
-          `Too many states to export (${record.size}). Maximum allowed: ${maxStates}`
+          `Too many states to export (${record.size}). Maximum allowed: ${maxStates}`,
         );
       }
       const { salt, blob } = await (async () => {
@@ -363,7 +372,7 @@ export const inMemoryPrivateStateProvider = <
             Array.from(record.entries()).map(([key, value]) => [
               key,
               JSON.stringify(serializeValue(value)),
-            ])
+            ]),
           ) as Record<PSI, string>,
         };
         const salt = crypto.getRandomValues(new Uint8Array(32));
@@ -371,7 +380,7 @@ export const inMemoryPrivateStateProvider = <
         return { salt, blob };
       })();
       return {
-        format: 'midnight-private-state-export',
+        format: "midnight-private-state-export",
         encryptedPayload: bytesToBase64(blob),
         salt: bytesToHex(salt),
       };
@@ -379,32 +388,36 @@ export const inMemoryPrivateStateProvider = <
 
     async importPrivateStates(
       exportData: PrivateStateExport,
-      options?: ImportPrivateStatesOptions
+      options?: ImportPrivateStatesOptions,
     ): Promise<ImportPrivateStatesResult> {
-      const conflictStrategy = options?.conflictStrategy ?? 'error';
-      if (exportData.format !== 'midnight-private-state-export') {
-        throw new InvalidExportFormatError('Unrecognized export format');
+      const conflictStrategy = options?.conflictStrategy ?? "error";
+      if (exportData.format !== "midnight-private-state-export") {
+        throw new InvalidExportFormatError("Unrecognized export format");
       }
       if (!exportData.encryptedPayload || !exportData.salt) {
-        throw new InvalidExportFormatError('Missing required fields');
+        throw new InvalidExportFormatError("Missing required fields");
       }
       if (!options?.password) {
-        throw new InvalidExportFormatError('Password is required for in-memory provider import');
+        throw new InvalidExportFormatError("Password is required for in-memory provider import");
       }
-      validatePassword(options.password, 'importPrivateStates');
+      validatePassword(options.password, "importPrivateStates");
       let payload: PrivateStatePayload<PSI>;
       try {
         payload = JSON.parse(
-          await decrypt(base64ToBytes(exportData.encryptedPayload), options.password, hexToBytes(exportData.salt))
+          await decrypt(
+            base64ToBytes(exportData.encryptedPayload),
+            options.password,
+            hexToBytes(exportData.salt),
+          ),
         ) as PrivateStatePayload<PSI>;
       } catch {
         throw new ExportDecryptionError();
       }
       if (
         !payload.states ||
-        typeof payload.states !== 'object' ||
-        typeof payload.version !== 'number' ||
-        typeof payload.stateCount !== 'number' ||
+        typeof payload.states !== "object" ||
+        typeof payload.version !== "number" ||
+        typeof payload.stateCount !== "number" ||
         !SUPPORTED_EXPORT_VERSIONS.includes(payload.version)
       ) {
         throw new ExportDecryptionError();
@@ -413,7 +426,7 @@ export const inMemoryPrivateStateProvider = <
       if (stateIds.length !== payload.stateCount || stateIds.length > maxStatesOf(options)) {
         throw new ExportDecryptionError();
       }
-      if (conflictStrategy === 'error') {
+      if (conflictStrategy === "error") {
         const conflicts = stateIds.filter((id) => record.has(id as string)).length;
         if (conflicts > 0) {
           throw new ImportConflictError(conflicts);
@@ -425,7 +438,7 @@ export const inMemoryPrivateStateProvider = <
       for (const stateId of stateIds) {
         const existing = record.get(stateId as string);
         if (existing !== undefined) {
-          if (conflictStrategy === 'skip') {
+          if (conflictStrategy === "skip") {
             skipped += 1;
             continue;
           }
@@ -441,15 +454,15 @@ export const inMemoryPrivateStateProvider = <
     async exportSigningKeys(options?: ExportSigningKeysOptions): Promise<SigningKeyExport> {
       const maxKeys = options?.maxKeys ?? MAX_EXPORT_SIGNING_KEYS;
       if (!options?.password) {
-        throw new SigningKeyExportError('Password is required for in-memory provider export');
+        throw new SigningKeyExportError("Password is required for in-memory provider export");
       }
-      validatePassword(options.password, 'exportSigningKeys');
+      validatePassword(options.password, "exportSigningKeys");
       if (signingKeys.size === 0) {
-        throw new SigningKeyExportError('No signing keys to export');
+        throw new SigningKeyExportError("No signing keys to export");
       }
       if (signingKeys.size > maxKeys) {
         throw new SigningKeyExportError(
-          `Too many keys to export (${signingKeys.size}). Maximum allowed: ${maxKeys}`
+          `Too many keys to export (${signingKeys.size}). Maximum allowed: ${maxKeys}`,
         );
       }
       const payload: SigningKeyPayload = {
@@ -460,13 +473,13 @@ export const inMemoryPrivateStateProvider = <
           Array.from(signingKeys.entries()).map(([address, key]) => [
             address,
             JSON.stringify(serializeValue(key)),
-          ])
+          ]),
         ),
       };
       const salt = crypto.getRandomValues(new Uint8Array(32));
       const blob = await encrypt(JSON.stringify(payload), options.password, salt);
       return {
-        format: 'midnight-signing-key-export',
+        format: "midnight-signing-key-export",
         encryptedPayload: bytesToBase64(blob),
         salt: bytesToHex(salt),
       };
@@ -474,32 +487,36 @@ export const inMemoryPrivateStateProvider = <
 
     async importSigningKeys(
       exportData: SigningKeyExport,
-      options?: ImportSigningKeysOptions
+      options?: ImportSigningKeysOptions,
     ): Promise<ImportSigningKeysResult> {
-      const conflictStrategy = options?.conflictStrategy ?? 'error';
-      if (exportData.format !== 'midnight-signing-key-export') {
-        throw new InvalidExportFormatError('Unrecognized export format');
+      const conflictStrategy = options?.conflictStrategy ?? "error";
+      if (exportData.format !== "midnight-signing-key-export") {
+        throw new InvalidExportFormatError("Unrecognized export format");
       }
       if (!exportData.encryptedPayload || !exportData.salt) {
-        throw new InvalidExportFormatError('Missing required fields');
+        throw new InvalidExportFormatError("Missing required fields");
       }
       if (!options?.password) {
-        throw new InvalidExportFormatError('Password is required for in-memory provider import');
+        throw new InvalidExportFormatError("Password is required for in-memory provider import");
       }
-      validatePassword(options.password, 'importSigningKeys');
+      validatePassword(options.password, "importSigningKeys");
       let payload: SigningKeyPayload;
       try {
         payload = JSON.parse(
-          await decrypt(base64ToBytes(exportData.encryptedPayload), options.password, hexToBytes(exportData.salt))
+          await decrypt(
+            base64ToBytes(exportData.encryptedPayload),
+            options.password,
+            hexToBytes(exportData.salt),
+          ),
         ) as SigningKeyPayload;
       } catch {
         throw new ExportDecryptionError();
       }
       if (
         !payload.keys ||
-        typeof payload.keys !== 'object' ||
-        typeof payload.version !== 'number' ||
-        typeof payload.keyCount !== 'number' ||
+        typeof payload.keys !== "object" ||
+        typeof payload.version !== "number" ||
+        typeof payload.keyCount !== "number" ||
         payload.keyCount !== Object.keys(payload.keys).length
       ) {
         throw new ExportDecryptionError();
@@ -510,7 +527,7 @@ export const inMemoryPrivateStateProvider = <
       for (const [address, serialized] of Object.entries(payload.keys)) {
         const existing = signingKeys.get(address);
         if (existing !== undefined) {
-          if (conflictStrategy === 'skip') {
+          if (conflictStrategy === "skip") {
             skipped += 1;
             continue;
           }
@@ -525,4 +542,5 @@ export const inMemoryPrivateStateProvider = <
   };
 };
 
-const maxStatesOf = (options?: ImportPrivateStatesOptions): number => options?.maxStates ?? MAX_EXPORT_STATES;
+const maxStatesOf = (options?: ImportPrivateStatesOptions): number =>
+  options?.maxStates ?? MAX_EXPORT_STATES;

@@ -3,11 +3,13 @@
 // (the local-fetch path is only used by the snarkjs/gnark engines, never by
 // stwo). Alias: `fs/promises` → this file (vite.config.ts).
 const unavailable = (name: string) => () => {
-  throw new Error(`${name} is not available in the browser — local zk-resource file fetching is Node-only (the browser path uses the stwo engine)`);
+  throw new Error(
+    `${name} is not available in the browser — local zk-resource file fetching is Node-only (the browser path uses the stwo engine)`,
+  );
 };
 
-export const readFile = unavailable('fs.readFile');
-export const readdir = unavailable('fs.readdir');
-export const stat = unavailable('fs.stat');
+export const readFile = unavailable("fs.readFile");
+export const readdir = unavailable("fs.readdir");
+export const stat = unavailable("fs.stat");
 
 export default { readFile, readdir, stat };

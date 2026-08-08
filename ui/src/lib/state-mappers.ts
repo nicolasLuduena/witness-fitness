@@ -5,10 +5,15 @@
 // BOTH: arrays AND Map-like objects (type-guarded) — never .map/.filter a
 // non-array again (audit P0-1).
 
-import { ATHLETE_A, BADGES } from '../domain/story';
-import { metricById, type AttestedCredential, type BadgeView, type StreakView } from '../domain/types';
-import { displayHash, hexShort } from './format';
-import { toEpochMs, toNumber } from './chain';
+import { ATHLETE_A, BADGES } from "../domain/story";
+import {
+  metricById,
+  type AttestedCredential,
+  type BadgeView,
+  type StreakView,
+} from "../domain/types";
+import { displayHash, hexShort } from "./format";
+import { toEpochMs, toNumber } from "./chain";
 
 export interface LedgerMetricLike {
   metricId?: number | string | bigint;
@@ -45,17 +50,20 @@ export interface LedgerMapLike<K, V> {
 }
 
 export const isLedgerMapLike = <K, V>(value: unknown): value is LedgerMapLike<K, V> =>
-  typeof value === 'object' &&
+  typeof value === "object" &&
   value !== null &&
-  typeof (value as { member?: unknown }).member === 'function' &&
-  typeof (value as { lookup?: unknown }).lookup === 'function';
-  // NOTE: deliberately does NOT require Symbol.iterator — the compiled
-  // badges ADT (Map<Field, Set<Uint8>>) exposes member/lookup but no outer
-  // iterator (codegen quirk for nested ADTs). The Map branch accesses via
-  // member/lookup only, so an outer iterator is never needed.
+  typeof (value as { member?: unknown }).member === "function" &&
+  typeof (value as { lookup?: unknown }).lookup === "function";
+// NOTE: deliberately does NOT require Symbol.iterator — the compiled
+// badges ADT (Map<Field, Set<Uint8>>) exposes member/lookup but no outer
+// iterator (codegen quirk for nested ADTs). The Map branch accesses via
+// member/lookup only, so an outer iterator is never needed.
 
 const bytesToHex = (bytes: Uint8Array): string =>
-  '0x' + Array.from(bytes).map((b) => b.toString(16).padStart(2, '0')).join('');
+  "0x" +
+  Array.from(bytes)
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
 
 // Normalized vault entries: Map-like (ledger: key = vaultKey bytes, entry =
 // {holderBinding, timestamp}) OR array (sidecar/stub: {vaultKey, timestamp,
@@ -67,7 +75,10 @@ export interface NormalizedVaultEntry {
 }
 
 export const vaultEntriesOf = (
-  vault: LedgerVaultEntryLike[] | LedgerMapLike<Uint8Array, { holderBinding: bigint; timestamp: bigint }> | undefined
+  vault:
+    | LedgerVaultEntryLike[]
+    | LedgerMapLike<Uint8Array, { holderBinding: bigint; timestamp: bigint }>
+    | undefined,
 ): NormalizedVaultEntry[] => {
   if (vault === undefined || vault === null) return [];
   if (isLedgerMapLike<Uint8Array, { holderBinding: bigint; timestamp: bigint }>(vault)) {
@@ -78,7 +89,7 @@ export const vaultEntriesOf = (
     }));
   }
   return (vault as LedgerVaultEntryLike[]).map((entry) => ({
-    vaultKey: entry.vaultKey ?? entry.key ?? '',
+    vaultKey: entry.vaultKey ?? entry.key ?? "",
     holderBinding: null,
     timestamp: entry.timestamp !== undefined ? BigInt(toNumber(entry.timestamp, 0)) : undefined,
   }));
@@ -88,7 +99,7 @@ export const credentialFromVaultEntry = (
   vaultKey: string,
   txHash: string | undefined,
   timestamp: number | string | bigint | undefined,
-  metrics: LedgerMetricLike[]
+  metrics: LedgerMetricLike[],
 ): AttestedCredential => {
   const chips =
     metrics.length > 0
@@ -98,11 +109,11 @@ export const credentialFromVaultEntry = (
           const value = toNumber(m.value, 0);
           return value > 0 ? metric.provableChip(value) : `attested ${m.label ?? metric.label}`;
         })
-      : ['attested credential (sealed on-chain)'];
+      : ["attested credential (sealed on-chain)"];
   return {
     id: hexShort(vaultKey, 12, 8),
     athlete: ATHLETE_A,
-    source: 'fixture-replay',
+    source: "fixture-replay",
     metric: metricById(BigInt(toNumber(metrics[0]?.metricId, 1))),
     value: toNumber(metrics[0]?.value, 0),
     commitment: vaultKey,
@@ -115,9 +126,13 @@ export const credentialFromVaultEntry = (
 };
 
 export const streakViewFrom = (
-  entry: LedgerStreakLike | LedgerStreakLike[] | LedgerMapLike<bigint, LedgerStreakLike> | undefined,
+  entry:
+    | LedgerStreakLike
+    | LedgerStreakLike[]
+    | LedgerMapLike<bigint, LedgerStreakLike>
+    | undefined,
   chainPrefix: string,
-  binding?: bigint
+  binding?: bigint,
 ): StreakView => {
   let resolved: LedgerStreakLike | undefined;
   if (isLedgerMapLike<bigint, LedgerStreakLike>(entry)) {
@@ -136,8 +151,8 @@ export const streakViewFrom = (
     lastDay: BigInt(lastDay),
     days: [
       ...(sealedToday
-        ? [{ day: lastDay, sealed: true, label: 'LAST', active: true }]
-        : [{ day: 0, sealed: false, label: 'TODAY', active: true }]),
+        ? [{ day: lastDay, sealed: true, label: "LAST", active: true }]
+        : [{ day: 0, sealed: false, label: "TODAY", active: true }]),
     ],
     chainId: displayHash(`${chainPrefix}:${lastDay}:${current}`),
   };
@@ -145,7 +160,7 @@ export const streakViewFrom = (
 
 export const badgeViewsFrom = (
   stateBadges: LedgerBadgeLike[] | LedgerMapLike<bigint, Iterable<bigint>> | undefined,
-  binding?: bigint
+  binding?: bigint,
 ): BadgeView[] => {
   const mintedIds = new Set<number>();
   if (isLedgerMapLike<bigint, Iterable<bigint>>(stateBadges)) {

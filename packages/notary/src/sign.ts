@@ -2,8 +2,8 @@
 // packages/contract/README.md "Notary parity contract"). k is a fresh CSPRNG
 // scalar per signature — the contract exports' deriveNonce is a deterministic
 // fixture helper only.
-import { randomBytes } from 'node:crypto';
-import { ecMulGenerator } from '@midnight-ntwrk/compact-runtime';
+import { randomBytes } from "node:crypto";
+import { ecMulGenerator } from "@midnight-ntwrk/compact-runtime";
 import {
   JUBJUB_ORDER,
   derivePublicKey,
@@ -11,13 +11,13 @@ import {
   schnorrChallenge,
   type A_Assertion,
   type SchnorrSignature,
-} from '@witnessfitness/contract';
+} from "@witnessfitness/contract";
 
 const TWO_248 = 1n << 248n;
 
 export const randomNonce = (): bigint => {
   for (;;) {
-    const candidate = BigInt('0x' + randomBytes(32).toString('hex')) % (JUBJUB_ORDER - 1n);
+    const candidate = BigInt("0x" + randomBytes(32).toString("hex")) % (JUBJUB_ORDER - 1n);
     if (candidate > 0n) {
       return candidate;
     }
@@ -40,6 +40,6 @@ export const publicKeyOf = (sk: bigint): { x: bigint; y: bigint } => derivePubli
 // Reduce an arbitrary hex secret to a valid nonzero Jubjub scalar. The
 // runtime's ecMulGenerator rejects scalars >= JUBJUB_ORDER.
 export const secretKeyFromHex = (hex: string): bigint => {
-  const scalar = BigInt('0x' + hex.replace(/^0x/, ''));
+  const scalar = BigInt("0x" + hex.replace(/^0x/, ""));
   return (scalar % (JUBJUB_ORDER - 1n)) + 1n;
 };

@@ -5,9 +5,11 @@
 // engine only, so koffi is never CALLED; the stub exists to satisfy the
 // import graph. Alias: `koffi` → this file (vite.config.ts).
 const unavailable = (name: string) => () => {
-  throw new Error(`${name} is not available in the browser — the WitnessFitness browser path uses the stwo ZK engine and never calls it`);
+  throw new Error(
+    `${name} is not available in the browser — the WitnessFitness browser path uses the stwo ZK engine and never calls it`,
+  );
 };
 
-export const load = unavailable('koffi.load');
-export const probe = unavailable('koffi.probe');
-export default { load: unavailable('koffi.load'), probe: unavailable('koffi.probe') };
+export const load = unavailable("koffi.load");
+export const probe = unavailable("koffi.probe");
+export default { load: unavailable("koffi.load"), probe: unavailable("koffi.probe") };

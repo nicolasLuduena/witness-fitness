@@ -20,10 +20,10 @@ import type {
   ZKOperator,
   ZKProofInput,
   ZKProofPublicSignals,
-} from '@reclaimprotocol/zk-symmetric-crypto';
-import * as s2circuits from './vendor/s2circuits.js';
+} from "@reclaimprotocol/zk-symmetric-crypto";
+import * as s2circuits from "./vendor/s2circuits.js";
 
-const DEFAULT_WASM_URL = new URL('./vendor/s2circuits_bg.wasm', import.meta.url);
+const DEFAULT_WASM_URL = new URL("./vendor/s2circuits_bg.wasm", import.meta.url);
 
 export type StwoWasmUrl = string | URL;
 
@@ -57,7 +57,7 @@ export function initStwoFromBytes(bytes: Uint8Array): void {
 }
 
 const bytesToBase64 = (bytes: Uint8Array): string => {
-  let bin = '';
+  let bin = "";
   for (let i = 0; i < bytes.length; i++) {
     bin += String.fromCharCode(bytes[i]);
   }
@@ -75,7 +75,7 @@ const base64ToBytes = (b64: string): Uint8Array => {
 
 const assertU32Counter = (counter: number): void => {
   if (!Number.isInteger(counter) || counter < 0 || counter > 0xffffffff) {
-    throw new RangeError('counter must be a uint32 integer (0 to 4294967295)');
+    throw new RangeError("counter must be a uint32 integer (0 to 4294967295)");
   }
 };
 
@@ -90,7 +90,7 @@ interface StwoWitnessJson {
 
 const serializeWitness = (algorithm: EncryptionAlgorithm, input: ZKProofInput): Uint8Array => {
   if (!input.noncesAndCounters?.length) {
-    throw new Error('noncesAndCounters must be a non-empty array');
+    throw new Error("noncesAndCounters must be a non-empty array");
   }
   const { nonce, counter } = input.noncesAndCounters[0];
   assertU32Counter(counter);
@@ -119,7 +119,7 @@ const proveFromWitness = async (witness: Uint8Array): Promise<{ proof: Uint8Arra
   const ciphertext = base64ToBytes(data.ciphertext);
   let resultJson: string;
   switch (data.algorithm) {
-    case 'chacha20':
+    case "chacha20":
       resultJson = s2circuits.generate_chacha20_proof(
         key,
         nonce,
@@ -128,7 +128,7 @@ const proveFromWitness = async (witness: Uint8Array): Promise<{ proof: Uint8Arra
         ciphertext,
       );
       break;
-    case 'aes-128-ctr':
+    case "aes-128-ctr":
       resultJson = s2circuits.generate_aes128_ctr_proof(
         key,
         nonce,
@@ -137,7 +137,7 @@ const proveFromWitness = async (witness: Uint8Array): Promise<{ proof: Uint8Arra
         ciphertext,
       );
       break;
-    case 'aes-256-ctr':
+    case "aes-256-ctr":
       resultJson = s2circuits.generate_aes256_ctr_proof(
         key,
         nonce,
@@ -154,7 +154,7 @@ const proveFromWitness = async (witness: Uint8Array): Promise<{ proof: Uint8Arra
     throw new Error(`Stwo proof generation failed: ${result.error}`);
   }
   if (!result.proof) {
-    throw new Error('Stwo proof generation failed: no proof returned');
+    throw new Error("Stwo proof generation failed: no proof returned");
   }
   // Decode base64 to binary for compact protobuf storage (matches gnark,
   // which also returns Uint8Array).
@@ -178,14 +178,13 @@ export function makeStwoZkOperator({ algorithm }: { algorithm: EncryptionAlgorit
       const expectedCiphertext = publicSignals.in;
       const expectedPlaintext = publicSignals.out;
       if (!expectedNonce || expectedCounter === undefined) {
-        logger?.warn('Invalid publicSignals: missing nonce or counter');
+        logger?.warn("Invalid publicSignals: missing nonce or counter");
         return false;
       }
       assertU32Counter(expectedCounter);
-      const proofStr =
-        typeof proof === 'string' ? proof : bytesToBase64(proof as Uint8Array);
+      const proofStr = typeof proof === "string" ? proof : bytesToBase64(proof as Uint8Array);
       let resultJson: string;
-      if (algorithm === 'chacha20') {
+      if (algorithm === "chacha20") {
         resultJson = s2circuits.verify_chacha20_proof(
           proofStr,
           expectedNonce,
@@ -204,7 +203,7 @@ export function makeStwoZkOperator({ algorithm }: { algorithm: EncryptionAlgorit
       }
       const result = JSON.parse(resultJson) as { error?: string; valid?: boolean };
       if (result.error) {
-        logger?.warn({ error: result.error }, 'Stwo STARK verification failed');
+        logger?.warn({ error: result.error }, "Stwo STARK verification failed");
         return false;
       }
       return result.valid === true;
@@ -219,7 +218,7 @@ export function makeStwoZkOperator({ algorithm }: { algorithm: EncryptionAlgorit
 
 export const makeBrowserStwoZkOperator = makeStwoZkOperator;
 
-const ALL_ALGORITHMS: EncryptionAlgorithm[] = ['chacha20', 'aes-128-ctr', 'aes-256-ctr'];
+const ALL_ALGORITHMS: EncryptionAlgorithm[] = ["chacha20", "aes-128-ctr", "aes-256-ctr"];
 
 let operatorCache: Record<EncryptionAlgorithm, ZKOperator> | undefined;
 

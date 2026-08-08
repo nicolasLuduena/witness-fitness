@@ -21,8 +21,8 @@
   --gold-dim: rgba(217, 164, 65, 0.14);
   --amber: #e0a04c;
   --danger: #e0564a;
-  --mono: ui-monospace, 'SF Mono', 'Cascadia Code', Menlo, Consolas, monospace;
-  --sans: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
+  --mono: ui-monospace, "SF Mono", "Cascadia Code", Menlo, Consolas, monospace;
+  --sans: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
   --radius: 12px;
 }
 
@@ -47,7 +47,7 @@ body {
 }
 
 body::before {
-  content: '';
+  content: "";
   position: fixed;
   inset: 0;
   pointer-events: none;
@@ -100,7 +100,7 @@ body::before {
 }
 
 .brand-mark::after {
-  content: 'W';
+  content: "W";
   position: absolute;
   inset: 0;
   display: grid;
@@ -252,7 +252,9 @@ body::before {
 }
 
 .card--glow {
-  box-shadow: 0 0 0 1px rgba(194, 59, 46, 0.12), 0 0 34px rgba(194, 59, 46, 0.06);
+  box-shadow:
+    0 0 0 1px rgba(194, 59, 46, 0.12),
+    0 0 34px rgba(194, 59, 46, 0.06);
 }
 
 .card-title {
@@ -267,7 +269,7 @@ body::before {
 }
 
 .card-title::after {
-  content: '';
+  content: "";
   flex: 1;
   height: 1px;
   background: var(--hairline);
@@ -469,7 +471,9 @@ body::before {
   border-radius: 10px;
   background: linear-gradient(160deg, #1a1416, #24181b);
   border: 1px solid #3a2426;
-  box-shadow: inset 0 0 24px rgba(0, 0, 0, 0.55), 0 6px 22px rgba(0, 0, 0, 0.45);
+  box-shadow:
+    inset 0 0 24px rgba(0, 0, 0, 0.55),
+    0 6px 22px rgba(0, 0, 0, 0.45);
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -477,17 +481,31 @@ body::before {
   gap: 7px;
   overflow: hidden;
   cursor: help;
-  transition: transform 0.18s ease, box-shadow 0.18s ease;
+  transition:
+    transform 0.18s ease,
+    box-shadow 0.18s ease;
 }
 
 .envelope::before {
   /* flap */
-  content: '';
+  content: "";
   position: absolute;
   inset: 0;
   background:
-    linear-gradient(135deg, transparent 48%, rgba(58, 36, 38, 0.85) 48%, rgba(58, 36, 38, 0.85) 52%, transparent 52%),
-    linear-gradient(45deg, transparent 48%, rgba(58, 36, 38, 0.85) 48%, rgba(58, 36, 38, 0.85) 52%, transparent 52%);
+    linear-gradient(
+      135deg,
+      transparent 48%,
+      rgba(58, 36, 38, 0.85) 48%,
+      rgba(58, 36, 38, 0.85) 52%,
+      transparent 52%
+    ),
+    linear-gradient(
+      45deg,
+      transparent 48%,
+      rgba(58, 36, 38, 0.85) 48%,
+      rgba(58, 36, 38, 0.85) 52%,
+      transparent 52%
+    );
   pointer-events: none;
 }
 
@@ -502,8 +520,20 @@ body::before {
 
 .envelope--open::before {
   background:
-    linear-gradient(135deg, transparent 48%, rgba(43, 77, 58, 0.9) 48%, rgba(43, 77, 58, 0.9) 52%, transparent 52%),
-    linear-gradient(45deg, transparent 48%, rgba(43, 77, 58, 0.9) 48%, rgba(43, 77, 58, 0.9) 52%, transparent 52%);
+    linear-gradient(
+      135deg,
+      transparent 48%,
+      rgba(43, 77, 58, 0.9) 48%,
+      rgba(43, 77, 58, 0.9) 52%,
+      transparent 52%
+    ),
+    linear-gradient(
+      45deg,
+      transparent 48%,
+      rgba(43, 77, 58, 0.9) 48%,
+      rgba(43, 77, 58, 0.9) 52%,
+      transparent 52%
+    );
 }
 
 .wax {
@@ -511,13 +541,15 @@ body::before {
   height: 26px;
   border-radius: 50%;
   background: radial-gradient(circle at 34% 30%, #e85a48, var(--seal) 55%, var(--seal-deep));
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.5), 0 0 14px var(--seal-glow);
+  box-shadow:
+    0 2px 6px rgba(0, 0, 0, 0.5),
+    0 0 14px var(--seal-glow);
   position: relative;
   z-index: 1;
 }
 
 .wax::after {
-  content: '';
+  content: "";
   position: absolute;
   inset: 6px;
   border-radius: 50%;
@@ -526,7 +558,9 @@ body::before {
 
 .envelope--open .wax {
   background: radial-gradient(circle at 34% 30%, #58d98c, var(--verified) 55%, #1e7a46);
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.5), 0 0 14px rgba(47, 191, 113, 0.4);
+  box-shadow:
+    0 2px 6px rgba(0, 0, 0, 0.5),
+    0 0 14px rgba(47, 191, 113, 0.4);
 }
 
 .envelope-label {

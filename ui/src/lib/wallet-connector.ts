@@ -3,13 +3,13 @@
 // configuration/networkId verification → address snapshot. Mirrors the
 // reference app's wallet context pattern.
 
-import type { ConnectedAPI, InitialAPI } from '@midnight-ntwrk/dapp-connector-api';
-import { MIN_WALLET_API_VERSION, NETWORK_ID } from '../config';
+import type { ConnectedAPI, InitialAPI } from "@midnight-ntwrk/dapp-connector-api";
+import { MIN_WALLET_API_VERSION, NETWORK_ID } from "../config";
 
 export class WalletUnavailableError extends Error {
   constructor(message: string) {
     super(message);
-    this.name = 'WalletUnavailableError';
+    this.name = "WalletUnavailableError";
   }
 }
 
@@ -55,7 +55,7 @@ export const discoverWalletSummaries = (): WalletSummary[] => {
   return Object.entries(midnight).map(([rdns, api]) => ({
     rdns,
     name: api.name ?? rdns,
-    icon: api.icon ?? '',
+    icon: api.icon ?? "",
     apiVersion: api.apiVersion,
   }));
 };
@@ -68,7 +68,7 @@ export const connectWallet = async (
   const wallets = discoverWallets();
   if (wallets.length === 0) {
     throw new WalletUnavailableError(
-      'No Midnight wallet detected — install a wallet extension (e.g. Lace)'
+      "No Midnight wallet detected — install a wallet extension (e.g. Lace)",
     );
   }
   const chosen = rdns ? midnight?.[rdns] : wallets[0];
@@ -78,7 +78,7 @@ export const connectWallet = async (
   const wallet = chosen;
   if (!versionAtLeast(wallet.apiVersion, MIN_WALLET_API_VERSION)) {
     throw new WalletUnavailableError(
-      `Wallet apiVersion ${wallet.apiVersion} is too old — need >= ${MIN_WALLET_API_VERSION}.`
+      `Wallet apiVersion ${wallet.apiVersion} is too old — need >= ${MIN_WALLET_API_VERSION}.`,
     );
   }
 
@@ -89,18 +89,18 @@ export const connectWallet = async (
     api.getShieldedAddresses(),
   ]);
 
-  if (connectionStatus.status !== 'connected') {
-    throw new WalletUnavailableError('Wallet is not connected to a network — switch to demo mode');
+  if (connectionStatus.status !== "connected") {
+    throw new WalletUnavailableError("Wallet is not connected to a network — switch to demo mode");
   }
   if (configuration.networkId !== networkId) {
     throw new WalletUnavailableError(
-      `Wallet is on network "${configuration.networkId}" but the devnet is "${networkId}" — point Lace at the local devnet or switch to demo mode`
+      `Wallet is on network "${configuration.networkId}" but the devnet is "${networkId}" — point Lace at the local devnet or switch to demo mode`,
     );
   }
 
   return {
     api,
-    rdns: rdns ?? Object.keys(window.midnight ?? {})[0] ?? 'unknown',
+    rdns: rdns ?? Object.keys(window.midnight ?? {})[0] ?? "unknown",
     name: wallet.name,
     apiVersion: wallet.apiVersion,
     shieldedAddress: shielded.shieldedAddress,

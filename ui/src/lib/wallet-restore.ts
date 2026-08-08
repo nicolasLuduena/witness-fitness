@@ -2,7 +2,7 @@
 // the backup lives in localStorage under `wf-wallet-backup-<addr-suffix>`;
 // restore ALWAYS loads the payload from storage — never from user input.
 
-const BACKUP_KEY_PREFIX = 'wf-wallet-backup';
+const BACKUP_KEY_PREFIX = "wf-wallet-backup";
 
 export const walletBackupKey = (address: string): string =>
   `${BACKUP_KEY_PREFIX}-${address.slice(-16)}`;
@@ -16,8 +16,7 @@ export const storeBackupPayload = (address: string, payload: string): void => {
   localStorage.setItem(walletBackupKey(address), payload);
 };
 
-export const hasStoredBackup = (address: string): boolean =>
-  readStoredBackup(address) !== null;
+export const hasStoredBackup = (address: string): boolean => readStoredBackup(address) !== null;
 
 // Restore orchestration: reads the stored payload and hands it to the bridge
 // (importPrivateState(password, storeName, payload)). The password is the only
@@ -29,7 +28,7 @@ export const performRestore = async (opts: {
 }): Promise<void> => {
   const payload = readStoredBackup(opts.address);
   if (payload === null) {
-    throw new Error('no backup stored for this wallet');
+    throw new Error("no backup stored for this wallet");
   }
   await opts.restorePrivateState(opts.password, payload);
 };

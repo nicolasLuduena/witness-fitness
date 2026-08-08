@@ -1,14 +1,23 @@
-import { logError } from '../lib/logger';
+import { logError } from "../lib/logger";
 // Demo state store: the single source of truth for all screens. Wraps the
 // WfClient (fixture or live) and holds the UI-facing slices: session,
 // credentials, wagers, streak, badges, proofs, notary strip, and the
 // settle-reveal beat state.
 
-import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { INITIAL_MODE } from '../config';
-import type { DemoMode } from '../config';
-import { createWfClient } from '../lib/wf-factory';
-import type { WfClient } from '../lib/wf-client';
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
+import { INITIAL_MODE } from "../config";
+import type { DemoMode } from "../config";
+import { createWfClient } from "../lib/wf-factory";
+import type { WfClient } from "../lib/wf-client";
 import type {
   AttestedCredential,
   AttestOutcome,
@@ -20,7 +29,7 @@ import type {
   WagerCreateRequest,
   WagerSettleResult,
   WagerView,
-} from '../domain/types';
+} from "../domain/types";
 
 export interface DemoState {
   mode: DemoMode;
@@ -95,7 +104,7 @@ export const DemoProvider = ({ children }: { children: ReactNode }) => {
       setStreak(strk);
       setBadges(bdgs);
     } catch (err) {
-      logError('DemoStore.refresh', err);
+      logError("DemoStore.refresh", err);
     }
   }, [client]);
 
@@ -103,7 +112,7 @@ export const DemoProvider = ({ children }: { children: ReactNode }) => {
     try {
       setNotaries(await client.notaryStatus());
     } catch (err) {
-      logError('DemoStore.refreshNotaries', err);
+      logError("DemoStore.refreshNotaries", err);
     }
   }, [client]);
 
@@ -116,21 +125,24 @@ export const DemoProvider = ({ children }: { children: ReactNode }) => {
     };
   }, [refresh, refreshNotaries]);
 
-  const connect = useCallback(async (rdns?: string) => {
-    setConnecting(true);
-    setConnectError(null);
-    try {
-      const s = await client.connect(rdns);
-      setSession(s);
-      await refresh();
-      await refreshNotaries();
-    } catch (err) {
-      logError('DemoStore.connect', err);
-      setConnectError(err instanceof Error ? err.message : 'connection failed');
-    } finally {
-      setConnecting(false);
-    }
-  }, [client, refresh, refreshNotaries]);
+  const connect = useCallback(
+    async (rdns?: string) => {
+      setConnecting(true);
+      setConnectError(null);
+      try {
+        const s = await client.connect(rdns);
+        setSession(s);
+        await refresh();
+        await refreshNotaries();
+      } catch (err) {
+        logError("DemoStore.connect", err);
+        setConnectError(err instanceof Error ? err.message : "connection failed");
+      } finally {
+        setConnecting(false);
+      }
+    },
+    [client, refresh, refreshNotaries],
+  );
 
   const attest = useCallback(async () => {
     setAttestRunning(true);
@@ -151,7 +163,7 @@ export const DemoProvider = ({ children }: { children: ReactNode }) => {
       await refresh();
       return wager;
     },
-    [client, refresh]
+    [client, refresh],
   );
 
   const acceptWager = useCallback(
@@ -159,7 +171,7 @@ export const DemoProvider = ({ children }: { children: ReactNode }) => {
       await client.acceptWager(id);
       await refresh();
     },
-    [client, refresh]
+    [client, refresh],
   );
 
   const submitWorkout = useCallback(
@@ -167,7 +179,7 @@ export const DemoProvider = ({ children }: { children: ReactNode }) => {
       await client.submitWorkout(id, credentialId);
       await refresh();
     },
-    [client, refresh]
+    [client, refresh],
   );
 
   const settleWager = useCallback(
@@ -176,7 +188,7 @@ export const DemoProvider = ({ children }: { children: ReactNode }) => {
       setSettleReveal(result);
       await refresh();
     },
-    [client, refresh]
+    [client, refresh],
   );
 
   const clearSettleReveal = useCallback(() => setSettleReveal(null), []);
@@ -192,7 +204,7 @@ export const DemoProvider = ({ children }: { children: ReactNode }) => {
       await client.mintBadge(badgeId);
       await refresh();
     },
-    [client, refresh]
+    [client, refresh],
   );
 
   const proveBadge = useCallback(
@@ -201,32 +213,35 @@ export const DemoProvider = ({ children }: { children: ReactNode }) => {
       setProofs((prev) => [proof, ...prev]);
       return;
     },
-    [client]
+    [client],
   );
 
   const backupPrivateState = client.backupPrivateState
     ? useCallback(
         (password: string) => {
-          if (!client.backupPrivateState) return Promise.reject(new Error('not supported in this mode'));
+          if (!client.backupPrivateState)
+            return Promise.reject(new Error("not supported in this mode"));
           return client.backupPrivateState(password);
         },
-        [client]
+        [client],
       )
     : undefined;
 
   const restorePrivateState = client.restorePrivateState
     ? useCallback(
         (password: string, payload: string) => {
-          if (!client.restorePrivateState) return Promise.reject(new Error('not supported in this mode'));
+          if (!client.restorePrivateState)
+            return Promise.reject(new Error("not supported in this mode"));
           return client.restorePrivateState(password, payload);
         },
-        [client]
+        [client],
       )
     : undefined;
 
   const resetPrivateState = client.resetPrivateState
     ? useCallback(() => {
-        if (!client.resetPrivateState) return Promise.reject(new Error('not supported in this mode'));
+        if (!client.resetPrivateState)
+          return Promise.reject(new Error("not supported in this mode"));
         return client.resetPrivateState();
       }, [client])
     : undefined;
@@ -268,6 +283,6 @@ export const DemoProvider = ({ children }: { children: ReactNode }) => {
 
 export const useDemo = (): DemoState => {
   const context = useContext(DemoContext);
-  if (!context) throw new Error('useDemo must be used within DemoProvider');
+  if (!context) throw new Error("useDemo must be used within DemoProvider");
   return context;
 };

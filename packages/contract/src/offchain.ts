@@ -7,12 +7,11 @@
 //           q * 2^248 + r == cFull in-field)
 // - s     = (k + c * sk) mod JUBJUB_ORDER
 // Signature is (R = k*G, s); the circuit verifies s*G == R + c*pk.
-import { ecMulGenerator } from '@midnight-ntwrk/compact-runtime';
-import { pureCircuits } from './managed/stride/contract/index.js';
-import type { A_Assertion, Schnorr_SchnorrSignature } from './managed/stride/contract/index.js';
+import { ecMulGenerator } from "@midnight-ntwrk/compact-runtime";
+import { pureCircuits } from "./managed/stride/contract/index.js";
+import type { A_Assertion, Schnorr_SchnorrSignature } from "./managed/stride/contract/index.js";
 
-export const JUBJUB_ORDER =
-  0x0e7db4ea6533afa906673b0101343b00a6682093ccc81082d0970e5ed6f72cb7n;
+export const JUBJUB_ORDER = 0x0e7db4ea6533afa906673b0101343b00a6682093ccc81082d0970e5ed6f72cb7n;
 const TWO_248 = 1n << 248n;
 
 export type SchnorrSignature = Schnorr_SchnorrSignature;
@@ -27,9 +26,9 @@ export const derivePublicKey = (sk: bigint): JubjubPoint => ecMulGenerator(sk);
 // needs reproducibility across Node and the browser.
 const fixtureDigest = (sk: bigint, seed: Uint8Array, tag: string): Uint8Array => {
   const input =
-    sk.toString(16).padStart(64, '0') +
+    sk.toString(16).padStart(64, "0") +
     tag +
-    Array.from(seed, (b) => b.toString(16).padStart(2, '0')).join('');
+    Array.from(seed, (b) => b.toString(16).padStart(2, "0")).join("");
   const out = new Uint8Array(32);
   for (let i = 0; i < 32; i++) {
     let h = (0x811c9dc5 ^ (i * 0x9e3779b1)) >>> 0;
@@ -44,9 +43,9 @@ const fixtureDigest = (sk: bigint, seed: Uint8Array, tag: string): Uint8Array =>
 
 // Deterministic k for reproducible fixtures; production notaries use a CSPRNG.
 export const deriveNonce = (sk: bigint, seed: Uint8Array): bigint => {
-  const h = fixtureDigest(sk, seed, 'wf:k:');
-  const hex = Array.from(h, (b) => b.toString(16).padStart(2, '0')).join('');
-  const k = BigInt('0x' + hex) % (JUBJUB_ORDER - 1n);
+  const h = fixtureDigest(sk, seed, "wf:k:");
+  const hex = Array.from(h, (b) => b.toString(16).padStart(2, "0")).join("");
+  const k = BigInt("0x" + hex) % (JUBJUB_ORDER - 1n);
   return k + 1n;
 };
 
@@ -56,20 +55,13 @@ export const encodeAssertion = (assertion: A_Assertion): bigint[] =>
 export const schnorrChallenge = (
   announcement: JubjubPoint,
   pk: JubjubPoint,
-  msg: bigint[]
-): bigint =>
-  pureCircuits.schnorrChallenge(
-    announcement.x,
-    announcement.y,
-    pk.x,
-    pk.y,
-    msg
-  );
+  msg: bigint[],
+): bigint => pureCircuits.schnorrChallenge(announcement.x, announcement.y, pk.x, pk.y, msg);
 
 export const signAssertion = (
   sk: bigint,
   assertion: A_Assertion,
-  nonceSeed: Uint8Array
+  nonceSeed: Uint8Array,
 ): SchnorrSignature => {
   const pk = derivePublicKey(sk);
   const msg = encodeAssertion(assertion);

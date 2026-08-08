@@ -16,10 +16,10 @@
 // unavailable (tests, first load), the local stub takes over with the same
 // surface.
 
-import type { ConnectedAPI } from '@midnight-ntwrk/dapp-connector-api';
-import { NOTARY_URLS } from '../config';
-import { logError } from './logger';
-import type { LedgerMapLike } from './state-mappers';
+import type { ConnectedAPI } from "@midnight-ntwrk/dapp-connector-api";
+import { NOTARY_URLS } from "../config";
+import { logError } from "./logger";
+import type { LedgerMapLike } from "./state-mappers";
 
 // Deterministic 32-byte (64-hex) digest for the TEST stub — FNV-1a expanded
 // over 32 lanes. Dependency-free + synchronous + identical in Node and the
@@ -37,7 +37,7 @@ const sha256Hex = (value: string): string => {
     }
     out[i] = h & 0xff;
   }
-  return Array.from(out, (b) => b.toString(16).padStart(2, '0')).join('');
+  return Array.from(out, (b) => b.toString(16).padStart(2, "0")).join("");
 };
 
 export interface WalletMetric {
@@ -58,7 +58,9 @@ export interface WalletVaultEntry {
 // ADTs (member/lookup/iterator, per the stride contract index.d.ts), while the
 // stub emits plain arrays/objects. UI mappers accept both (state-mappers).
 export interface WalletLedgerState {
-  vault: WalletVaultEntry[] | LedgerMapLike<Uint8Array, { holderBinding: bigint; timestamp: bigint }>;
+  vault:
+    | WalletVaultEntry[]
+    | LedgerMapLike<Uint8Array, { holderBinding: bigint; timestamp: bigint }>;
   streaks:
     | { count?: number | string; lastDay?: number | string }
     | Array<{ count?: number | string; lastDay?: number | string }>
@@ -146,11 +148,11 @@ export interface WalletStrideSession {
   submitWorkout(
     wagerId: bigint,
     attestation: WalletAttestation,
-    value: bigint
+    value: bigint,
   ): Promise<{ txHash: string }>;
   settleWager(
     id: bigint,
-    openings: { challenger: WalletWagerOpening; opponent: WalletWagerOpening }
+    openings: { challenger: WalletWagerOpening; opponent: WalletWagerOpening },
   ): Promise<{ txHash: string }>;
   stageSubmissionRand(rand: Uint8Array): Promise<void>;
   // The vault key of the attestation CURRENTLY staged in the private state
@@ -160,7 +162,10 @@ export interface WalletStrideSession {
   stagedVaultKey(): Promise<Uint8Array | null>;
   advanceStreak(vaultKey: Uint8Array): Promise<{ streakCount: bigint; lastDay: bigint }>;
   mintBadge(badgeId: number, vaultKey: Uint8Array): Promise<{ minted: boolean }>;
-  proveBadge(badgeId: number, verifierBinding: bigint): Promise<{ verified: boolean; verifierBinding: bigint }>;
+  proveBadge(
+    badgeId: number,
+    verifierBinding: bigint,
+  ): Promise<{ verified: boolean; verifierBinding: bigint }>;
   readState(): Promise<WalletLedgerState>;
 }
 
@@ -173,14 +178,14 @@ export interface WalletBridge {
   joinStrideFromBrowser(
     connectedAPI: ConnectedAPI,
     contractAddress: string,
-    privateStateId: string
+    privateStateId: string,
   ): Promise<WalletStrideSession>;
 }
 
 export class WalletBridgeNotImplementedError extends Error {
   constructor(feature: string) {
     super(`@witnessfitness/api/browser not available yet — ${feature} (stub) is not implemented`);
-    this.name = 'WalletBridgeNotImplementedError';
+    this.name = "WalletBridgeNotImplementedError";
   }
 }
 
@@ -203,14 +208,22 @@ interface StoredState {
   streakCount: number;
   lastDay: number;
   badges: number[];
-  attestations: Array<{ artifactsJson: string; commitRandHex: string; vaultKeyHex: string; metrics: WalletMetric[] }>;
+  attestations: Array<{
+    artifactsJson: string;
+    commitRandHex: string;
+    vaultKeyHex: string;
+    metrics: WalletMetric[];
+  }>;
 }
 
 const hexOf = (bytes: Uint8Array): string =>
-  '0x' + Array.from(bytes).map((b) => b.toString(16).padStart(2, '0')).join('');
+  "0x" +
+  Array.from(bytes)
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
 
 const bytesOf = (hex: string): Uint8Array => {
-  const bare = hex.replace(/^0x/, '');
+  const bare = hex.replace(/^0x/, "");
   const out = new Uint8Array(Math.ceil(bare.length / 2));
   for (let i = 0; i * 2 < bare.length; i += 1) {
     out[i] = Number.parseInt(bare.slice(i * 2, i * 2 + 2), 16) || 0;
@@ -238,7 +251,7 @@ export const createStubWalletBridge = (): WalletBridge => {
   const wagers = new Map<bigint, StubWagerRecord>();
   let nextWagerId = 1n;
   let lastConnected: ConnectedAPI | null = null;
-  let lastContractAddress = '';
+  let lastContractAddress = "";
 
   const addressOf = async (api: ConnectedAPI): Promise<string> => {
     const shielded = await api.getShieldedAddresses();
@@ -266,12 +279,13 @@ export const createStubWalletBridge = (): WalletBridge => {
 
     return {
       contractAddress: lastContractAddress,
-      holderBinding: '0x' + sha256Hex(storeName).slice(0, 64),
+      holderBinding: "0x" + sha256Hex(storeName).slice(0, 64),
       attest: async (artifacts) => {
         const s = state();
-        const metricsJson = (artifacts.responseText ?? '').match(/"distance"\s*:\s*([0-9.]+)/);
+        const metricsJson = (artifacts.responseText ?? "").match(/"distance"\s*:\s*([0-9.]+)/);
         const distance = metricsJson ? Math.round(Number(metricsJson[1])) : 0;
-        const metrics: WalletMetric[] = distance > 0 ? [{ metricId: '0x1', label: 'distance', value: String(distance) }] : [];
+        const metrics: WalletMetric[] =
+          distance > 0 ? [{ metricId: "0x1", label: "distance", value: String(distance) }] : [];
         const commitRand = crypto.getRandomValues(new Uint8Array(32));
         const vaultKey = crypto.getRandomValues(new Uint8Array(32));
         const vaultKeyHex = hexOf(vaultKey);
@@ -284,7 +298,7 @@ export const createStubWalletBridge = (): WalletBridge => {
         s.vault.unshift({ vaultKey: vaultKeyHex, timestamp: String(Date.now()), metrics });
         return {
           vaultKey,
-          txHash: '0x' + sha256Hex(`wf-tx:${vaultKeyHex}:${Date.now()}`).slice(0, 64),
+          txHash: "0x" + sha256Hex(`wf-tx:${vaultKeyHex}:${Date.now()}`).slice(0, 64),
           metrics,
           attestation: {
             assertion: { provider: 0n, claims: [{ metricId: 1n, value: BigInt(distance) }] },
@@ -305,10 +319,16 @@ export const createStubWalletBridge = (): WalletBridge => {
           accepted: w.accepted,
           settled: w.settled,
           challengerSubmission: w.submissions.challenger
-            ? { is_some: true, value: sealedCommit(w.submissions.challenger.value, w.submissions.challenger.rand) }
+            ? {
+                is_some: true,
+                value: sealedCommit(w.submissions.challenger.value, w.submissions.challenger.rand),
+              }
             : { is_some: false, value: new Uint8Array(32) },
           opponentSubmission: w.submissions.opponent
-            ? { is_some: true, value: sealedCommit(w.submissions.opponent.value, w.submissions.opponent.rand) }
+            ? {
+                is_some: true,
+                value: sealedCommit(w.submissions.opponent.value, w.submissions.opponent.rand),
+              }
             : { is_some: false, value: new Uint8Array(32) },
         })),
       createWager: async ({ opponentBinding, metricId, stake, deadlineBlock, routing }) => {
@@ -317,13 +337,13 @@ export const createStubWalletBridge = (): WalletBridge => {
         // passing undefined payout/coinKey to the real flow (audit P0-A).
         if (!routing || !(routing.payout instanceof Uint8Array) || !routing.coinKey?.bytes) {
           throw new Error(
-            'createWager requires routing { payout: Uint8Array, coinKey: { bytes } } — the real flow reads payout/coinKey flat'
+            "createWager requires routing { payout: Uint8Array, coinKey: { bytes } } — the real flow reads payout/coinKey flat",
           );
         }
         const id = nextWagerId;
         nextWagerId += 1n;
         wagers.set(id, {
-          challenger: BigInt('0x' + sha256Hex(storeName).slice(0, 64)),
+          challenger: BigInt("0x" + sha256Hex(storeName).slice(0, 64)),
           opponent: opponentBinding,
           metricId,
           stake,
@@ -332,14 +352,14 @@ export const createStubWalletBridge = (): WalletBridge => {
           settled: false,
           submissions: { challenger: null, opponent: null },
         });
-        return { txHash: '0x' + sha256Hex(`wf-create:${id}`).slice(0, 64) };
+        return { txHash: "0x" + sha256Hex(`wf-create:${id}`).slice(0, 64) };
       },
       acceptWager: async (id) => {
         const w = wagers.get(id);
-        if (!w) throw new Error('unknown wager');
-        if (w.accepted) throw new Error('wager already accepted');
+        if (!w) throw new Error("unknown wager");
+        if (w.accepted) throw new Error("wager already accepted");
         w.accepted = true;
-        return { txHash: '0x' + sha256Hex(`wf-accept:${id}`).slice(0, 64) };
+        return { txHash: "0x" + sha256Hex(`wf-accept:${id}`).slice(0, 64) };
       },
       submitWorkout: async (wagerId, attestation, value) => {
         // Strict-fake contract: the real submitWorkoutFlow stages the full
@@ -347,31 +367,31 @@ export const createStubWalletBridge = (): WalletBridge => {
         // .assertion/.signatures) — reject anything less loudly (audit P0-B).
         if (
           !attestation ||
-          typeof attestation.assertion !== 'object' ||
+          typeof attestation.assertion !== "object" ||
           attestation.assertion === null ||
           !Array.isArray(attestation.signatures)
         ) {
           throw new Error(
-            'submitWorkout requires the full attestation { assertion, signatures, commitRand, vaultKey } — the private state is staged from it'
+            "submitWorkout requires the full attestation { assertion, signatures, commitRand, vaultKey } — the private state is staged from it",
           );
         }
         const w = wagers.get(wagerId);
-        if (!w) throw new Error('unknown wager');
-        const mine = BigInt('0x' + sha256Hex(storeName).slice(0, 64));
+        if (!w) throw new Error("unknown wager");
+        const mine = BigInt("0x" + sha256Hex(storeName).slice(0, 64));
         const opening = { value, rand: stagedSubmissionRand };
         if (w.challenger === mine) {
-          if (w.submissions.challenger) throw new Error('already submitted');
+          if (w.submissions.challenger) throw new Error("already submitted");
           w.submissions.challenger = opening;
         } else {
-          if (w.submissions.opponent) throw new Error('already submitted');
+          if (w.submissions.opponent) throw new Error("already submitted");
           w.submissions.opponent = opening;
         }
-        return { txHash: '0x' + sha256Hex(`wf-submit:${wagerId}:${mine}`).slice(0, 64) };
+        return { txHash: "0x" + sha256Hex(`wf-submit:${wagerId}:${mine}`).slice(0, 64) };
       },
       settleWager: async (id, openings) => {
         const w = wagers.get(id);
-        if (!w) throw new Error('unknown wager');
-        if (w.settled) throw new Error('wager settled');
+        if (!w) throw new Error("unknown wager");
+        if (w.settled) throw new Error("wager settled");
         // Faithful to the contract: the openings are only verified against
         // the sealed commitments when BOTH submissions exist — the forfeit
         // (one) and refund (none) branches ignore them entirely.
@@ -379,16 +399,19 @@ export const createStubWalletBridge = (): WalletBridge => {
         if (both) {
           const match = (expected: WalletWagerOpening | null, actual: WalletWagerOpening) =>
             expected !== null &&
-            keysEqual(sealedCommit(actual.value, actual.rand), sealedCommit(expected.value, expected.rand));
+            keysEqual(
+              sealedCommit(actual.value, actual.rand),
+              sealedCommit(expected.value, expected.rand),
+            );
           if (!match(w.submissions.challenger, openings.challenger)) {
-            throw new Error('challenger opening does not match the sealed submission');
+            throw new Error("challenger opening does not match the sealed submission");
           }
           if (!match(w.submissions.opponent, openings.opponent)) {
-            throw new Error('opponent opening does not match the sealed submission');
+            throw new Error("opponent opening does not match the sealed submission");
           }
         }
         w.settled = true;
-        return { txHash: '0x' + sha256Hex(`wf-settle:${id}`).slice(0, 64) };
+        return { txHash: "0x" + sha256Hex(`wf-settle:${id}`).slice(0, 64) };
       },
       stageSubmissionRand: async (rand) => {
         stagedSubmissionRand = rand;
@@ -401,7 +424,7 @@ export const createStubWalletBridge = (): WalletBridge => {
       advanceStreak: async (vaultKey) => {
         const s = state();
         if (!s.attestations.some((a) => a.vaultKeyHex === hexOf(vaultKey))) {
-          throw new Error('unknown credential — attest first');
+          throw new Error("unknown credential — attest first");
         }
         s.streakCount = 1;
         s.lastDay = Math.floor(Date.now() / 86_400_000);
@@ -410,16 +433,18 @@ export const createStubWalletBridge = (): WalletBridge => {
       mintBadge: async (badgeId, vaultKey) => {
         const s = state();
         const a = s.attestations.find((x) => x.vaultKeyHex === hexOf(vaultKey));
-        if (!a) throw new Error('unknown credential — attest first');
+        if (!a) throw new Error("unknown credential — attest first");
         const distance = Number(a.metrics[0]?.value ?? 0);
-        if (badgeId === 1 && s.streakCount < 3) throw new Error('failed assert: Streak badge requires streak >= 3');
-        if (badgeId === 2 && distance < 10_000) throw new Error('failed assert: Distance below threshold');
+        if (badgeId === 1 && s.streakCount < 3)
+          throw new Error("failed assert: Streak badge requires streak >= 3");
+        if (badgeId === 2 && distance < 10_000)
+          throw new Error("failed assert: Distance below threshold");
         if (!s.badges.includes(badgeId)) s.badges.push(badgeId);
         return { minted: true };
       },
       proveBadge: async (badgeId, verifierBinding) => {
         const s = state();
-        if (!s.badges.includes(badgeId)) throw new Error('not a badge holder');
+        if (!s.badges.includes(badgeId)) throw new Error("not a badge holder");
         return { verified: true, verifierBinding };
       },
       readState: async () => {
@@ -440,7 +465,7 @@ export const createStubWalletBridge = (): WalletBridge => {
     },
     exportPrivateState: async (password, storeName) => {
       const s = stores.get(storeName);
-      if (!s) throw new Error('no private state to export — attest first');
+      if (!s) throw new Error("no private state to export — attest first");
       // Stub of the real AEAD envelope: the payload carries a password
       // check so import validates against the payload, not a remembered
       // password (the real bridge decrypts with the supplied password).
@@ -449,7 +474,7 @@ export const createStubWalletBridge = (): WalletBridge => {
     importPrivateState: async (password, storeName, payload) => {
       const parsed = JSON.parse(atob(payload)) as { data?: StoredState; passwordHash?: string };
       if (!parsed.data || parsed.passwordHash !== sha256Hex(password)) {
-        throw new Error('wrong backup password');
+        throw new Error("wrong backup password");
       }
       stores.set(storeName, parsed.data);
     },
@@ -457,7 +482,7 @@ export const createStubWalletBridge = (): WalletBridge => {
       stores.delete(storeName);
     },
     deriveBrowserHolderSecret: () => {
-      if (!lastConnected) throw new Error('wallet not connected');
+      if (!lastConnected) throw new Error("wallet not connected");
       void addressOf(lastConnected); // async probe — the real impl uses wallet signing
       // Random 32 bytes, matching the real deriveBrowserHolderSecret
       // (api/browser) — determinism comes from persistence, not derivation.
@@ -480,7 +505,7 @@ let stubSingleton: WalletBridge | null = null;
 
 const txHashOf = (tx: unknown): string => {
   const publicData = (tx as { public?: { txHash?: unknown } } | undefined)?.public;
-  return publicData && typeof publicData.txHash === 'string' ? publicData.txHash : '';
+  return publicData && typeof publicData.txHash === "string" ? publicData.txHash : "";
 };
 
 const keysEqual = (a: Uint8Array, b: Uint8Array): boolean =>
@@ -490,10 +515,12 @@ const claimsToMetrics = (claims: unknown): WalletMetric[] => {
   if (!Array.isArray(claims)) return [];
   return claims.map((raw) => {
     const claim = raw as { metricId?: unknown; value?: unknown };
-    const metricId = typeof claim.metricId === 'bigint' ? claim.metricId : BigInt(String(claim.metricId ?? 0));
-    const value = typeof claim.value === 'bigint' ? claim.value : BigInt(String(claim.value ?? 0));
-    const label = metricId === 1n ? 'distance' : metricId === 2n ? 'moving time' : `metric ${metricId}`;
-    return { metricId: '0x' + metricId.toString(16), label, value: value.toString() };
+    const metricId =
+      typeof claim.metricId === "bigint" ? claim.metricId : BigInt(String(claim.metricId ?? 0));
+    const value = typeof claim.value === "bigint" ? claim.value : BigInt(String(claim.value ?? 0));
+    const label =
+      metricId === 1n ? "distance" : metricId === 2n ? "moving time" : `metric ${metricId}`;
+    return { metricId: "0x" + metricId.toString(16), label, value: value.toString() };
   });
 };
 
@@ -505,13 +532,15 @@ const claimsToMetrics = (claims: unknown): WalletMetric[] => {
 export const adaptStrideSession = async (
   api: ConnectedAPI,
   contractAddress: string,
-  privateStateId: string
+  privateStateId: string,
 ): Promise<WalletStrideSession> => {
-  const browserMod = (await import(/* @vite-ignore */ '@witnessfitness/api/browser')) as unknown as {
+  const browserMod = (await import(
+    /* @vite-ignore */ "@witnessfitness/api/browser"
+  )) as unknown as {
     joinStrideFromBrowser: (
       api: ConnectedAPI,
       contractAddress: string,
-      privateStateId: string
+      privateStateId: string,
     ) => Promise<{
       providers: {
         privateStateProvider: {
@@ -533,12 +562,12 @@ export const adaptStrideSession = async (
       }>;
     }>;
   };
-  const apiMod = (await import(/* @vite-ignore */ '@witnessfitness/api')) as unknown as {
+  const apiMod = (await import(/* @vite-ignore */ "@witnessfitness/api")) as unknown as {
     NotaryClient: new (urls: string[]) => { attestate(artifacts: unknown): Promise<unknown> };
     attestWorkout(
       ctx: unknown,
       attestation: unknown,
-      commitRand: Uint8Array
+      commitRand: Uint8Array,
     ): Promise<{ vaultKey: Uint8Array; tx: unknown }>;
     createWagerFlow(ctx: unknown, input: unknown): Promise<unknown>;
     acceptWagerFlow(ctx: unknown, id: bigint, routing: unknown): Promise<unknown>;
@@ -548,7 +577,7 @@ export const adaptStrideSession = async (
       commitRand: Uint8Array,
       wagerId: bigint,
       vaultKey: Uint8Array,
-      value: bigint
+      value: bigint,
     ): Promise<unknown>;
     settleWagerFlow(ctx: unknown, id: bigint): Promise<unknown>;
     advanceStreakFlow(
@@ -556,18 +585,18 @@ export const adaptStrideSession = async (
       attestation: unknown,
       commitRand: Uint8Array,
       vaultKey: Uint8Array,
-      day: bigint
+      day: bigint,
     ): Promise<unknown>;
     mintBadgeFlow(
       ctx: unknown,
       attestation: unknown,
       commitRand: Uint8Array,
       badgeId: bigint,
-      vaultKey: Uint8Array
+      vaultKey: Uint8Array,
     ): Promise<unknown>;
     proveBadgeFlow(ctx: unknown, badgeId: bigint, verifierBinding: bigint): Promise<unknown>;
   };
-  const contractMod = (await import(/* @vite-ignore */ '@witnessfitness/contract')) as unknown as {
+  const contractMod = (await import(/* @vite-ignore */ "@witnessfitness/contract")) as unknown as {
     pureCircuits: {
       holderBinding(secret: Uint8Array): bigint;
       computeVaultKey(assertion: unknown, commitRand: Uint8Array): Uint8Array;
@@ -583,13 +612,16 @@ export const adaptStrideSession = async (
     | undefined;
   const holderSecret = stored?.holderSecret ?? new Uint8Array(32);
   const holderBinding =
-    '0x' + contractMod.pureCircuits.holderBinding(holderSecret).toString(16).padStart(64, '0');
+    "0x" + contractMod.pureCircuits.holderBinding(holderSecret).toString(16).padStart(64, "0");
   const ctx = { contract, privateStateId, holderSecret };
   const notaryClient = new apiMod.NotaryClient(NOTARY_URLS);
 
   const stage = async (patch: Record<string, unknown>): Promise<void> => {
     const existing =
-      ((await providers.privateStateProvider.get(privateStateId)) as Record<string, unknown> | null | undefined) ?? {};
+      ((await providers.privateStateProvider.get(privateStateId)) as
+        | Record<string, unknown>
+        | null
+        | undefined) ?? {};
     await providers.privateStateProvider.set(privateStateId, { ...existing, ...patch });
   };
 
@@ -608,15 +640,15 @@ export const adaptStrideSession = async (
       | null
       | undefined;
     if (!ps?.assertion) {
-      throw new Error('no attestation staged — attest a workout first');
+      throw new Error("no attestation staged — attest a workout first");
     }
     return {
       assertion: ps.assertion,
       signatures: ps.signatures ?? [],
       commitRand: ps.commitRand ?? new Uint8Array(32),
       notaryIds: [],
-      metricSource: 'strava',
-      identifier: '',
+      metricSource: "strava",
+      identifier: "",
     };
   };
 
@@ -626,7 +658,10 @@ export const adaptStrideSession = async (
       | null
       | undefined;
     if (!ps?.assertion) return null;
-    return contractMod.pureCircuits.computeVaultKey(ps.assertion, ps.commitRand ?? new Uint8Array(32));
+    return contractMod.pureCircuits.computeVaultKey(
+      ps.assertion,
+      ps.commitRand ?? new Uint8Array(32),
+    );
   };
 
   return {
@@ -696,7 +731,7 @@ export const adaptStrideSession = async (
         attestation.commitRand,
         wagerId,
         attestation.vaultKey,
-        value
+        value,
       );
       return { txHash: txHashOf(tx) };
     },
@@ -720,12 +755,15 @@ export const adaptStrideSession = async (
       const staged = await stagedAttestation();
       const ts = (staged.assertion as { timestamp?: bigint }).timestamp ?? 0n;
       const day = BigInt(Math.floor(Number(ts) / 86_400));
-      const stagedKey = contractMod.pureCircuits.computeVaultKey(staged.assertion, staged.commitRand);
+      const stagedKey = contractMod.pureCircuits.computeVaultKey(
+        staged.assertion,
+        staged.commitRand,
+      );
       // The contract opens ONLY persistentCommit(assertion, commitRand) — the
       // caller's key must be that one, not a vault-iteration guess (audit P1).
       if (!keysEqual(stagedKey, vaultKey)) {
         throw new Error(
-          `credential ${hexOf(vaultKey)} is not the staged attestation (${hexOf(stagedKey)}) — use stagedVaultKey()`
+          `credential ${hexOf(vaultKey)} is not the staged attestation (${hexOf(stagedKey)}) — use stagedVaultKey()`,
         );
       }
       await apiMod.advanceStreakFlow(ctx, staged, staged.commitRand, stagedKey, day);
@@ -738,10 +776,13 @@ export const adaptStrideSession = async (
     },
     mintBadge: async (badgeId, vaultKey) => {
       const staged = await stagedAttestation();
-      const stagedKey = contractMod.pureCircuits.computeVaultKey(staged.assertion, staged.commitRand);
+      const stagedKey = contractMod.pureCircuits.computeVaultKey(
+        staged.assertion,
+        staged.commitRand,
+      );
       if (!keysEqual(stagedKey, vaultKey)) {
         throw new Error(
-          `credential ${hexOf(vaultKey)} is not the staged attestation (${hexOf(stagedKey)}) — use stagedVaultKey()`
+          `credential ${hexOf(vaultKey)} is not the staged attestation (${hexOf(stagedKey)}) — use stagedVaultKey()`,
         );
       }
       await apiMod.mintBadgeFlow(ctx, staged, staged.commitRand, BigInt(badgeId), stagedKey);
@@ -754,9 +795,9 @@ export const adaptStrideSession = async (
     readState: async () => {
       const state = await contract.readState();
       return {
-        vault: state.vault as WalletLedgerState['vault'],
-        streaks: state.streaks as WalletLedgerState['streaks'],
-        badges: state.badges as WalletLedgerState['badges'],
+        vault: state.vault as WalletLedgerState["vault"],
+        streaks: state.streaks as WalletLedgerState["streaks"],
+        badges: state.badges as WalletLedgerState["badges"],
       };
     },
   };
@@ -765,7 +806,7 @@ export const adaptStrideSession = async (
 export const loadWalletBridge = async (): Promise<WalletBridge> => {
   try {
     // Probe the api module exists; the session adapter does the heavy lifting.
-    const mod = (await import(/* @vite-ignore */ '@witnessfitness/api/browser')) as unknown as {
+    const mod = (await import(/* @vite-ignore */ "@witnessfitness/api/browser")) as unknown as {
       initializeProviders: (api: ConnectedAPI) => Promise<unknown>;
       exportPrivateState: (password: string, storeName: string) => Promise<string>;
       importPrivateState: (password: string, storeName: string, payload: string) => Promise<void>;
@@ -775,7 +816,8 @@ export const loadWalletBridge = async (): Promise<WalletBridge> => {
     return {
       initializeProviders: (api) => mod.initializeProviders(api),
       exportPrivateState: (password, storeName) => mod.exportPrivateState(password, storeName),
-      importPrivateState: (password, storeName, payload) => mod.importPrivateState(password, storeName, payload),
+      importPrivateState: (password, storeName, payload) =>
+        mod.importPrivateState(password, storeName, payload),
       resetPrivateState: (storeName) => mod.resetPrivateState(storeName),
       deriveBrowserHolderSecret: () => mod.deriveBrowserHolderSecret(),
       joinStrideFromBrowser: (api, contractAddress, privateStateId) =>
@@ -786,14 +828,14 @@ export const loadWalletBridge = async (): Promise<WalletBridge> => {
     // behavior): a real-bridge failure must be loud and visible. The local
     // stub remains reachable ONLY in test mode (vitest) where the real api
     // module isn't part of the graph.
-    if (import.meta.env.MODE === 'test') {
-      logError('wallet-bridge.load (using local stub in tests)', err);
+    if (import.meta.env.MODE === "test") {
+      logError("wallet-bridge.load (using local stub in tests)", err);
       stubSingleton ??= createStubWalletBridge();
       return stubSingleton;
     }
-    logError('wallet-bridge.load (REAL bridge failed — no fallback)', err);
+    logError("wallet-bridge.load (REAL bridge failed — no fallback)", err);
     throw new Error(
-      `wallet bridge failed to load: ${err instanceof Error ? err.message : String(err)} — see the console`
+      `wallet bridge failed to load: ${err instanceof Error ? err.message : String(err)} — see the console`,
     );
   }
 };

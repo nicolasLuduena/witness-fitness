@@ -9,10 +9,10 @@
 // privateState.wagerOpenings = [challengerValue, challengerRand,
 // opponentValue, opponentRand].
 
-import { ATTEST_SERVICE_URL } from './attest/config';
-import { logError } from './logger';
+import { ATTEST_SERVICE_URL } from "./attest/config";
+import { logError } from "./logger";
 
-export type RelaySide = 'A' | 'B';
+export type RelaySide = "A" | "B";
 
 // Mutable for tests (vitest cannot wait 60s); the wallet-client reads it per
 // settle call.
@@ -24,12 +24,15 @@ export interface RelayOpening {
   rand: string; // 0x-hex (bigint)
 }
 
-export const hexOf = (value: bigint): string => '0x' + value.toString(16);
+export const hexOf = (value: bigint): string => "0x" + value.toString(16);
 
 export const bytesHexOf = (bytes: Uint8Array): string =>
-  '0x' + Array.from(bytes).map((b) => b.toString(16).padStart(2, '0')).join('');
+  "0x" +
+  Array.from(bytes)
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
 
-export const relaySideOf = (isChallenger: boolean): RelaySide => (isChallenger ? 'A' : 'B');
+export const relaySideOf = (isChallenger: boolean): RelaySide => (isChallenger ? "A" : "B");
 
 export const postWagerOpening = async (
   wagerId: number,
@@ -39,8 +42,8 @@ export const postWagerOpening = async (
   serviceUrl: string = ATTEST_SERVICE_URL,
 ): Promise<void> => {
   const res = await fetch(`${serviceUrl}/wager-openings`, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
+    method: "POST",
+    headers: { "content-type": "application/json" },
     // wagerId must be a STRING on the wire — the sidecar's /wager-openings
     // validates typeof wagerId === 'string' and 400s numbers (audit: the
     // curl-era tests used strings; the UI sent numbers and was never run
@@ -54,7 +57,7 @@ export const postWagerOpening = async (
   });
   if (!res.ok) {
     const body = (await res.json().catch((parseErr) => {
-      logError('wager-relay.parseErrorBody', parseErr);
+      logError("wager-relay.parseErrorBody", parseErr);
       return null;
     })) as { error?: string } | null;
     throw new Error(`wager-opening relay failed: ${body?.error ?? `HTTP ${res.status}`}`);
@@ -80,7 +83,7 @@ export const waitForBothOpenings = async (
   wagerId: number,
   opts: { sides?: RelaySide[]; timeoutMs?: number; pollMs?: number; serviceUrl?: string } = {},
 ): Promise<{ challenger: RelayOpening; opponent: RelayOpening }> => {
-  const sides = opts.sides ?? ['A', 'B'];
+  const sides = opts.sides ?? ["A", "B"];
   const timeoutMs = opts.timeoutMs ?? OPENING_RELAY_TIMEOUT.ms;
   const pollMs = opts.pollMs ?? 2_000;
   const serviceUrl = opts.serviceUrl;
@@ -88,13 +91,13 @@ export const waitForBothOpenings = async (
   for (;;) {
     const openings = await getWagerOpenings(wagerId, serviceUrl);
     const bySide = new Map(openings.map((o) => [o.who, o]));
-    const challenger = bySide.get('A');
-    const opponent = bySide.get('B');
+    const challenger = bySide.get("A");
+    const opponent = bySide.get("B");
     if (challenger && opponent) {
       return { challenger, opponent };
     }
     if (Date.now() > deadline) {
-      const missing = sides.filter((s) => !bySide.has(s)).join(' and ');
+      const missing = sides.filter((s) => !bySide.has(s)).join(" and ");
       throw new Error(
         `opponent's sealed opening (${missing}) never reached the relay — retry settle once both athletes have submitted`,
       );

@@ -5,9 +5,9 @@
 // makes any residual import evaluate cleanly and fail loudly only if called.
 export const createHash = (): never => {
   throw new Error(
-    'node:crypto.createHash is not available in the browser — contract libraries must be browser-pure'
+    "node:crypto.createHash is not available in the browser — contract libraries must be browser-pure",
   );
 };
 export const randomBytes = (): never => {
-  throw new Error('node:crypto.randomBytes is not available in the browser');
+  throw new Error("node:crypto.randomBytes is not available in the browser");
 };

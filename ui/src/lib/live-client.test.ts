@@ -2,23 +2,23 @@
 // clearly when the service is absent, and the attest path must fail clearly
 // while the attest workstream's flow replaces the (now removed) fixture log.
 
-import { describe, expect, it } from 'vitest';
-import { LiveClient } from './live-client';
-import { joinSidecar, SidecarOfflineError } from './chain';
+import { describe, expect, it } from "vitest";
+import { LiveClient } from "./live-client";
+import { joinSidecar, SidecarOfflineError } from "./chain";
 
-const DEAD_PORT = 'http://127.0.0.1:1';
+const DEAD_PORT = "http://127.0.0.1:1";
 
-describe('live path (sidecar delegation)', () => {
-  it('joinSidecar rejects with a clear offline error when the sidecar is down', async () => {
+describe("live path (sidecar delegation)", () => {
+  it("joinSidecar rejects with a clear offline error when the sidecar is down", async () => {
     await expect(joinSidecar(DEAD_PORT)).rejects.toThrow(SidecarOfflineError);
     await expect(joinSidecar(DEAD_PORT)).rejects.toThrow(/offline|switch to demo mode/);
   });
 
-  it('attest fails clearly while the attestation log is empty (Round 1B)', async () => {
+  it("attest fails clearly while the attestation log is empty (Round 1B)", async () => {
     globalThis.fetch = (async () =>
-      new Response(JSON.stringify({ ok: true, contractAddress: '0xdead', network: 'devnet' }), {
+      new Response(JSON.stringify({ ok: true, contractAddress: "0xdead", network: "devnet" }), {
         status: 200,
-        headers: { 'content-type': 'application/json' },
+        headers: { "content-type": "application/json" },
       })) as typeof fetch;
     try {
       const client = new LiveClient();

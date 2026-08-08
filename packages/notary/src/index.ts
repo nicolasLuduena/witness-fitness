@@ -3,20 +3,20 @@
 // assertion, signs it, and returns { assertion, signature, notaryId }.
 // GET /health and GET /pubkey expose the instance's identity for the demo
 // "3 notary keys" strip.
-import dotenv from 'dotenv';
-import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
-import { loadConfig, type NotaryConfig } from './config.js';
+import dotenv from "dotenv";
+import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
+import { loadConfig, type NotaryConfig } from "./config.js";
 
-dotenv.config({ path: process.env.NOTARY_ENV_FILE ?? '.env' });
-import { normalizeArtifacts, verifyReclaimProof } from './verify-reclaim.js';
-import { buildAssertion, metricLabel } from './assert.js';
-import { publicKeyOf, secretKeyFromHex, signAssertion } from './sign.js';
+dotenv.config({ path: process.env.NOTARY_ENV_FILE ?? ".env" });
+import { normalizeArtifacts, verifyReclaimProof } from "./verify-reclaim.js";
+import { buildAssertion, metricLabel } from "./assert.js";
+import { publicKeyOf, secretKeyFromHex, signAssertion } from "./sign.js";
 
 const readBody = (req: IncomingMessage, maxBytes: number): Promise<string> =>
   new Promise((resolve, reject) => {
     const chunks: Buffer[] = [];
     let size = 0;
-    req.on('data', (chunk: Buffer) => {
+    req.on("data", (chunk: Buffer) => {
       size += chunk.length;
       if (size > maxBytes) {
         reject(new Error(`request body exceeds ${maxBytes} bytes`));
@@ -25,33 +25,33 @@ const readBody = (req: IncomingMessage, maxBytes: number): Promise<string> =>
       }
       chunks.push(chunk);
     });
-    req.on('end', () => resolve(Buffer.concat(chunks).toString('utf-8')));
-    req.on('error', reject);
+    req.on("end", () => resolve(Buffer.concat(chunks).toString("utf-8")));
+    req.on("error", reject);
   });
 
 // Deep-convert bigint → hex string and Uint8Array → hex string before
 // JSON.stringify (a replacer alone can't catch Uint8Array: toJSON fires
 // first and turns Buffers into {type:'Buffer',...}).
 const jsonSafe = (value: unknown): unknown => {
-  if (typeof value === 'bigint') {
-    return '0x' + value.toString(16);
+  if (typeof value === "bigint") {
+    return "0x" + value.toString(16);
   }
   if (value instanceof Uint8Array) {
-    return '0x' + Buffer.from(value).toString('hex');
+    return "0x" + Buffer.from(value).toString("hex");
   }
   if (Array.isArray(value)) {
     return value.map(jsonSafe);
   }
-  if (value !== null && typeof value === 'object') {
+  if (value !== null && typeof value === "object") {
     return Object.fromEntries(
-      Object.entries(value as Record<string, unknown>).map(([k, v]) => [k, jsonSafe(v)])
+      Object.entries(value as Record<string, unknown>).map(([k, v]) => [k, jsonSafe(v)]),
     );
   }
   return value;
 };
 
 const sendJson = (res: ServerResponse, status: number, body: unknown): void => {
-  res.writeHead(status, { 'content-type': 'application/json' });
+  res.writeHead(status, { "content-type": "application/json" });
   res.end(JSON.stringify(jsonSafe(body)));
 };
 
@@ -60,22 +60,22 @@ const sendJson = (res: ServerResponse, status: number, body: unknown): void => {
 // non-matching origins are served without them (the browser blocks — the
 // correct behavior for a demo signer).
 const CORS_ALLOWED_ORIGINS = [
-  'http://localhost:5173',
-  'http://127.0.0.1:5173',
-  'http://localhost:4173',
-  'http://127.0.0.1:4173',
+  "http://localhost:5173",
+  "http://127.0.0.1:5173",
+  "http://localhost:4173",
+  "http://127.0.0.1:4173",
 ];
 
 const corsOriginFor = (req: IncomingMessage): string | null => {
   const origin = req.headers.origin;
-  return typeof origin === 'string' && CORS_ALLOWED_ORIGINS.includes(origin) ? origin : null;
+  return typeof origin === "string" && CORS_ALLOWED_ORIGINS.includes(origin) ? origin : null;
 };
 
 const applyCors = (res: ServerResponse, origin: string): void => {
-  res.setHeader('Access-Control-Allow-Origin', origin);
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'content-type');
-  res.setHeader('Vary', 'Origin');
+  res.setHeader("Access-Control-Allow-Origin", origin);
+  res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "content-type");
+  res.setHeader("Vary", "Origin");
 };
 
 export interface NotaryServer {
@@ -84,32 +84,32 @@ export interface NotaryServer {
   publicKey: { x: bigint; y: bigint };
 }
 
-export { metricLabel } from './assert.js';
+export { metricLabel } from "./assert.js";
 
 export const createNotaryServer = (config: NotaryConfig): NotaryServer => {
   const sk = secretKeyFromHex(config.notaryKey);
   const publicKey = publicKeyOf(sk);
 
   const handler = async (req: IncomingMessage, res: ServerResponse): Promise<void> => {
-    const url = new URL(req.url ?? '/', 'http://localhost');
-    if (req.method === 'GET' && url.pathname === '/health') {
+    const url = new URL(req.url ?? "/", "http://localhost");
+    if (req.method === "GET" && url.pathname === "/health") {
       sendJson(res, 200, {
         notaryId: config.notaryId,
-        keyId: '0x' + publicKey.x.toString(16).slice(0, 16),
+        keyId: "0x" + publicKey.x.toString(16).slice(0, 16),
         publicKey,
         attestorUrl: config.attestorUrl,
       });
       return;
     }
-    if (req.method === 'GET' && url.pathname === '/pubkey') {
+    if (req.method === "GET" && url.pathname === "/pubkey") {
       sendJson(res, 200, {
         notaryId: config.notaryId,
         registeredPublicKey: publicKey,
-        registered: config.contractAddress !== '',
+        registered: config.contractAddress !== "",
       });
       return;
     }
-    if (req.method === 'POST' && url.pathname === '/attestate') {
+    if (req.method === "POST" && url.pathname === "/attestate") {
       try {
         const body = JSON.parse(await readBody(req, config.maxBodyBytes));
         const artifacts = normalizeArtifacts(body.proofArtifacts ?? body);
@@ -129,7 +129,7 @@ export const createNotaryServer = (config: NotaryConfig): NotaryServer => {
       }
       return;
     }
-    sendJson(res, 404, { error: 'not found' });
+    sendJson(res, 404, { error: "not found" });
   };
 
   const server = createServer((req, res) => {
@@ -137,7 +137,7 @@ export const createNotaryServer = (config: NotaryConfig): NotaryServer => {
     if (origin !== null) {
       applyCors(res, origin);
     }
-    if (req.method === 'OPTIONS') {
+    if (req.method === "OPTIONS") {
       res.writeHead(204);
       res.end();
       return;
@@ -161,7 +161,7 @@ if (isMain()) {
     console.log(
       `[notary ${config.notaryId}] listening on :${config.port} keyId=0x${publicKey.x
         .toString(16)
-        .slice(0, 16)}`
+        .slice(0, 16)}`,
     );
   });
 }

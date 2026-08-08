@@ -3,16 +3,16 @@ import {
   createCircuitContext,
   dummyContractAddress,
   type Effects,
-} from '@midnight-ntwrk/compact-runtime';
-import { Contract, ledger, type Ledger } from '../../src/managed/stride/contract/index.js';
-import { witnesses } from '../../src/witnesses.js';
-import type { PrivateState } from '../../src/private-state.js';
+} from "@midnight-ntwrk/compact-runtime";
+import { Contract, ledger, type Ledger } from "../../src/managed/stride/contract/index.js";
+import { witnesses } from "../../src/witnesses.js";
+import type { PrivateState } from "../../src/private-state.js";
 
 const ADDR = dummyContractAddress();
-const COIN_PK = '0'.repeat(64);
+const COIN_PK = "0".repeat(64);
 
 export class StrideSim {
-  private state: Contract['initialState'] extends never ? never : any;
+  private state: Contract["initialState"] extends never ? never : any;
   private lastEffects: Effects | null = null;
 
   // Block-time override (seconds). Leave null to use the runtime default;
@@ -34,11 +34,11 @@ export class StrideSim {
       ps,
       undefined,
       undefined,
-      this.now ?? undefined
+      this.now ?? undefined,
     );
-    const circuit = (this.contract.circuits as Record<string, (c: unknown, ...a: unknown[]) => any>)[
-      name
-    ];
+    const circuit = (
+      this.contract.circuits as Record<string, (c: unknown, ...a: unknown[]) => any>
+    )[name];
     const res = circuit(ctx, ...args);
     this.state = res.context.currentQueryContext.state;
     this.lastEffects = res.context.currentQueryContext.effects;
@@ -49,7 +49,7 @@ export class StrideSim {
   // contract), unshieldedOutputs (payouts), shieldedMints (winner NFTs).
   effects(): Effects {
     if (!this.lastEffects) {
-      throw new Error('no circuit call executed yet');
+      throw new Error("no circuit call executed yet");
     }
     return this.lastEffects;
   }

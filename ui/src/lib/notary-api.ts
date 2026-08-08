@@ -6,8 +6,8 @@
 // Every call is timeboxed (AbortController) so a dead notary degrades the
 // strip to red instead of hanging the demo.
 
-import { NOTARY_TIMEOUT_MS, NOTARY_URLS } from '../config';
-import { logError } from './logger';
+import { NOTARY_TIMEOUT_MS, NOTARY_URLS } from "../config";
+import { logError } from "./logger";
 
 export interface NotaryHealth {
   keyId?: string;
@@ -39,7 +39,11 @@ export interface ProofArtifacts {
   extractedParameterValues?: Record<string, string>;
 }
 
-async function fetchJson<T>(url: string, init: RequestInit, timeoutMs = NOTARY_TIMEOUT_MS): Promise<T> {
+async function fetchJson<T>(
+  url: string,
+  init: RequestInit,
+  timeoutMs = NOTARY_TIMEOUT_MS,
+): Promise<T> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
@@ -54,24 +58,26 @@ async function fetchJson<T>(url: string, init: RequestInit, timeoutMs = NOTARY_T
 }
 
 export const notaryHealth = (index: number): Promise<NotaryHealth | null> =>
-  fetchJson<NotaryHealth>(`${NOTARY_URLS[index]}/health`, { method: 'GET' }).catch(() => null);
+  fetchJson<NotaryHealth>(`${NOTARY_URLS[index]}/health`, { method: "GET" }).catch(() => null);
 
 export const notaryPubkey = (index: number): Promise<NotaryPubkeyResponse | null> =>
-  fetchJson<NotaryPubkeyResponse>(`${NOTARY_URLS[index]}/pubkey`, { method: 'GET' }).catch(() => null);
+  fetchJson<NotaryPubkeyResponse>(`${NOTARY_URLS[index]}/pubkey`, { method: "GET" }).catch(
+    () => null,
+  );
 
 export const notaryAttestate = async (
   index: number,
-  proofArtifacts: ProofArtifacts
+  proofArtifacts: ProofArtifacts,
 ): Promise<NotaryAttestateResponse> => {
   try {
     return await fetchJson<NotaryAttestateResponse>(`${NOTARY_URLS[index]}/attestate`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
+      method: "POST",
+      headers: { "content-type": "application/json" },
       body: JSON.stringify({ proofArtifacts }),
     });
   } catch (err) {
-    logError('notary.attestate', err);
-    return { error: err instanceof Error ? err.message : 'unreachable' };
+    logError("notary.attestate", err);
+    return { error: err instanceof Error ? err.message : "unreachable" };
   }
 };
 

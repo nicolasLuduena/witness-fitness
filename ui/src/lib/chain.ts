@@ -11,13 +11,13 @@
 //   POST /badge/prove     { badgeId }   → { badgeId, verified, verifierBinding }
 //   GET  /state           → { vault: [...], streaks: [...], badges: [...] }
 
-import { SIDECAR_TIMEOUT_MS, SIDECAR_URL } from '../config';
-import { logError } from './logger';
+import { SIDECAR_TIMEOUT_MS, SIDECAR_URL } from "../config";
+import { logError } from "./logger";
 
 export class SidecarOfflineError extends Error {
   constructor(message: string) {
     super(message);
-    this.name = 'SidecarOfflineError';
+    this.name = "SidecarOfflineError";
   }
 }
 
@@ -129,7 +129,7 @@ export interface SidecarWagerSimpleResponse {
 export interface SidecarWagerSettleResponse {
   id: string;
   // null = neither submitted → both stakes refunded
-  winner: 'A' | 'B' | 'tie' | null;
+  winner: "A" | "B" | "tie" | null;
   potNIGHT: string;
   nft: { tokenType: string; txHash: string } | null;
   disclosed: { A: string | null; B: string | null };
@@ -166,7 +166,11 @@ export interface SidecarHandle {
 // 400 validation/predicate, 404 unknown credential, 409 double-count). They
 // must surface as plain errors, NOT as "service offline". Network failures,
 // timeouts and 5xx stay SidecarOfflineError.
-async function fetchJson<T>(url: string, init: RequestInit, timeoutMs = SIDECAR_TIMEOUT_MS): Promise<T> {
+async function fetchJson<T>(
+  url: string,
+  init: RequestInit,
+  timeoutMs = SIDECAR_TIMEOUT_MS,
+): Promise<T> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   let res: Response;
@@ -174,13 +178,13 @@ async function fetchJson<T>(url: string, init: RequestInit, timeoutMs = SIDECAR_
     res = await fetch(url, { ...init, signal: controller.signal });
   } catch (err) {
     logError(`chain.fetchJson(${url})`, err);
-    if (err instanceof DOMException && err.name === 'AbortError') {
+    if (err instanceof DOMException && err.name === "AbortError") {
       throw new SidecarOfflineError(
-        `demo service offline (${url}) — request timed out after ${timeoutMs}ms`
+        `demo service offline (${url}) — request timed out after ${timeoutMs}ms`,
       );
     }
     throw new SidecarOfflineError(
-      `demo service offline (${url}) — ${err instanceof Error ? err.message : 'unreachable'}`
+      `demo service offline (${url}) — ${err instanceof Error ? err.message : "unreachable"}`,
     );
   } finally {
     clearTimeout(timer);
@@ -189,9 +193,9 @@ async function fetchJson<T>(url: string, init: RequestInit, timeoutMs = SIDECAR_
     let message = `HTTP ${res.status} from ${url}`;
     try {
       const parsed = (await res.json()) as { error?: unknown };
-      if (typeof parsed?.error === 'string') message = parsed.error;
+      if (typeof parsed?.error === "string") message = parsed.error;
     } catch (parseErr) {
-      logError('chain.parseErrorBody', parseErr);
+      logError("chain.parseErrorBody", parseErr);
       // non-JSON error body — keep the HTTP message
     }
     if (res.status >= 500) {
@@ -205,17 +209,17 @@ async function fetchJson<T>(url: string, init: RequestInit, timeoutMs = SIDECAR_
 export const joinSidecar = async (baseUrl = SIDECAR_URL): Promise<SidecarHandle> => {
   let health: SidecarHealth;
   try {
-    health = await fetchJson<SidecarHealth>(`${baseUrl}/health`, { method: 'GET' }, 3_000);
+    health = await fetchJson<SidecarHealth>(`${baseUrl}/health`, { method: "GET" }, 3_000);
   } catch (err) {
     throw new SidecarOfflineError(
       err instanceof Error
         ? err.message
-        : `demo service offline (${baseUrl}) — start the sidecar or switch to demo mode`
+        : `demo service offline (${baseUrl}) — start the sidecar or switch to demo mode`,
     );
   }
   if (!health?.ok || !health.contractAddress) {
     throw new SidecarOfflineError(
-      `sidecar unhealthy (${baseUrl}) — got ${JSON.stringify(health).slice(0, 120)}`
+      `sidecar unhealthy (${baseUrl}) — got ${JSON.stringify(health).slice(0, 120)}`,
     );
   }
 
@@ -225,55 +229,55 @@ export const joinSidecar = async (baseUrl = SIDECAR_URL): Promise<SidecarHandle>
     network: health.network,
     attest: async (artifacts: ArtifactsPayload): Promise<SidecarAttestResponse> =>
       fetchJson<SidecarAttestResponse>(`${baseUrl}/attest`, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
+        method: "POST",
+        headers: { "content-type": "application/json" },
         body: JSON.stringify({ artifacts }),
       }),
     state: async (): Promise<SidecarState> =>
-      fetchJson<SidecarState>(`${baseUrl}/state`, { method: 'GET' }),
+      fetchJson<SidecarState>(`${baseUrl}/state`, { method: "GET" }),
     advanceStreak: async (vaultKey: string): Promise<SidecarStreakAdvanceResponse> =>
       fetchJson<SidecarStreakAdvanceResponse>(`${baseUrl}/streak/advance`, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
+        method: "POST",
+        headers: { "content-type": "application/json" },
         body: JSON.stringify({ vaultKey }),
       }),
     mintBadge: async (vaultKey: string, badgeId: number): Promise<SidecarBadgeMintResponse> =>
       fetchJson<SidecarBadgeMintResponse>(`${baseUrl}/badge/mint`, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
+        method: "POST",
+        headers: { "content-type": "application/json" },
         // sidecar enforces string badgeId (typeof check) — numbers get 400
         body: JSON.stringify({ vaultKey, badgeId: String(badgeId) }),
       }),
     proveBadge: async (badgeId: number): Promise<SidecarBadgeProveResponse> =>
       fetchJson<SidecarBadgeProveResponse>(`${baseUrl}/badge/prove`, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
+        method: "POST",
+        headers: { "content-type": "application/json" },
         body: JSON.stringify({ badgeId: String(badgeId) }),
       }),
     wagers: async (): Promise<SidecarWagerList> =>
-      fetchJson<SidecarWagerList>(`${baseUrl}/wagers`, { method: 'GET' }),
+      fetchJson<SidecarWagerList>(`${baseUrl}/wagers`, { method: "GET" }),
     createWager: async (body) =>
       fetchJson<SidecarWagerCreateResponse>(`${baseUrl}/wager/create`, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
+        method: "POST",
+        headers: { "content-type": "application/json" },
         body: JSON.stringify(body),
       }),
     acceptWager: async (body) =>
       fetchJson<SidecarWagerSimpleResponse>(`${baseUrl}/wager/accept`, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
+        method: "POST",
+        headers: { "content-type": "application/json" },
         body: JSON.stringify(body),
       }),
     submitWager: async (body) =>
       fetchJson<SidecarWagerSimpleResponse>(`${baseUrl}/wager/submit`, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
+        method: "POST",
+        headers: { "content-type": "application/json" },
         body: JSON.stringify(body),
       }),
     settleWager: async (body) =>
       fetchJson<SidecarWagerSettleResponse>(`${baseUrl}/wager/settle`, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
+        method: "POST",
+        headers: { "content-type": "application/json" },
         body: JSON.stringify(body),
       }),
   };
@@ -283,20 +287,23 @@ export const joinSidecar = async (baseUrl = SIDECAR_URL): Promise<SidecarHandle>
 // epoch seconds; normalize once here so screens never care.
 export const toNumber = (value: number | string | bigint | undefined, fallback = 0): number => {
   if (value === undefined || value === null) return fallback;
-  if (typeof value === 'number') return value;
-  if (typeof value === 'bigint') return Number(value);
+  if (typeof value === "number") return value;
+  if (typeof value === "bigint") return Number(value);
   const parsed = /^0x/i.test(value) ? Number(BigInt(value)) : Number(value);
   return Number.isFinite(parsed) ? parsed : fallback;
 };
 
-export const toEpochMs = (value: number | string | bigint | undefined, fallback = Date.now()): number => {
+export const toEpochMs = (
+  value: number | string | bigint | undefined,
+  fallback = Date.now(),
+): number => {
   const raw = toNumber(value, fallback / 1000);
   return raw < 10_000_000_000 ? raw * 1000 : raw; // seconds → ms
 };
 
 export const toBigInt = (value: number | string | bigint | undefined, fallback = 0n): bigint => {
   if (value === undefined || value === null) return fallback;
-  if (typeof value === 'bigint') return value;
-  if (typeof value === 'number') return BigInt(value);
-  return /^0x/i.test(value) ? BigInt(value) : BigInt(value || '0');
+  if (typeof value === "bigint") return value;
+  if (typeof value === "number") return BigInt(value);
+  return /^0x/i.test(value) ? BigInt(value) : BigInt(value || "0");
 };

@@ -5,9 +5,9 @@
 // This test drives adaptStrideSession against MOCKED api/browser+api+contract
 // modules and asserts the shapes the real flow functions receive.
 
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { ConnectedAPI } from '@midnight-ntwrk/dapp-connector-api';
-import { adaptStrideSession, type WalletStrideSession } from './wallet-bridge';
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import type { ConnectedAPI } from "@midnight-ntwrk/dapp-connector-api";
+import { adaptStrideSession, type WalletStrideSession } from "./wallet-bridge";
 
 const mocks = vi.hoisted(() => {
   const store = new Map<string, unknown>();
@@ -27,7 +27,7 @@ const mocks = vi.hoisted(() => {
     proveBadgeFlow: vi.fn(),
   };
   const contract = {
-    contractAddress: '0xdeadbeef',
+    contractAddress: "0xdeadbeef",
     providers: { privateStateProvider },
     readState: vi.fn(async () => ({
       vault: new Map(),
@@ -58,14 +58,24 @@ const mocks = vi.hoisted(() => {
   });
   const notarizedValue = notarized();
   const tx = (txHash: string) => ({ public: { txHash } });
-  return { store, privateStateProvider, flows, contract, pureCircuits, attestate, notarized, notarizedValue, tx };
+  return {
+    store,
+    privateStateProvider,
+    flows,
+    contract,
+    pureCircuits,
+    attestate,
+    notarized,
+    notarizedValue,
+    tx,
+  };
 });
 
-vi.mock('@witnessfitness/api/browser', () => ({
+vi.mock("@witnessfitness/api/browser", () => ({
   joinStrideFromBrowser: vi.fn(async () => mocks.contract),
 }));
 
-vi.mock('@witnessfitness/api', () => ({
+vi.mock("@witnessfitness/api", () => ({
   NotaryClient: class {
     constructor(public readonly urls: string[]) {}
     attestate = mocks.attestate;
@@ -73,14 +83,14 @@ vi.mock('@witnessfitness/api', () => ({
   ...mocks.flows,
 }));
 
-vi.mock('@witnessfitness/contract', () => ({
+vi.mock("@witnessfitness/contract", () => ({
   pureCircuits: mocks.pureCircuits,
 }));
 
 const api = {} as ConnectedAPI;
 
 const sessionOf = (): Promise<WalletStrideSession> =>
-  adaptStrideSession(api, '0xdeadbeef', 'wf-test-store');
+  adaptStrideSession(api, "0xdeadbeef", "wf-test-store");
 
 const bytes = (fill: number): Uint8Array => new Uint8Array(32).fill(fill);
 
@@ -96,14 +106,14 @@ beforeEach(() => {
   mocks.pureCircuits.holderBinding.mockClear();
   mocks.pureCircuits.computeVaultKey.mockClear();
   mocks.attestate.mockReset();
-  mocks.flows.attestWorkout.mockResolvedValue({ vaultKey: bytes(5), tx: mocks.tx('0xattest') });
-  mocks.flows.createWagerFlow.mockResolvedValue(mocks.tx('0xcreate'));
-  mocks.flows.acceptWagerFlow.mockResolvedValue(mocks.tx('0xaccept'));
-  mocks.flows.submitWorkoutFlow.mockResolvedValue(mocks.tx('0xsubmit'));
-  mocks.flows.settleWagerFlow.mockResolvedValue(mocks.tx('0xsettle'));
-  mocks.flows.advanceStreakFlow.mockResolvedValue(mocks.tx('0xstreak'));
-  mocks.flows.mintBadgeFlow.mockResolvedValue(mocks.tx('0xbadge'));
-  mocks.flows.proveBadgeFlow.mockResolvedValue(mocks.tx('0xprove'));
+  mocks.flows.attestWorkout.mockResolvedValue({ vaultKey: bytes(5), tx: mocks.tx("0xattest") });
+  mocks.flows.createWagerFlow.mockResolvedValue(mocks.tx("0xcreate"));
+  mocks.flows.acceptWagerFlow.mockResolvedValue(mocks.tx("0xaccept"));
+  mocks.flows.submitWorkoutFlow.mockResolvedValue(mocks.tx("0xsubmit"));
+  mocks.flows.settleWagerFlow.mockResolvedValue(mocks.tx("0xsettle"));
+  mocks.flows.advanceStreakFlow.mockResolvedValue(mocks.tx("0xstreak"));
+  mocks.flows.mintBadgeFlow.mockResolvedValue(mocks.tx("0xbadge"));
+  mocks.flows.proveBadgeFlow.mockResolvedValue(mocks.tx("0xprove"));
   mocks.attestate.mockImplementation(async () => mocks.notarizedValue);
 });
 
@@ -111,8 +121,8 @@ afterEach(() => {
   vi.clearAllMocks();
 });
 
-describe('wallet bridge real adapter (P0/P1 regression)', () => {
-  it('createWager flattens routing into flat payout/coinKey for createWagerFlow', async () => {
+describe("wallet bridge real adapter (P0/P1 regression)", () => {
+  it("createWager flattens routing into flat payout/coinKey for createWagerFlow", async () => {
     const session = await sessionOf();
     const payout = bytes(1);
     const coinKey = { bytes: bytes(2) };
@@ -134,10 +144,10 @@ describe('wallet bridge real adapter (P0/P1 regression)', () => {
       payout,
       coinKey,
     });
-    expect(input).not.toHaveProperty('routing');
+    expect(input).not.toHaveProperty("routing");
   });
 
-  it('submitWorkout passes the FULL attestation (assertion + signatures) to submitWorkoutFlow', async () => {
+  it("submitWorkout passes the FULL attestation (assertion + signatures) to submitWorkoutFlow", async () => {
     const session = await sessionOf();
     const attestation = {
       assertion: { version: 1n },
@@ -154,11 +164,11 @@ describe('wallet bridge real adapter (P0/P1 regression)', () => {
       attestation.commitRand,
       7n,
       attestation.vaultKey,
-      3900n
+      3900n,
     );
   });
 
-  it('settleWager stages wagerOpenings challenger-first into the private state', async () => {
+  it("settleWager stages wagerOpenings challenger-first into the private state", async () => {
     const session = await sessionOf();
     const openings = {
       challenger: { value: 3900n, rand: bytes(0x11) },
@@ -167,55 +177,55 @@ describe('wallet bridge real adapter (P0/P1 regression)', () => {
     await session.settleWager(7n, openings);
 
     expect(mocks.privateStateProvider.set).toHaveBeenCalledWith(
-      'wf-test-store',
-      expect.objectContaining({ wagerOpenings: [3900n, bytes(0x11), 2426n, bytes(0x22)] })
+      "wf-test-store",
+      expect.objectContaining({ wagerOpenings: [3900n, bytes(0x11), 2426n, bytes(0x22)] }),
     );
     expect(mocks.flows.settleWagerFlow).toHaveBeenCalledWith(expect.anything(), 7n);
   });
 
-  it('attest fans out to the NotaryClient with the artifacts and vaults the notarized assertion', async () => {
+  it("attest fans out to the NotaryClient with the artifacts and vaults the notarized assertion", async () => {
     const session = await sessionOf();
-    const artifacts = { claim: { a: 1 }, claimSignatureHex: '0xaa', attestorAddress: '0xbb' };
+    const artifacts = { claim: { a: 1 }, claimSignatureHex: "0xaa", attestorAddress: "0xbb" };
     const result = await session.attest(artifacts);
 
     expect(mocks.attestate).toHaveBeenCalledWith(artifacts);
     expect(mocks.flows.attestWorkout).toHaveBeenCalledWith(
       expect.anything(),
       mocks.notarizedValue,
-      expect.any(Uint8Array)
+      expect.any(Uint8Array),
     );
-    expect(result.txHash).toBe('0xattest');
+    expect(result.txHash).toBe("0xattest");
     expect(result.vaultKey).toEqual(bytes(5));
-    expect(result.metrics).toEqual([{ metricId: '0x1', label: 'distance', value: '3900' }]);
+    expect(result.metrics).toEqual([{ metricId: "0x1", label: "distance", value: "3900" }]);
     expect(result.attestation.assertion).toBe(mocks.notarizedValue.assertion);
     expect(result.attestation.commitRand).toEqual(expect.any(Uint8Array));
   });
 
-  it('holderBinding is the pureCircuits binding, formatted 0x + 64 hex', async () => {
+  it("holderBinding is the pureCircuits binding, formatted 0x + 64 hex", async () => {
     const session = await sessionOf();
-    expect(session.holderBinding).toBe('0x' + 0x1234n.toString(16).padStart(64, '0'));
+    expect(session.holderBinding).toBe("0x" + 0x1234n.toString(16).padStart(64, "0"));
   });
 
-  it('stagedVaultKey derives from the staged assertion — null when nothing staged', async () => {
+  it("stagedVaultKey derives from the staged assertion — null when nothing staged", async () => {
     const session = await sessionOf();
     expect(await session.stagedVaultKey()).toBeNull();
 
     const commitRand = bytes(7);
-    await mocks.privateStateProvider.set('wf-test-store', {
+    await mocks.privateStateProvider.set("wf-test-store", {
       assertion: { version: 1n, timestamp: 1754640000n },
       commitRand,
     });
     expect(await session.stagedVaultKey()).toEqual(commitRand);
     expect(mocks.pureCircuits.computeVaultKey).toHaveBeenCalledWith(
       { version: 1n, timestamp: 1754640000n },
-      commitRand
+      commitRand,
     );
   });
 
-  it('advanceStreak rejects a vault key that is not the staged attestation (audit P1)', async () => {
+  it("advanceStreak rejects a vault key that is not the staged attestation (audit P1)", async () => {
     const session = await sessionOf();
     const commitRand = bytes(7);
-    await mocks.privateStateProvider.set('wf-test-store', {
+    await mocks.privateStateProvider.set("wf-test-store", {
       assertion: { version: 1n, timestamp: 1754640000n },
       commitRand,
     });
@@ -232,15 +242,15 @@ describe('wallet bridge real adapter (P0/P1 regression)', () => {
       }),
       commitRand,
       commitRand,
-      1754640000n / 86400n
+      1754640000n / 86400n,
     );
     expect(result).toEqual({ streakCount: 0n, lastDay: 0n });
   });
 
-  it('mintBadge rejects a mismatch and passes the staged key', async () => {
+  it("mintBadge rejects a mismatch and passes the staged key", async () => {
     const session = await sessionOf();
     const commitRand = bytes(7);
-    await mocks.privateStateProvider.set('wf-test-store', {
+    await mocks.privateStateProvider.set("wf-test-store", {
       assertion: { version: 1n },
       commitRand,
     });
@@ -254,7 +264,7 @@ describe('wallet bridge real adapter (P0/P1 regression)', () => {
       expect.objectContaining({ assertion: { version: 1n }, commitRand }),
       commitRand,
       1n,
-      commitRand
+      commitRand,
     );
   });
 });

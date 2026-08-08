@@ -4,7 +4,7 @@
 // Tokens persist per-origin in localStorage (localStorage is inherently
 // per-origin — no manual namespacing needed beyond the key).
 
-import { ATTEST_SERVICE_URL, STRAVA_CLIENT_ID, stravaRedirectUri } from './config';
+import { ATTEST_SERVICE_URL, STRAVA_CLIENT_ID, stravaRedirectUri } from "./config";
 
 export interface StravaAthlete {
   id: number;
@@ -38,7 +38,7 @@ export interface StravaActivity {
 
 export type StoredTokens = StravaExchangeResponse;
 
-const TOKEN_STORAGE_KEY = 'wf-strava-tokens';
+const TOKEN_STORAGE_KEY = "wf-strava-tokens";
 
 export interface TokenStore {
   load(): StoredTokens | null;
@@ -52,7 +52,7 @@ export const localStorageTokenStore: TokenStore = {
       const raw = localStorage.getItem(TOKEN_STORAGE_KEY);
       if (!raw) return null;
       const parsed = JSON.parse(raw) as Partial<StoredTokens>;
-      if (typeof parsed.access_token !== 'string' || typeof parsed.refresh_token !== 'string') {
+      if (typeof parsed.access_token !== "string" || typeof parsed.refresh_token !== "string") {
         return null;
       }
       return parsed as StoredTokens;
@@ -71,10 +71,10 @@ export const localStorageTokenStore: TokenStore = {
 export function buildAuthUrl(opts: { clientId?: string; redirectUri?: string } = {}): string {
   const params = new URLSearchParams({
     client_id: opts.clientId ?? STRAVA_CLIENT_ID,
-    response_type: 'code',
+    response_type: "code",
     redirect_uri: opts.redirectUri ?? stravaRedirectUri(),
-    scope: 'read,activity:read_all',
-    approval_prompt: 'auto',
+    scope: "read,activity:read_all",
+    approval_prompt: "auto",
   });
   return `https://www.strava.com/oauth/authorize?${params.toString()}`;
 }
@@ -85,10 +85,10 @@ export interface AuthCallback {
 }
 
 export function parseAuthCallback(url: string | URL): AuthCallback {
-  const parsed = typeof url === 'string' ? new URL(url) : url;
+  const parsed = typeof url === "string" ? new URL(url) : url;
   return {
-    code: parsed.searchParams.get('code') ?? undefined,
-    error: parsed.searchParams.get('error') ?? undefined,
+    code: parsed.searchParams.get("code") ?? undefined,
+    error: parsed.searchParams.get("error") ?? undefined,
   };
 }
 
@@ -97,8 +97,8 @@ export async function exchangeCode(
   serviceUrl: string = ATTEST_SERVICE_URL,
 ): Promise<StravaExchangeResponse> {
   const res = await fetch(`${serviceUrl}/strava/exchange`, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
+    method: "POST",
+    headers: { "content-type": "application/json" },
     body: JSON.stringify({ code }),
   });
   if (!res.ok) {
@@ -112,8 +112,8 @@ export async function refreshAccessToken(
   serviceUrl: string = ATTEST_SERVICE_URL,
 ): Promise<StravaRefreshResponse> {
   const res = await fetch(`${serviceUrl}/strava/refresh`, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
+    method: "POST",
+    headers: { "content-type": "application/json" },
     body: JSON.stringify({ refresh_token: refreshToken }),
   });
   if (!res.ok) {
@@ -130,14 +130,14 @@ export async function getValidAccessToken(
 ): Promise<string> {
   const tokens = store.load();
   if (!tokens) {
-    throw new Error('no strava tokens stored; run the OAuth flow first');
+    throw new Error("no strava tokens stored; run the OAuth flow first");
   }
   const nowS = Math.floor(Date.now() / 1000);
   if (tokens.access_token && tokens.expires_at > nowS + 60) {
     return tokens.access_token;
   }
   if (!tokens.refresh_token) {
-    throw new Error('no valid access token and no refresh token; run the auth flow first');
+    throw new Error("no valid access token and no refresh token; run the auth flow first");
   }
   const fresh = await refreshAccessToken(tokens.refresh_token, serviceUrl);
   store.save({ ...fresh, athlete: tokens.athlete });
@@ -151,12 +151,9 @@ export function shouldRefresh(tokens: StoredTokens): boolean {
 // Strava's API answers browser CORS with `access-control-allow-origin: *`
 // (verified 2026-08-07) — direct fetch is viable. The URL is isolated here so
 // a service-proxy fallback can swap the base without touching callers.
-export const STRAVA_ACTIVITIES_ENDPOINT = 'https://www.strava.com/api/v3/athlete/activities';
+export const STRAVA_ACTIVITIES_ENDPOINT = "https://www.strava.com/api/v3/athlete/activities";
 
-export async function fetchActivities(
-  accessToken: string,
-  perPage = 5,
-): Promise<StravaActivity[]> {
+export async function fetchActivities(accessToken: string, perPage = 5): Promise<StravaActivity[]> {
   const res = await fetch(`${STRAVA_ACTIVITIES_ENDPOINT}?per_page=${perPage}`, {
     headers: { Authorization: `Bearer ${accessToken}` },
   });
@@ -172,7 +169,7 @@ export async function fetchActivities(
 
 export type EmptyAccountGuard =
   | { canInteract: true; activities: StravaActivity[] }
-  | { canInteract: false; reason: 'no-activities'; activities: StravaActivity[] };
+  | { canInteract: false; reason: "no-activities"; activities: StravaActivity[] };
 
 // Post-OAuth guard: an account with zero activities cannot produce meaningful
 // attestations (the demo wagers on real distances). Expose the verdict — the
@@ -180,14 +177,14 @@ export type EmptyAccountGuard =
 export async function emptyAccountGuard(accessToken: string): Promise<EmptyAccountGuard> {
   const activities = await fetchActivities(accessToken);
   if (activities.length === 0) {
-    return { canInteract: false, reason: 'no-activities', activities };
+    return { canInteract: false, reason: "no-activities", activities };
   }
   return { canInteract: true, activities };
 }
 
 async function errorMessage(res: Response): Promise<string> {
   const body = (await res.json().catch(() => null)) as { error?: unknown } | null;
-  if (body && typeof body.error === 'string') {
+  if (body && typeof body.error === "string") {
     return body.error;
   }
   return `HTTP ${res.status}`;

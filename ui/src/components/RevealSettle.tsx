@@ -4,20 +4,20 @@
 //   3. "Comparison disclosed" — both openings are revealed: the chain publishes
 //      them at settlement to decide the winner; they were sealed until then.
 
-import { useState } from 'react';
-import type { WagerSettleResult } from '../domain/types';
-import { fmtKm, fmtTnight } from '../lib/format';
-import { Button, Notice } from './bits';
+import { useState } from "react";
+import type { WagerSettleResult } from "../domain/types";
+import { fmtKm, fmtTnight } from "../lib/format";
+import { Button, Notice } from "./bits";
 
 export const RevealSettle = ({ result }: { result: WagerSettleResult }) => {
   const { wager } = result;
-  const [phase, setPhase] = useState<'reveal' | 'room' | 'disclosed'>('reveal');
+  const [phase, setPhase] = useState<"reveal" | "room" | "disclosed">("reveal");
   const res = wager.result;
   if (!res) return null;
 
   const challengerValue = res.challengerValue ?? 0;
   const opponentValue = res.opponentValue ?? 0;
-  const winnerIsChallenger = res.winner?.role === 'local';
+  const winnerIsChallenger = res.winner?.role === "local";
   const winnerValue = winnerIsChallenger ? challengerValue : opponentValue;
 
   return (
@@ -28,7 +28,11 @@ export const RevealSettle = ({ result }: { result: WagerSettleResult }) => {
             Settlement — {wager.title}
           </div>
           <div className="hero" style={{ marginTop: 8 }}>
-            {res.tie ? 'Dead heat — stakes returned to both athletes.' : res.forfeit ? res.summary : `Winner: ${res.winner?.name} — ${fmtTnight(res.pot)} ${res.currency} pot moves.`}
+            {res.tie
+              ? "Dead heat — stakes returned to both athletes."
+              : res.forfeit
+                ? res.summary
+                : `Winner: ${res.winner?.name} — ${fmtTnight(res.pot)} ${res.currency} pot moves.`}
           </div>
         </div>
         <Chip />
@@ -37,12 +41,16 @@ export const RevealSettle = ({ result }: { result: WagerSettleResult }) => {
       <div className="reveal-grid">
         <div className="reveal-side">
           <div className="reveal-side__name">{wager.challenger.name}</div>
-          {phase === 'disclosed' ? (
-            <div className={`reveal-side__value ${winnerIsChallenger ? '' : 'reveal-side__value--loser'}`}>
+          {phase === "disclosed" ? (
+            <div
+              className={`reveal-side__value ${winnerIsChallenger ? "" : "reveal-side__value--loser"}`}
+            >
               {fmtKm(challengerValue)}
             </div>
-          ) : phase === 'room' ? (
-            <div className="reveal-side__value">{winnerIsChallenger ? fmtKm(winnerValue) : <Masked />}</div>
+          ) : phase === "room" ? (
+            <div className="reveal-side__value">
+              {winnerIsChallenger ? fmtKm(winnerValue) : <Masked />}
+            </div>
           ) : (
             <div className="reveal-masked">••••</div>
           )}
@@ -50,12 +58,16 @@ export const RevealSettle = ({ result }: { result: WagerSettleResult }) => {
         <div className="reveal-vs">VS</div>
         <div className="reveal-side">
           <div className="reveal-side__name">{wager.opponent.name}</div>
-          {phase === 'disclosed' ? (
-            <div className={`reveal-side__value ${winnerIsChallenger ? 'reveal-side__value--loser' : ''}`}>
+          {phase === "disclosed" ? (
+            <div
+              className={`reveal-side__value ${winnerIsChallenger ? "reveal-side__value--loser" : ""}`}
+            >
               {fmtKm(opponentValue)}
             </div>
-          ) : phase === 'room' ? (
-            <div className="reveal-side__value">{winnerIsChallenger ? <Masked /> : fmtKm(winnerValue)}</div>
+          ) : phase === "room" ? (
+            <div className="reveal-side__value">
+              {winnerIsChallenger ? <Masked /> : fmtKm(winnerValue)}
+            </div>
           ) : (
             <div className="reveal-masked">••••</div>
           )}
@@ -67,19 +79,23 @@ export const RevealSettle = ({ result }: { result: WagerSettleResult }) => {
           className="reveal-card"
           style={{
             marginTop: 14,
-            borderColor: 'rgba(217, 164, 65, 0.45)',
-            background: 'linear-gradient(180deg, rgba(217, 164, 65, 0.07), rgba(217, 164, 65, 0.02))',
-            boxShadow: '0 0 34px rgba(217, 164, 65, 0.1)',
+            borderColor: "rgba(217, 164, 65, 0.45)",
+            background:
+              "linear-gradient(180deg, rgba(217, 164, 65, 0.07), rgba(217, 164, 65, 0.02))",
+            boxShadow: "0 0 34px rgba(217, 164, 65, 0.1)",
           }}
         >
           <div className="row" style={{ gap: 14 }}>
-            <div className="medal" style={{ width: 40, height: 40, fontSize: 17 }}>🏅</div>
+            <div className="medal" style={{ width: 40, height: 40, fontSize: 17 }}>
+              🏅
+            </div>
             <div>
               <div style={{ fontWeight: 700 }}>Winner receives the WitnessFitness NFT</div>
               <div className="muted" style={{ fontSize: 13 }}>
-                A shielded coin — the winner can prove they own it without revealing anything about the wager.
+                A shielded coin — the winner can prove they own it without revealing anything about
+                the wager.
               </div>
-              <div className="row" style={{ marginTop: 8, gap: 14, flexWrap: 'wrap' }}>
+              <div className="row" style={{ marginTop: 8, gap: 14, flexWrap: "wrap" }}>
                 <span className="chip chip--gold">token {res.nft.tokenType.slice(0, 18)}…</span>
                 <span className="hash">minted in tx {res.nft.txHash.slice(0, 20)}…</span>
               </div>
@@ -88,33 +104,33 @@ export const RevealSettle = ({ result }: { result: WagerSettleResult }) => {
         </div>
       ) : null}
 
-      {phase === 'reveal' && (
+      {phase === "reveal" && (
         <Notice tone="info">
           The chain compared two sealed distances and paid the winner — the values stayed sealed
           until the deadline and were revealed only at settlement, never before.
         </Notice>
       )}
-      {phase === 'room' && (
+      {phase === "room" && (
         <Notice tone="warn">
           <strong>Challenge the room:</strong> the winner ran {fmtKm(winnerValue)}. The losing
           number is somewhere between — nobody saw it before settlement.
         </Notice>
       )}
-      {phase === 'disclosed' && (
+      {phase === "disclosed" && (
         <Notice tone="success">
           The comparison was <strong>revealed on-chain at settlement</strong> — both openings were
           published to decide the winner. {fmtTnight(res.pot)} already moved under seal.
         </Notice>
       )}
 
-      <div className="row" style={{ marginTop: 16, justifyContent: 'center' }}>
-        {phase === 'reveal' && (
-          <Button tone="primary" onClick={() => setPhase('room')}>
+      <div className="row" style={{ marginTop: 16, justifyContent: "center" }}>
+        {phase === "reveal" && (
+          <Button tone="primary" onClick={() => setPhase("room")}>
             Show the room — winner only
           </Button>
         )}
-        {phase === 'room' && (
-          <Button tone="seal" onClick={() => setPhase('disclosed')}>
+        {phase === "room" && (
+          <Button tone="seal" onClick={() => setPhase("disclosed")}>
             Athletes choose to disclose
           </Button>
         )}
@@ -123,8 +139,10 @@ export const RevealSettle = ({ result }: { result: WagerSettleResult }) => {
   );
 };
 
-const Masked = () => <span className="reveal-masked" title="revealed only at settlement">▮▮▮▮</span>;
-
-const Chip = () => (
-  <span className="chip chip--provable">settled under seal</span>
+const Masked = () => (
+  <span className="reveal-masked" title="revealed only at settlement">
+    ▮▮▮▮
+  </span>
 );
+
+const Chip = () => <span className="chip chip--provable">settled under seal</span>;

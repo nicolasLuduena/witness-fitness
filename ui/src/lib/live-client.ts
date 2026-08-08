@@ -14,8 +14,8 @@
 // WitnessFitness NFT to the winner. The UI drives both athletes' submissions
 // (two explicit buttons) and settles under seal.
 
-import type { DemoMode } from '../config';
-import { NOTARY_URLS, SIDECAR_URL } from '../config';
+import type { DemoMode } from "../config";
+import { NOTARY_URLS, SIDECAR_URL } from "../config";
 import type {
   Athlete,
   AttestedCredential,
@@ -31,32 +31,32 @@ import type {
   WagerSettleResult,
   WagerSubmission,
   WagerView,
-} from '../domain/types';
-import { ATHLETE_A, ATHLETE_B, ATTESTATION_LOG, BADGES } from '../domain/story';
-import { displayHash, hexShort } from './format';
-import { notaryHealth } from './notary-api';
+} from "../domain/types";
+import { ATHLETE_A, ATHLETE_B, ATTESTATION_LOG, BADGES } from "../domain/story";
+import { displayHash, hexShort } from "./format";
+import { notaryHealth } from "./notary-api";
 import {
   joinSidecar,
   toNumber,
   type ArtifactsPayload,
   type SidecarHandle,
   type SidecarWagerEntry,
-} from './chain';
-import type { WfClient } from './wf-client';
-import { badgeViewsFrom, credentialFromVaultEntry, streakViewFrom } from './state-mappers';
-import { metricById } from '../domain/types';
+} from "./chain";
+import type { WfClient } from "./wf-client";
+import { badgeViewsFrom, credentialFromVaultEntry, streakViewFrom } from "./state-mappers";
+import { metricById } from "../domain/types";
 
 // NIGHT base units on the devnet (api scripts convention: NIGHT = 10^12).
 const NIGHT_BASE = 10n ** 12n;
-export const hexOf = (value: bigint): string => '0x' + value.toString(16);
+export const hexOf = (value: bigint): string => "0x" + value.toString(16);
 
-export const athleteLetter = (athlete: Athlete): 'A' | 'B' =>
-  athlete.role === 'local' ? 'A' : 'B';
+export const athleteLetter = (athlete: Athlete): "A" | "B" =>
+  athlete.role === "local" ? "A" : "B";
 
 export const nightToDisplay = (base: number): number => base / Number(NIGHT_BASE);
 
 export class LiveClient implements WfClient {
-  readonly mode: DemoMode = 'live';
+  readonly mode: DemoMode = "live";
 
   private sidecar: SidecarHandle | null = null;
   private attestCount = 0;
@@ -66,7 +66,7 @@ export class LiveClient implements WfClient {
     const sidecar = await joinSidecar(SIDECAR_URL);
     this.sidecar = sidecar;
     return {
-      mode: 'live',
+      mode: "live",
       athlete: ATHLETE_A,
       walletConnected: false,
       walletLabel: `demo sidecar · contract ${hexShort(sidecar.contractAddress, 10, 6)}`,
@@ -74,9 +74,9 @@ export class LiveClient implements WfClient {
   }
 
   async attest(): Promise<AttestOutcome> {
-    if (!this.sidecar) throw new Error('live client not connected — start the sidecar first');
+    if (!this.sidecar) throw new Error("live client not connected — start the sidecar first");
     const stages = liveStages();
-    const mark = (id: string, state: AttestationStage['state']) => {
+    const mark = (id: string, state: AttestationStage["state"]) => {
       for (const s of stages) if (s.id === id) s.state = state;
     };
 
@@ -84,7 +84,9 @@ export class LiveClient implements WfClient {
     // attest workstream's flow (ui/src/lib/attest/*) replaces this replay.
     const logEntry = ATTESTATION_LOG[this.attestCount % ATTESTATION_LOG.length];
     if (!logEntry) {
-      throw new Error('live debug mode has no attestation source — use wallet mode for attestations');
+      throw new Error(
+        "live debug mode has no attestation source — use wallet mode for attestations",
+      );
     }
     const fixture = logEntry.fixture as unknown as {
       claim: unknown;
@@ -104,21 +106,26 @@ export class LiveClient implements WfClient {
       extractedParameterValues: fixture.proof?.extractedParameterValues,
     };
 
-    mark('tls', 'active');
+    mark("tls", "active");
     await delay(250);
-    mark('tls', 'done');
+    mark("tls", "done");
 
-    mark('notarize', 'active');
+    mark("notarize", "active");
     const result = await this.sidecar.attest(artifacts);
-    mark('notarize', 'done');
+    mark("notarize", "done");
 
-    mark('chain', 'active');
+    mark("chain", "active");
     await delay(180);
-    mark('chain', 'done');
+    mark("chain", "done");
     this.attestCount += 1;
     this.lastVaultKey = result.vaultKey;
 
-    const credential = credentialFromVaultEntry(result.vaultKey, result.txHash, result.timestamp, result.metrics);
+    const credential = credentialFromVaultEntry(
+      result.vaultKey,
+      result.txHash,
+      result.timestamp,
+      result.metrics,
+    );
     return { credential, stages, replayed: true };
   }
 
@@ -126,7 +133,7 @@ export class LiveClient implements WfClient {
     const sidecar = this.requireSidecar();
     const state = await sidecar.state();
     return state.vault.map((entry) => {
-      const key = entry.vaultKey ?? entry.key ?? '';
+      const key = entry.vaultKey ?? entry.key ?? "";
       const metrics = entry.metrics ?? (entry.metric ? [entry.metric] : []);
       return credentialFromVaultEntry(key, undefined, entry.timestamp, metrics);
     });
@@ -144,10 +151,10 @@ export class LiveClient implements WfClient {
     const deadlineBlock = hexOf(
       BigInt(req.deadlineBlock) > 0n
         ? BigInt(req.deadlineBlock)
-        : BigInt(Math.floor(Date.now() / 1000)) + 90n
+        : BigInt(Math.floor(Date.now() / 1000)) + 90n,
     );
     const created = await sidecar.createWager({
-      athlete: 'A',
+      athlete: "A",
       opponent,
       metricId: hexOf(req.metricId),
       stake: hexOf(BigInt(req.stake) * NIGHT_BASE),
@@ -182,7 +189,7 @@ export class LiveClient implements WfClient {
   // ('A' or 'B') — the sidecar auto-derives the vaulted credential + value.
   async submitWorkout(id: number, credentialId: string): Promise<WagerView> {
     const sidecar = this.requireSidecar();
-    const athlete = credentialId === 'B' ? 'B' : 'A';
+    const athlete = credentialId === "B" ? "B" : "A";
     await sidecar.submitWager({ athlete, id: String(id) });
     const updated = (await this.listWagers()).find((w) => w.id === id);
     if (!updated) throw new Error(`wager ${id} not found after submit`);
@@ -193,46 +200,47 @@ export class LiveClient implements WfClient {
     const sidecar = this.requireSidecar();
     const before = (await this.listWagers()).find((w) => w.id === id);
     if (!before) throw new Error(`wager ${id} not found`);
-    const result = await sidecar.settleWager({ athlete: 'A', id: String(id) });
+    const result = await sidecar.settleWager({ athlete: "A", id: String(id) });
     const settled = (await this.listWagers()).find((w) => w.id === id);
     if (!settled) throw new Error(`wager ${id} not found after settle`);
 
     const winner: Athlete | undefined =
-      result.winner === 'tie' || result.winner === null
+      result.winner === "tie" || result.winner === null
         ? undefined
-        : result.winner === 'A'
+        : result.winner === "A"
           ? ATHLETE_A
           : ATHLETE_B;
     const challengerIsA = settled.challenger.handle === ATHLETE_A.handle;
     const challengerValue = toNumber(
       (challengerIsA ? result.disclosed.A : result.disclosed.B) ?? undefined,
-      0
+      0,
     );
     const opponentValue = toNumber(
       (challengerIsA ? result.disclosed.B : result.disclosed.A) ?? undefined,
-      0
+      0,
     );
     // One disclosed value null + a winner = forfeit; both null = refund.
     const forfeit =
       result.winner !== null &&
-      result.winner !== 'tie' &&
+      result.winner !== "tie" &&
       (result.disclosed.A === null || result.disclosed.B === null);
 
-    const summary = result.winner === null
-      ? 'Neither submitted — both stakes refunded'
-      : result.winner === 'tie'
-        ? 'Dead heat — stakes returned'
-        : forfeit
-          ? `${winner?.name} wins by forfeit — the pot moves under seal`
-          : `${winner?.name} wins — sealed comparison revealed at settlement`;
+    const summary =
+      result.winner === null
+        ? "Neither submitted — both stakes refunded"
+        : result.winner === "tie"
+          ? "Dead heat — stakes returned"
+          : forfeit
+            ? `${winner?.name} wins by forfeit — the pot moves under seal`
+            : `${winner?.name} wins — sealed comparison revealed at settlement`;
 
     settled.result = {
       winner,
-      tie: result.winner === 'tie',
+      tie: result.winner === "tie",
       forfeit,
       pot: nightToDisplay(toNumber(result.potNIGHT, 0)),
-      currency: 'NIGHT',
-      disclosed: !forfeit && result.winner !== null && result.winner !== 'tie',
+      currency: "NIGHT",
+      disclosed: !forfeit && result.winner !== null && result.winner !== "tie",
       challengerValue,
       opponentValue,
       nft: result.nft,
@@ -252,28 +260,28 @@ export class LiveClient implements WfClient {
   }
 
   private wagerViewFrom(entry: SidecarWagerEntry): WagerView {
-    const challenger = this.athleteOf(entry.challenger, 'challenger');
-    const opponent = this.athleteOf(entry.opponent, 'opponent');
+    const challenger = this.athleteOf(entry.challenger, "challenger");
+    const opponent = this.athleteOf(entry.opponent, "opponent");
     const id = toNumber(entry.id, 0);
     const bothSubmitted = entry.challengerSubmitted && entry.opponentSubmitted;
-    const status: WagerView['status'] = entry.settled
-      ? 'settled'
+    const status: WagerView["status"] = entry.settled
+      ? "settled"
       : entry.accepted && bothSubmitted
-        ? 'submitted'
+        ? "submitted"
         : entry.accepted
-          ? 'accepted'
-          : 'open';
+          ? "accepted"
+          : "open";
     const submissions: WagerSubmission[] = [
       ...(entry.challengerSubmitted
-        ? [{ athlete: challenger, sealed: true, commitment: 'sealed' }]
+        ? [{ athlete: challenger, sealed: true, commitment: "sealed" }]
         : []),
       ...(entry.opponentSubmitted
-        ? [{ athlete: opponent, sealed: true, commitment: 'sealed' }]
+        ? [{ athlete: opponent, sealed: true, commitment: "sealed" }]
         : []),
     ];
     const winner =
-      entry.settled && (entry.winner === 'A' || entry.winner === 'B')
-        ? entry.winner === 'A'
+      entry.settled && (entry.winner === "A" || entry.winner === "B")
+        ? entry.winner === "A"
           ? ATHLETE_A
           : ATHLETE_B
         : undefined;
@@ -281,10 +289,10 @@ export class LiveClient implements WfClient {
       entry.settled && winner
         ? {
             winner,
-            tie: entry.winner === 'tie',
+            tie: entry.winner === "tie",
             forfeit: false,
             pot: nightToDisplay(toNumber(entry.stake, 0) * 2),
-            currency: 'NIGHT',
+            currency: "NIGHT",
             disclosed: true,
             summary: `${winner.name} wins — the losing number stays sealed`,
           }
@@ -304,13 +312,13 @@ export class LiveClient implements WfClient {
     };
   }
 
-  private athleteOf(letter: string, role: 'challenger' | 'opponent'): Athlete {
-    if (letter === 'A') return ATHLETE_A;
-    if (letter === 'B') return ATHLETE_B;
+  private athleteOf(letter: string, role: "challenger" | "opponent"): Athlete {
+    if (letter === "A") return ATHLETE_A;
+    if (letter === "B") return ATHLETE_B;
     return {
       name: `Identity ${letter.slice(0, 10)}`,
       handle: letter.slice(0, 16),
-      role: role === 'challenger' ? 'opponent' : 'other',
+      role: role === "challenger" ? "opponent" : "other",
       holderBinding: letter,
     };
   }
@@ -318,7 +326,7 @@ export class LiveClient implements WfClient {
   async streak(): Promise<StreakView> {
     const sidecar = this.requireSidecar();
     const state = await sidecar.state();
-    return streakViewFrom(state.streaks, 'sidecar:streak');
+    return streakViewFrom(state.streaks, "sidecar:streak");
   }
 
   async advanceStreak(): Promise<StreakView> {
@@ -327,7 +335,7 @@ export class LiveClient implements WfClient {
     const result = await sidecar.advanceStreak(vaultKey);
     return streakViewFrom(
       { streakCount: result.streakCount, lastDay: result.lastDay },
-      'sidecar:streak'
+      "sidecar:streak",
     );
   }
 
@@ -369,7 +377,7 @@ export class LiveClient implements WfClient {
 
   async notaryStatus(): Promise<NotaryInfo[]> {
     const healths = await Promise.all([0, 1, 2].map((i) => notaryHealth(i)));
-    const { loadDeployInfo } = await import('./deploy-info');
+    const { loadDeployInfo } = await import("./deploy-info");
     const deploy = await loadDeployInfo();
     return deploy.notaryKeys.map((key, index) => ({
       index: index as 0 | 1 | 2,
@@ -385,7 +393,7 @@ export class LiveClient implements WfClient {
   private requireSidecar(): SidecarHandle {
     if (!this.sidecar) {
       throw new Error(
-        `demo service offline (${SIDECAR_URL}) — connect first, or check the sidecar`
+        `demo service offline (${SIDECAR_URL}) — connect first, or check the sidecar`,
       );
     }
     return this.sidecar;
@@ -396,7 +404,7 @@ export class LiveClient implements WfClient {
     const state = await sidecar.state();
     const first = state.vault[0];
     const key = first?.vaultKey ?? first?.key;
-    if (!key) throw new Error('no vaulted credential — attest a workout first');
+    if (!key) throw new Error("no vaulted credential — attest a workout first");
     this.lastVaultKey = key;
     return key;
   }
@@ -405,7 +413,22 @@ export class LiveClient implements WfClient {
 const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 const liveStages = (): AttestationStage[] => [
-  { id: 'tls', label: 'Replaying attested TLS session', detail: 'pre-recorded via attestor-core (identical crypto path)', state: 'pending' },
-  { id: 'notarize', label: 'Notarizing — sidecar collects 2-of-3', detail: '3 instances polled, signatures verified, assertion signed', state: 'pending' },
-  { id: 'chain', label: 'Submitting to the contract', detail: 'verifyAttestation → credential vaulted on-chain', state: 'pending' },
+  {
+    id: "tls",
+    label: "Replaying attested TLS session",
+    detail: "pre-recorded via attestor-core (identical crypto path)",
+    state: "pending",
+  },
+  {
+    id: "notarize",
+    label: "Notarizing — sidecar collects 2-of-3",
+    detail: "3 instances polled, signatures verified, assertion signed",
+    state: "pending",
+  },
+  {
+    id: "chain",
+    label: "Submitting to the contract",
+    detail: "verifyAttestation → credential vaulted on-chain",
+    state: "pending",
+  },
 ];

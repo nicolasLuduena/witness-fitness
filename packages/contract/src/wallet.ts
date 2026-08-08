@@ -1,20 +1,20 @@
 // Minimal devnet wallet stack (pattern from midnight-reference-app
 // packages/wallet). Genesis-mint seeds fund local devnet accounts.
-import * as ledger from '@midnight-ntwrk/ledger-v8';
-import { getNetworkId, setNetworkId } from '@midnight-ntwrk/midnight-js-network-id';
-import type { MidnightProvider, WalletProvider } from '@midnight-ntwrk/midnight-js-types';
-import { DustWallet } from '@midnight-ntwrk/wallet-sdk-dust-wallet';
-import { WalletFacade } from '@midnight-ntwrk/wallet-sdk-facade';
-import { HDWallet, Roles } from '@midnight-ntwrk/wallet-sdk-hd';
-import { ShieldedWallet } from '@midnight-ntwrk/wallet-sdk-shielded';
+import * as ledger from "@midnight-ntwrk/ledger-v8";
+import { getNetworkId, setNetworkId } from "@midnight-ntwrk/midnight-js-network-id";
+import type { MidnightProvider, WalletProvider } from "@midnight-ntwrk/midnight-js-types";
+import { DustWallet } from "@midnight-ntwrk/wallet-sdk-dust-wallet";
+import { WalletFacade } from "@midnight-ntwrk/wallet-sdk-facade";
+import { HDWallet, Roles } from "@midnight-ntwrk/wallet-sdk-hd";
+import { ShieldedWallet } from "@midnight-ntwrk/wallet-sdk-shielded";
 import {
   createKeystore,
   InMemoryTransactionHistoryStorage,
   PublicKey,
   UnshieldedWallet,
   type UnshieldedKeystore,
-} from '@midnight-ntwrk/wallet-sdk-unshielded-wallet';
-import * as Rx from 'rxjs';
+} from "@midnight-ntwrk/wallet-sdk-unshielded-wallet";
+import * as Rx from "rxjs";
 
 export interface WalletConfig {
   readonly networkId?: string;
@@ -32,16 +32,16 @@ export interface WalletContext {
 }
 
 export const deriveKeysFromSeed = (seed: string) => {
-  const hdWallet = HDWallet.fromSeed(Buffer.from(seed, 'hex'));
-  if (hdWallet.type !== 'seedOk') {
-    throw new Error('Failed to initialize HDWallet from seed');
+  const hdWallet = HDWallet.fromSeed(Buffer.from(seed, "hex"));
+  if (hdWallet.type !== "seedOk") {
+    throw new Error("Failed to initialize HDWallet from seed");
   }
   const derivationResult = hdWallet.hdWallet
     .selectAccount(0)
     .selectRoles([Roles.Zswap, Roles.NightExternal, Roles.Dust])
     .deriveKeysAt(0);
-  if (derivationResult.type !== 'keysDerived') {
-    throw new Error('Failed to derive keys');
+  if (derivationResult.type !== "keysDerived") {
+    throw new Error("Failed to derive keys");
   }
   hdWallet.hdWallet.clear();
   return derivationResult.keys;
@@ -51,8 +51,8 @@ export const waitForSync = (wallet: WalletFacade) =>
   Rx.firstValueFrom(
     wallet.state().pipe(
       Rx.throttleTime(5_000),
-      Rx.filter((state) => state.isSynced)
-    )
+      Rx.filter((state) => state.isSynced),
+    ),
   );
 
 export const waitForFunds = (wallet: WalletFacade): Promise<bigint> =>
@@ -61,8 +61,8 @@ export const waitForFunds = (wallet: WalletFacade): Promise<bigint> =>
       Rx.throttleTime(10_000),
       Rx.filter((s) => s.isSynced),
       Rx.map((s) => s.unshielded.balances[ledger.unshieldedToken().raw] ?? 0n),
-      Rx.filter((balance) => balance > 0n)
-    )
+      Rx.filter((balance) => balance > 0n),
+    ),
   );
 
 const buildInitConfig = (config: WalletConfig) => ({
@@ -77,11 +77,11 @@ const buildInitConfig = (config: WalletConfig) => ({
   },
   provingServerUrl: new URL(config.proofServer),
   txHistoryStorage: new InMemoryTransactionHistoryStorage(),
-  relayURL: new URL(config.node.replace(/^http/, 'ws')),
+  relayURL: new URL(config.node.replace(/^http/, "ws")),
 });
 
 export const buildWallet = async (config: WalletConfig, seed: string): Promise<WalletContext> => {
-  setNetworkId(config.networkId ?? 'undeployed');
+  setNetworkId(config.networkId ?? "undeployed");
   const keys = deriveKeysFromSeed(seed);
   const shieldedSecretKeys = ledger.ZswapSecretKeys.fromSeed(keys[Roles.Zswap]);
   const dustSecretKey = ledger.DustSecretKey.fromSeed(keys[Roles.Dust]);
@@ -96,15 +96,15 @@ export const buildWallet = async (config: WalletConfig, seed: string): Promise<W
     dust: (walletConfig) =>
       DustWallet(walletConfig).startWithSecretKey(
         dustSecretKey,
-        ledger.LedgerParameters.initialParameters().dust
+        ledger.LedgerParameters.initialParameters().dust,
       ),
   });
   await wallet.start(shieldedSecretKeys, dustSecretKey);
   await waitForSync(wallet);
 
-  const balance = (await Rx.firstValueFrom(wallet.state())).unshielded.balances[
-    ledger.unshieldedToken().raw
-  ] ?? 0n;
+  const balance =
+    (await Rx.firstValueFrom(wallet.state())).unshielded.balances[ledger.unshieldedToken().raw] ??
+    0n;
   if (balance === 0n) {
     await waitForFunds(wallet);
   }
@@ -113,29 +113,29 @@ export const buildWallet = async (config: WalletConfig, seed: string): Promise<W
 
 export const registerForDustGeneration = async (
   wallet: WalletFacade,
-  unshieldedKeystore: UnshieldedKeystore
+  unshieldedKeystore: UnshieldedKeystore,
 ): Promise<void> => {
   const state = await Rx.firstValueFrom(wallet.state().pipe(Rx.filter((s) => s.isSynced)));
   if (state.dust.availableCoins.length > 0) {
     return;
   }
   const nightUtxos = state.unshielded.availableCoins.filter(
-    (coin) => coin.meta?.registeredForDustGeneration !== true
+    (coin) => coin.meta?.registeredForDustGeneration !== true,
   );
   if (nightUtxos.length === 0) {
     await Rx.firstValueFrom(
       wallet.state().pipe(
         Rx.throttleTime(5_000),
         Rx.filter((s) => s.isSynced),
-        Rx.filter((s) => s.dust.balance(new Date()) > 0n)
-      )
+        Rx.filter((s) => s.dust.balance(new Date()) > 0n),
+      ),
     );
     return;
   }
   const recipe = await wallet.registerNightUtxosForDustGeneration(
     nightUtxos,
     unshieldedKeystore.getPublicKey(),
-    (payload) => unshieldedKeystore.signData(payload)
+    (payload) => unshieldedKeystore.signData(payload),
   );
   const finalized = await wallet.finalizeRecipe(recipe);
   await wallet.submitTransaction(finalized);
@@ -143,15 +143,15 @@ export const registerForDustGeneration = async (
     wallet.state().pipe(
       Rx.throttleTime(5_000),
       Rx.filter((s) => s.isSynced),
-      Rx.filter((s) => s.dust.balance(new Date()) > 0n)
-    )
+      Rx.filter((s) => s.dust.balance(new Date()) > 0n),
+    ),
   );
 };
 
 export const signTransactionIntents = (
   tx: { intents?: Map<number, unknown> },
   signFn: (payload: Uint8Array) => ledger.Signature,
-  proofMarker: 'proof' | 'pre-proof'
+  proofMarker: "proof" | "pre-proof",
 ): void => {
   if (!tx.intents || tx.intents.size === 0) {
     return;
@@ -165,7 +165,7 @@ export const signTransactionIntents = (
       ledger.SignatureEnabled,
       ledger.Proofish,
       ledger.PreBinding
-    >('signature', proofMarker, 'pre-binding', (intent as { serialize(): Uint8Array }).serialize());
+    >("signature", proofMarker, "pre-binding", (intent as { serialize(): Uint8Array }).serialize());
 
     const sigData = cloned.signatureData(segment);
     const signature = signFn(sigData);
@@ -173,7 +173,7 @@ export const signTransactionIntents = (
     if (cloned.fallibleUnshieldedOffer) {
       const sigs = cloned.fallibleUnshieldedOffer.inputs.map(
         (_: ledger.UtxoSpend, i: number) =>
-          cloned.fallibleUnshieldedOffer!.signatures.at(i) ?? signature
+          cloned.fallibleUnshieldedOffer!.signatures.at(i) ?? signature,
       );
       cloned.fallibleUnshieldedOffer = cloned.fallibleUnshieldedOffer.addSignatures(sigs);
     }
@@ -181,16 +181,17 @@ export const signTransactionIntents = (
     if (cloned.guaranteedUnshieldedOffer) {
       const sigs = cloned.guaranteedUnshieldedOffer.inputs.map(
         (_: ledger.UtxoSpend, i: number) =>
-          cloned.guaranteedUnshieldedOffer!.signatures.at(i) ?? signature
+          cloned.guaranteedUnshieldedOffer!.signatures.at(i) ?? signature,
       );
       cloned.guaranteedUnshieldedOffer = cloned.guaranteedUnshieldedOffer.addSignatures(sigs);
     }
 
-    tx.intents.set(segment, cloned);  }
+    tx.intents.set(segment, cloned);
+  }
 };
 
 export const createWalletAndMidnightProvider = async (
-  ctx: WalletContext
+  ctx: WalletContext,
 ): Promise<WalletProvider & MidnightProvider> => {
   const state = await Rx.firstValueFrom(ctx.wallet.state().pipe(Rx.filter((s) => s.isSynced)));
   return {
@@ -207,7 +208,7 @@ export const createWalletAndMidnightProvider = async (
           shieldedSecretKeys: ctx.shieldedSecretKeys,
           dustSecretKey: ctx.dustSecretKey,
         },
-        { ttl: ttl ?? new Date(Date.now() + 30 * 60 * 1000) }
+        { ttl: ttl ?? new Date(Date.now() + 30 * 60 * 1000) },
       );
       // Sign the recipe with the wallet SDK's OWN path (signRecipe →
       // TransactionOps.addSignature, wallet-sdk-unshielded-wallet

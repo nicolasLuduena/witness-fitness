@@ -1,38 +1,37 @@
 // Runtime configuration. All values overridable via Vite env (VITE_*).
 // No secrets live here — demo keys are public by design (registered on-chain).
 
-export const SIDECAR_URL =
-  import.meta.env.VITE_WF_SIDECAR_URL ?? 'http://127.0.0.1:8200';
+export const SIDECAR_URL = import.meta.env.VITE_WF_SIDECAR_URL ?? "http://127.0.0.1:8200";
 
 export const NOTARY_PORTS = [8101, 8102, 8103];
 
 export const NOTARY_URLS = NOTARY_PORTS.map((port) => `http://127.0.0.1:${port}`);
 
 export const INDEXER_URL =
-  import.meta.env.VITE_WF_INDEXER_URL ?? 'http://127.0.0.1:8088/api/v3/graphql';
+  import.meta.env.VITE_WF_INDEXER_URL ?? "http://127.0.0.1:8088/api/v3/graphql";
 
 export const INDEXER_WS_URL =
-  import.meta.env.VITE_WF_INDEXER_WS_URL ?? 'ws://127.0.0.1:8088/api/v3/graphql/ws';
+  import.meta.env.VITE_WF_INDEXER_WS_URL ?? "ws://127.0.0.1:8088/api/v3/graphql/ws";
 
-export const PROOF_SERVER_URL = import.meta.env.VITE_WF_PROOF_SERVER_URL ?? 'http://127.0.0.1:6300';
+export const PROOF_SERVER_URL = import.meta.env.VITE_WF_PROOF_SERVER_URL ?? "http://127.0.0.1:6300";
 
 // The demo is LIVE-ONLY (Round 1B): browser wallet by default, with ?mode=live
 // kept purely for maintainer debugging (the identity sidecar).
-export type DemoMode = 'live' | 'wallet';
+export type DemoMode = "live" | "wallet";
 
 // Network id the devnet + Lace connect with (reference app convention).
-export const NETWORK_ID = 'undeployed';
+export const NETWORK_ID = "undeployed";
 
 // Minimum DApp Connector apiVersion the wallet mode accepts.
-export const MIN_WALLET_API_VERSION = '3.0.0';
+export const MIN_WALLET_API_VERSION = "3.0.0";
 
 const DEFAULT_MODE: DemoMode =
-  (import.meta.env.VITE_WF_MODE as DemoMode | undefined) === 'live' ? 'live' : 'wallet';
+  (import.meta.env.VITE_WF_MODE as DemoMode | undefined) === "live" ? "live" : "wallet";
 
 export const INITIAL_MODE: DemoMode =
-  typeof window !== 'undefined' &&
-  new URLSearchParams(window.location.search).get('mode') === 'live'
-    ? 'live'
+  typeof window !== "undefined" &&
+  new URLSearchParams(window.location.search).get("mode") === "live"
+    ? "live"
     : DEFAULT_MODE;
 
 // per-request timeout for sidecar calls (ms). Submit beats (attest,

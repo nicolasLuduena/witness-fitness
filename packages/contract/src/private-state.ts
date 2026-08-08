@@ -1,4 +1,4 @@
-import type { A_Assertion, Schnorr_SchnorrSignature } from './managed/stride/contract/index.js';
+import type { A_Assertion, Schnorr_SchnorrSignature } from "./managed/stride/contract/index.js";
 
 export type SchnorrSignature = Schnorr_SchnorrSignature;
 
@@ -16,7 +16,7 @@ export type PrivateState = {
 
 export const createPrivateState = (
   adminSecretKey: Uint8Array,
-  holderSecret: Uint8Array
+  holderSecret: Uint8Array,
 ): PrivateState => ({
   adminSecretKey,
   holderSecret,

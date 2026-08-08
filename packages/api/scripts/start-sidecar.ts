@@ -3,17 +3,17 @@
 // CONTRACT_ADDRESS). Reads the contract address at startup so a parallel
 // redeploy auto-wires on restart.
 //   pnpm --filter @witnessfitness/api start:sidecar
-import { createDemoSidecar, loadSidecarConfig } from '../src/demo-sidecar.js';
+import { createDemoSidecar, loadSidecarConfig } from "../src/demo-sidecar.js";
 
 const config = loadSidecarConfig();
 const sidecar = createDemoSidecar(config);
 
 sidecar.server.listen(config.port, () => {
   console.log(
-    `[sidecar] listening on :${config.port} | contract ${config.contractAddress || '(unset — set CONTRACT_ADDRESS or deploy the contract)'}`
+    `[sidecar] listening on :${config.port} | contract ${config.contractAddress || "(unset — set CONTRACT_ADDRESS or deploy the contract)"}`,
   );
 });
 
 sidecar.init().catch((error) => {
-  console.error('[sidecar] init failed — serving /health only:', error);
+  console.error("[sidecar] init failed — serving /health only:", error);
 });

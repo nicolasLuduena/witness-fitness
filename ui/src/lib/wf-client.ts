@@ -17,10 +17,10 @@ import type {
   WagerCreateRequest,
   WagerSettleResult,
   WagerView,
-} from '../domain/types';
-import type { DemoMode } from '../config';
+} from "../domain/types";
+import type { DemoMode } from "../config";
 
-export type { AttestOutcome } from '../domain/types';
+export type { AttestOutcome } from "../domain/types";
 
 export interface WfClient {
   readonly mode: DemoMode;

@@ -2,28 +2,28 @@
 // startup: wallet by default, ?mode=live for maintainer debugging), tab
 // navigation, screens, and the always-visible notary trust strip.
 
-import { useState } from 'react';
-import { DemoProvider, useDemo } from './state/DemoStore';
-import { NotaryStrip } from './components/NotaryStrip';
-import { ConnectScreen } from './screens/ConnectScreen';
-import { VaultScreen } from './screens/VaultScreen';
-import { WagersScreen } from './screens/WagersScreen';
-import { StreaksScreen } from './screens/StreaksScreen';
-import { EmployerScreen } from './screens/EmployerScreen';
+import { useState } from "react";
+import { DemoProvider, useDemo } from "./state/DemoStore";
+import { NotaryStrip } from "./components/NotaryStrip";
+import { ConnectScreen } from "./screens/ConnectScreen";
+import { VaultScreen } from "./screens/VaultScreen";
+import { WagersScreen } from "./screens/WagersScreen";
+import { StreaksScreen } from "./screens/StreaksScreen";
+import { EmployerScreen } from "./screens/EmployerScreen";
 
-type Tab = 'connect' | 'vault' | 'wagers' | 'streaks' | 'employer';
+type Tab = "connect" | "vault" | "wagers" | "streaks" | "employer";
 
 const TABS: { id: Tab; label: string }[] = [
-  { id: 'connect', label: 'Connect' },
-  { id: 'vault', label: 'Vault' },
-  { id: 'wagers', label: 'Wagers' },
-  { id: 'streaks', label: 'Streaks & Badges' },
-  { id: 'employer', label: 'Employer Panel' },
+  { id: "connect", label: "Connect" },
+  { id: "vault", label: "Vault" },
+  { id: "wagers", label: "Wagers" },
+  { id: "streaks", label: "Streaks & Badges" },
+  { id: "employer", label: "Employer Panel" },
 ];
 
 const Shell = () => {
   const { mode, credentials, wagers, proofs } = useDemo();
-  const [tab, setTab] = useState<Tab>('connect');
+  const [tab, setTab] = useState<Tab>("connect");
 
   return (
     <div className="app-shell">
@@ -39,13 +39,13 @@ const Shell = () => {
           <div
             className="mode-pill"
             title={
-              mode === 'live'
-                ? 'Live mode — maintainer debug via the identity sidecar (?mode=live)'
-                : 'Wallet mode — Lace DApp Connector, direct chain access'
+              mode === "live"
+                ? "Live mode — maintainer debug via the identity sidecar (?mode=live)"
+                : "Wallet mode — Lace DApp Connector, direct chain access"
             }
           >
             <span className="dot dot--green" />
-            {mode === 'live' ? 'live mode' : 'wallet mode'}
+            {mode === "live" ? "live mode" : "wallet mode"}
           </div>
         </div>
       </header>
@@ -54,24 +54,28 @@ const Shell = () => {
         {TABS.map((t) => (
           <button
             key={t.id}
-            className={`tab ${tab === t.id ? 'tab--active' : ''}`}
+            className={`tab ${tab === t.id ? "tab--active" : ""}`}
             onClick={() => setTab(t.id)}
           >
             {t.label}
-            {t.id === 'vault' && credentials.length > 0 ? (
+            {t.id === "vault" && credentials.length > 0 ? (
               <span className="tab__count">{credentials.length}</span>
             ) : null}
-            {t.id === 'wagers' && wagers.length > 0 ? <span className="tab__count">{wagers.length}</span> : null}
-            {t.id === 'employer' && proofs.length > 0 ? <span className="tab__count">{proofs.length}</span> : null}
+            {t.id === "wagers" && wagers.length > 0 ? (
+              <span className="tab__count">{wagers.length}</span>
+            ) : null}
+            {t.id === "employer" && proofs.length > 0 ? (
+              <span className="tab__count">{proofs.length}</span>
+            ) : null}
           </button>
         ))}
       </nav>
 
-      {tab === 'connect' ? <ConnectScreen /> : null}
-      {tab === 'vault' ? <VaultScreen /> : null}
-      {tab === 'wagers' ? <WagersScreen /> : null}
-      {tab === 'streaks' ? <StreaksScreen /> : null}
-      {tab === 'employer' ? <EmployerScreen /> : null}
+      {tab === "connect" ? <ConnectScreen /> : null}
+      {tab === "vault" ? <VaultScreen /> : null}
+      {tab === "wagers" ? <WagersScreen /> : null}
+      {tab === "streaks" ? <StreaksScreen /> : null}
+      {tab === "employer" ? <EmployerScreen /> : null}
 
       <NotaryStrip />
     </div>

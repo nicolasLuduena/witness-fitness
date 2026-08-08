@@ -2,7 +2,7 @@
 // username, replacing the hardcoded demo names (Ava/Milo/…). The handle is
 // left unset unless the service starts returning one; Round 2 may derive it.
 
-import type { StravaExchangeResponse } from './strava';
+import type { StravaExchangeResponse } from "./strava";
 
 export interface AthleteIdentity {
   name: string;
@@ -10,9 +10,7 @@ export interface AthleteIdentity {
   stravaHandle?: string;
 }
 
-export function athleteIdentityFromExchange(
-  exchange: StravaExchangeResponse,
-): AthleteIdentity {
+export function athleteIdentityFromExchange(exchange: StravaExchangeResponse): AthleteIdentity {
   const { athlete } = exchange;
   return {
     name: `${athlete.firstname} ${athlete.lastname}`.trim(),

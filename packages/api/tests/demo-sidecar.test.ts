@@ -2,9 +2,9 @@
 // shapes the UI agent is wiring against, dedupe rules, wager lifecycle state
 // transitions (create → accept → submit ×2 → settle), opening recording, and
 // error mapping. The real gate is the live E2E; these tests pin the shapes.
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import type { AddressInfo } from 'node:net';
-import { createServer } from 'node:http';
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import type { AddressInfo } from "node:net";
+import { createServer } from "node:http";
 import {
   createDemoSidecarWithDeps,
   dayOfTimestamp,
@@ -16,16 +16,16 @@ import {
   type DemoSidecarConfig,
   type SidecarDeps,
   type StoredCredential,
-} from '../src/demo-sidecar.js';
-import { pureCircuits } from '@witnessfitness/contract';
-import type { NotarizedAttestation, StrideDerivedState } from '../src/index.js';
-import type { Athlete, WagerPayoutRouting } from '../src/demo-sidecar.js';
+} from "../src/demo-sidecar.js";
+import { pureCircuits } from "@witnessfitness/contract";
+import type { NotarizedAttestation, StrideDerivedState } from "../src/index.js";
+import type { Athlete, WagerPayoutRouting } from "../src/demo-sidecar.js";
 
 const config: DemoSidecarConfig = {
   ...loadSidecarConfig({}),
   port: 0,
-  contractAddress: '0xdeadbeef',
-  notaryUrls: ['http://127.0.0.1:1'],
+  contractAddress: "0xdeadbeef",
+  notaryUrls: ["http://127.0.0.1:1"],
   txTimeoutMs: 5_000,
   notaryTimeoutMs: 5_000,
   walletInitTimeoutMs: 5_000,
@@ -34,11 +34,11 @@ const config: DemoSidecarConfig = {
 const holderSecret = demoHolderSecret(config.genesisSeed);
 const HOLDER_BINDING = pureCircuits.holderBinding(holderSecret);
 const EMPLOYER_BINDING = pureCircuits.holderBinding(
-  (await import('../src/demo-sidecar.js')).demoEmployerSecret(config.genesisSeed)
+  (await import("../src/demo-sidecar.js")).demoEmployerSecret(config.genesisSeed),
 );
 const CANNED_VAULT_KEY = new Uint8Array([
-  1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26,
-  27, 28, 29, 30, 31, 32,
+  1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27,
+  28, 29, 30, 31, 32,
 ]);
 const CANNED_VAULT_KEY_B = new Uint8Array([
   2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27,
@@ -46,7 +46,7 @@ const CANNED_VAULT_KEY_B = new Uint8Array([
 ]);
 const TS = 1786000000n;
 
-const cannedAssertion = (value: bigint): NotarizedAttestation['assertion'] => ({
+const cannedAssertion = (value: bigint): NotarizedAttestation["assertion"] => ({
   version: 1n,
   provider: 1n,
   claims: [
@@ -67,14 +67,14 @@ const cannedAssertion = (value: bigint): NotarizedAttestation['assertion'] => ({
 
 // Athlete B's fixture carries a different distance so the wager has a winner.
 const cannedAttestation = (identifier: string): NotarizedAttestation => ({
-  assertion: cannedAssertion(identifier.includes('B') ? 54321n : 12345n),
+  assertion: cannedAssertion(identifier.includes("B") ? 54321n : 12345n),
   signatures: [
     { announcement: { x: 1n, y: 2n }, response: 3n },
     { announcement: { x: 4n, y: 5n }, response: 6n },
     { announcement: { x: 0n, y: 1n }, response: 0n },
   ],
-  notaryIds: ['notary-1', 'notary-2'],
-  metricSource: 'fixture-demo',
+  notaryIds: ["notary-1", "notary-2"],
+  metricSource: "fixture-demo",
   identifier,
 });
 
@@ -102,7 +102,7 @@ const fakeState = (
     badges?: bigint[];
     wagers?: Map<bigint, FakeWager>;
     nextWagerId?: bigint;
-  }
+  },
 ): StrideDerivedState =>
   ({
     vault: opts.vault ?? [],
@@ -152,13 +152,13 @@ const makeDeps = (
     acceptWager: number;
     submitWorkout: number;
     settleWager: number;
-  }
+  },
 ): SidecarDeps & { staged: { athlete: Athlete; fields: Record<string, unknown> }[] } => {
   const ledger = {
     wagers: new Map<bigint, FakeWager>(),
     nextWagerId: 0n,
   };
-  const identities: SidecarDeps['identities'] = {
+  const identities: SidecarDeps["identities"] = {
     A: { holderBinding, routing: routingOf(1) },
     B: { holderBinding: HOLDER_BINDING_B, routing: routingOf(3) },
   };
@@ -166,14 +166,14 @@ const makeDeps = (
   return {
     notary: {
       attestate: async (artifacts: unknown) => {
-        const id = (artifacts as { identifier?: string })?.identifier ?? 'fixture-id';
+        const id = (artifacts as { identifier?: string })?.identifier ?? "fixture-id";
         return cannedAttestation(id);
       },
     },
     flows: {
       attest: async (athlete) => ({
-        vaultKey: athlete === 'A' ? CANNED_VAULT_KEY : CANNED_VAULT_KEY_B,
-        tx: { public: { txHash: '0xattest-tx' } },
+        vaultKey: athlete === "A" ? CANNED_VAULT_KEY : CANNED_VAULT_KEY_B,
+        tx: { public: { txHash: "0xattest-tx" } },
       }),
       createWager: async (athlete, input) => {
         calls.createWager += 1;
@@ -194,28 +194,28 @@ const makeDeps = (
           challengerCoinKey: input.coinKey.bytes,
           opponentCoinKey: new Uint8Array(32),
         });
-        return { public: { txHash: '0xcreate-tx' } };
+        return { public: { txHash: "0xcreate-tx" } };
       },
       acceptWager: async (athlete, id, routing) => {
         calls.acceptWager += 1;
         const wager = ledger.wagers.get(id);
-        if (!wager) throw new Error('no such wager');
+        if (!wager) throw new Error("no such wager");
         wager.accepted = true;
         wager.opponentPayout = routing.payout;
         wager.opponentCoinKey = routing.coinKey.bytes;
-        return { public: { txHash: '0xaccept-tx' } };
+        return { public: { txHash: "0xaccept-tx" } };
       },
       submitWorkout: async (athlete, id) => {
         calls.submitWorkout += 1;
         const wager = ledger.wagers.get(id);
-        if (!wager) throw new Error('no such wager');
-        const sub = { is_some: true, value: athlete === 'A' ? 12345n : 54321n };
-        if (athlete === 'A') {
+        if (!wager) throw new Error("no such wager");
+        const sub = { is_some: true, value: athlete === "A" ? 12345n : 54321n };
+        if (athlete === "A") {
           wager.challengerSubmission = sub;
         } else {
           wager.opponentSubmission = sub;
         }
-        return { public: { txHash: '0xsubmit-tx' } };
+        return { public: { txHash: "0xsubmit-tx" } };
       },
       settleWager: async (_athlete, id) => {
         calls.settleWager += 1;
@@ -223,19 +223,19 @@ const makeDeps = (
         if (wager) {
           wager.settled = true;
         }
-        return { public: { txHash: '0xsettle-tx' } };
+        return { public: { txHash: "0xsettle-tx" } };
       },
       advanceStreak: async () => {
         calls.advanceStreak += 1;
-        return { public: { txHash: '0xstreak-tx' } };
+        return { public: { txHash: "0xstreak-tx" } };
       },
       mintBadge: async () => {
         calls.mintBadge += 1;
-        return { public: { txHash: '0xbadge-tx' } };
+        return { public: { txHash: "0xbadge-tx" } };
       },
       proveBadge: async () => {
         calls.proveBadge += 1;
-        return { public: { txHash: '0xprove-tx' } };
+        return { public: { txHash: "0xprove-tx" } };
       },
     },
     stagePrivateState: async (athlete, fields) => {
@@ -259,12 +259,14 @@ const makeDeps = (
   };
 };
 
-const NFT_TYPE = '0x' + 'ab'.repeat(32);
-const stakeOf = (night: number): string => '0x' + (BigInt(night) * 10n ** 12n).toString(16);
-const futureDeadline = (): string => '0x' + (BigInt(Math.floor(Date.now() / 1000)) + 3_600n).toString(16);
-const pastDeadline = (): string => '0x' + (BigInt(Math.floor(Date.now() / 1000)) - 3_600n).toString(16);
+const NFT_TYPE = "0x" + "ab".repeat(32);
+const stakeOf = (night: number): string => "0x" + (BigInt(night) * 10n ** 12n).toString(16);
+const futureDeadline = (): string =>
+  "0x" + (BigInt(Math.floor(Date.now() / 1000)) + 3_600n).toString(16);
+const pastDeadline = (): string =>
+  "0x" + (BigInt(Math.floor(Date.now() / 1000)) - 3_600n).toString(16);
 
-describe('demo sidecar wire contract', () => {
+describe("demo sidecar wire contract", () => {
   let sidecar: ReturnType<typeof createDemoSidecarWithDeps>;
   let baseUrl: string;
   const calls = {
@@ -291,8 +293,8 @@ describe('demo sidecar wire contract', () => {
 
   const post = (path: string, body: unknown): Promise<Response> =>
     fetch(`${baseUrl}${path}`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
+      method: "POST",
+      headers: { "content-type": "application/json" },
       body: JSON.stringify(body),
     });
 
@@ -315,130 +317,128 @@ describe('demo sidecar wire contract', () => {
     const url = `http://127.0.0.1:${port}`;
     const postTo = (path: string, body: unknown): Promise<Response> =>
       fetch(`${url}${path}`, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
+        method: "POST",
+        headers: { "content-type": "application/json" },
         body: JSON.stringify(body),
       });
     return { side, deps, url, postTo, close: () => side.close() };
   };
 
-  it('OPTIONS preflight with an allowed origin → 204 + CORS headers', async () => {
+  it("OPTIONS preflight with an allowed origin → 204 + CORS headers", async () => {
     const res = await fetch(`${baseUrl}/attest`, {
-      method: 'OPTIONS',
+      method: "OPTIONS",
       headers: {
-        origin: 'http://localhost:5173',
-        'access-control-request-method': 'POST',
-        'access-control-request-headers': 'content-type',
+        origin: "http://localhost:5173",
+        "access-control-request-method": "POST",
+        "access-control-request-headers": "content-type",
       },
     });
     expect(res.status).toBe(204);
-    expect(res.headers.get('access-control-allow-origin')).toBe('http://localhost:5173');
-    expect(res.headers.get('access-control-allow-methods')).toBe('GET, POST, OPTIONS');
-    expect(res.headers.get('access-control-allow-headers')).toBe('content-type');
-    expect(res.headers.get('vary')).toContain('Origin');
+    expect(res.headers.get("access-control-allow-origin")).toBe("http://localhost:5173");
+    expect(res.headers.get("access-control-allow-methods")).toBe("GET, POST, OPTIONS");
+    expect(res.headers.get("access-control-allow-headers")).toBe("content-type");
+    expect(res.headers.get("vary")).toContain("Origin");
   });
 
-  it('GET /health with an allowed Origin → CORS header present', async () => {
-    const res = await fetch(`${baseUrl}/health`, { headers: { origin: 'http://127.0.0.1:4173' } });
+  it("GET /health with an allowed Origin → CORS header present", async () => {
+    const res = await fetch(`${baseUrl}/health`, { headers: { origin: "http://127.0.0.1:4173" } });
     expect(res.status).toBe(200);
-    expect(res.headers.get('access-control-allow-origin')).toBe('http://127.0.0.1:4173');
+    expect(res.headers.get("access-control-allow-origin")).toBe("http://127.0.0.1:4173");
   });
 
-  it('GET /health with a disallowed origin → no CORS header', async () => {
-    const res = await fetch(`${baseUrl}/health`, { headers: { origin: 'http://evil.example' } });
+  it("GET /health with a disallowed origin → no CORS header", async () => {
+    const res = await fetch(`${baseUrl}/health`, { headers: { origin: "http://evil.example" } });
     expect(res.status).toBe(200);
-    expect(res.headers.get('access-control-allow-origin')).toBeNull();
+    expect(res.headers.get("access-control-allow-origin")).toBeNull();
   });
 
-  it('GET /health reports ok/ready/contractAddress/network + stateless flags', async () => {
+  it("GET /health reports ok/ready/contractAddress/network + stateless flags", async () => {
     const res = await fetch(`${baseUrl}/health`);
     expect(res.status).toBe(200);
     const body = (await res.json()) as Record<string, unknown>;
     expect(body.ok).toBe(true);
     expect(body.ready).toBe(true);
-    expect(body.contractAddress).toBe('0xdeadbeef');
-    expect(body.network).toBe('devnet');
+    expect(body.contractAddress).toBe("0xdeadbeef");
+    expect(body.network).toBe("devnet");
     expect(body.stateless).toBe(true);
-    expect(typeof body.hasStrava).toBe('boolean');
-    expect(typeof body.hasAttestorKey).toBe('boolean');
+    expect(typeof body.hasStrava).toBe("boolean");
+    expect(typeof body.hasAttestorKey).toBe("boolean");
   });
 
-  it('POST /attest returns { vaultKey, txHash, timestamp, metrics } (hex wire)', async () => {
-    const res = await post('/attest', { artifacts: { identifier: 'fixture-1' } });
+  it("POST /attest returns { vaultKey, txHash, timestamp, metrics } (hex wire)", async () => {
+    const res = await post("/attest", { artifacts: { identifier: "fixture-1" } });
     expect(res.status).toBe(200);
     const body = (await res.json()) as Record<string, unknown>;
     expect(body.vaultKey).toMatch(/^0x[0-9a-f]{64}$/);
-    expect(body.txHash).toBe('0xattest-tx');
-    expect(body.timestamp).toBe('0x' + TS.toString(16));
-    expect(body.metrics).toEqual([
-      { metricId: '0x1', label: 'distance', value: '0x3039' },
-    ]);
+    expect(body.txHash).toBe("0xattest-tx");
+    expect(body.timestamp).toBe("0x" + TS.toString(16));
+    expect(body.metrics).toEqual([{ metricId: "0x1", label: "distance", value: "0x3039" }]);
   });
 
-  it('POST /attest with the same artifacts → 409 double-count (never hangs)', async () => {
-    const res = await post('/attest', { artifacts: { identifier: 'fixture-1' } });
+  it("POST /attest with the same artifacts → 409 double-count (never hangs)", async () => {
+    const res = await post("/attest", { artifacts: { identifier: "fixture-1" } });
     expect(res.status).toBe(409);
     const body = (await res.json()) as Record<string, unknown>;
     expect(body.error).toMatch(/double-count/);
   });
 
-  it('POST /attest with a missing artifacts field → 400', async () => {
-    const res = await post('/attest', {});
+  it("POST /attest with a missing artifacts field → 400", async () => {
+    const res = await post("/attest", {});
     expect(res.status).toBe(400);
   });
 
-  it('POST /streak/advance on the attested vaultKey returns { streakCount, lastDay }', async () => {
-    const res = await post('/streak/advance', { vaultKey: vaultKeyOfFirst() });
+  it("POST /streak/advance on the attested vaultKey returns { streakCount, lastDay }", async () => {
+    const res = await post("/streak/advance", { vaultKey: vaultKeyOfFirst() });
     expect(res.status).toBe(200);
-    expect(await res.json()).toEqual({ streakCount: '0x1', lastDay: '0x50bf' });
+    expect(await res.json()).toEqual({ streakCount: "0x1", lastDay: "0x50bf" });
     expect(calls.advanceStreak).toBe(1);
   });
 
-  it('POST /streak/advance on an unknown vaultKey → 404', async () => {
-    const res = await post('/streak/advance', { vaultKey: '0x' + 'ab'.repeat(32) });
+  it("POST /streak/advance on an unknown vaultKey → 404", async () => {
+    const res = await post("/streak/advance", { vaultKey: "0x" + "ab".repeat(32) });
     expect(res.status).toBe(404);
     expect(((await res.json()) as Record<string, unknown>).error).toMatch(/attest first/);
   });
 
-  it('POST /badge/mint { vaultKey, badgeId } returns { badgeId, minted }', async () => {
-    const res = await post('/badge/mint', { vaultKey: vaultKeyOfFirst(), badgeId: '0x2' });
+  it("POST /badge/mint { vaultKey, badgeId } returns { badgeId, minted }", async () => {
+    const res = await post("/badge/mint", { vaultKey: vaultKeyOfFirst(), badgeId: "0x2" });
     expect(res.status).toBe(200);
-    expect(await res.json()).toEqual({ badgeId: '0x2', minted: true });
+    expect(await res.json()).toEqual({ badgeId: "0x2", minted: true });
     expect(calls.mintBadge).toBe(1);
   });
 
-  it('POST /badge/mint with an unknown badgeId → 400', async () => {
-    const res = await post('/badge/mint', { vaultKey: vaultKeyOfFirst(), badgeId: '0x5' });
+  it("POST /badge/mint with an unknown badgeId → 400", async () => {
+    const res = await post("/badge/mint", { vaultKey: vaultKeyOfFirst(), badgeId: "0x5" });
     expect(res.status).toBe(400);
   });
 
-  it('POST /badge/prove { badgeId } returns { badgeId, verified, verifierBinding }', async () => {
-    const res = await post('/badge/prove', { badgeId: '0x2' });
+  it("POST /badge/prove { badgeId } returns { badgeId, verified, verifierBinding }", async () => {
+    const res = await post("/badge/prove", { badgeId: "0x2" });
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({
-      badgeId: '0x2',
+      badgeId: "0x2",
       verified: true,
-      verifierBinding: '0x' + EMPLOYER_BINDING.toString(16),
+      verifierBinding: "0x" + EMPLOYER_BINDING.toString(16),
     });
     expect(calls.proveBadge).toBe(1);
   });
 
-  it('POST /badge/prove for an unbidden badge → 404', async () => {
-    const res = await post('/badge/prove', { badgeId: '0x9' });
+  it("POST /badge/prove for an unbidden badge → 404", async () => {
+    const res = await post("/badge/prove", { badgeId: "0x9" });
     expect(res.status).toBe(404);
   });
 
-  it('GET /state lists vault/streaks/badges for the demo identity', async () => {
+  it("GET /state lists vault/streaks/badges for the demo identity", async () => {
     const res = await fetch(`${baseUrl}/state`);
     expect(res.status).toBe(200);
     const body = (await res.json()) as Record<string, unknown>;
     expect(body.vault).toHaveLength(1);
-    expect(body.vault[0]).toHaveProperty('vaultKey');
-    expect(body.streaks).toEqual({ count: '0x1', lastDay: '0x50bf' });
-    expect(body.badges).toEqual(['0x2']);
+    expect(body.vault[0]).toHaveProperty("vaultKey");
+    expect(body.streaks).toEqual({ count: "0x1", lastDay: "0x50bf" });
+    expect(body.badges).toEqual(["0x2"]);
   });
 
-  it('serves 503 until init completes', async () => {
+  it("serves 503 until init completes", async () => {
     const cold = createDemoSidecarWithDeps(
       config,
       makeDeps(HOLDER_BINDING, {
@@ -449,13 +449,13 @@ describe('demo sidecar wire contract', () => {
         acceptWager: 0,
         submitWorkout: 0,
         settleWager: 0,
-      })
+      }),
     );
     await new Promise<void>((resolve) => cold.server.listen(0, resolve));
     const { port } = cold.server.address() as AddressInfo;
     const res = await fetch(`http://127.0.0.1:${port}/attest`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
+      method: "POST",
+      headers: { "content-type": "application/json" },
       body: JSON.stringify({ artifacts: {} }),
     });
     expect(res.status).toBe(503);
@@ -464,114 +464,117 @@ describe('demo sidecar wire contract', () => {
     await cold.close();
   });
 
-  describe('wager lifecycle (two identities)', () => {
-    it('create → accept → submit both → settle (winner B, NFT detected)', async () => {
+  describe("wager lifecycle (two identities)", () => {
+    it("create → accept → submit both → settle (winner B, NFT detected)", async () => {
       const { postTo, close } = await freshSidecar();
       try {
-        const resA = await postTo('/attest', { artifacts: { identifier: 'fixture-A' } });
+        const resA = await postTo("/attest", { artifacts: { identifier: "fixture-A" } });
         expect(resA.status).toBe(200);
-        expect(((await resA.json()) as Record<string, unknown>).athlete).toBe('A');
+        expect(((await resA.json()) as Record<string, unknown>).athlete).toBe("A");
 
-        const resB = await postTo('/attest', { athlete: 'B', artifacts: { identifier: 'fixture-B' } });
+        const resB = await postTo("/attest", {
+          athlete: "B",
+          artifacts: { identifier: "fixture-B" },
+        });
         expect(resB.status).toBe(200);
-        expect(((await resB.json()) as Record<string, unknown>).athlete).toBe('B');
+        expect(((await resB.json()) as Record<string, unknown>).athlete).toBe("B");
 
-        const created = await postTo('/wager/create', {
-          athlete: 'A',
-          opponent: 'B',
-          metricId: '0x1',
+        const created = await postTo("/wager/create", {
+          athlete: "A",
+          opponent: "B",
+          metricId: "0x1",
           stake: stakeOf(10),
           deadlineBlock: pastDeadline(),
         });
         expect(created.status).toBe(200);
         expect(await created.json()).toEqual({
-          wagerId: '0x0',
-          txHash: '0xcreate-tx',
-          challenger: 'A',
-          opponent: 'B',
-          metricId: '0x1',
+          wagerId: "0x0",
+          txHash: "0xcreate-tx",
+          challenger: "A",
+          opponent: "B",
+          metricId: "0x1",
           stake: stakeOf(10),
           deadlineBlock: pastDeadline(),
         });
 
-        const accepted = await postTo('/wager/accept', { athlete: 'B', id: '0x0' });
+        const accepted = await postTo("/wager/accept", { athlete: "B", id: "0x0" });
         expect(accepted.status).toBe(200);
         expect(await accepted.json()).toEqual({
-          id: '0x0',
-          athlete: 'B',
+          id: "0x0",
+          athlete: "B",
           accepted: true,
-          txHash: '0xaccept-tx',
+          txHash: "0xaccept-tx",
         });
 
-        const subA = await postTo('/wager/submit', { athlete: 'A', id: '0x0' });
+        const subA = await postTo("/wager/submit", { athlete: "A", id: "0x0" });
         expect(subA.status).toBe(200);
         expect(((await subA.json()) as Record<string, unknown>).submitted).toBe(true);
 
-        const subB = await postTo('/wager/submit', { athlete: 'B', id: '0x0' });
+        const subB = await postTo("/wager/submit", { athlete: "B", id: "0x0" });
         expect(subB.status).toBe(200);
         expect(((await subB.json()) as Record<string, unknown>).submitted).toBe(true);
 
-        const settled = await postTo('/wager/settle', { id: '0x0' });
+        const settled = await postTo("/wager/settle", { id: "0x0" });
         expect(settled.status).toBe(200);
         const settleBody = (await settled.json()) as Record<string, unknown>;
-        expect(settleBody.winner).toBe('B');
+        expect(settleBody.winner).toBe("B");
         expect(settleBody.potNIGHT).toBe(stakeOf(20));
-        expect(settleBody.nft).toEqual({ tokenType: NFT_TYPE, txHash: '0xsettle-tx' });
-        expect(settleBody.disclosed).toEqual({ A: '0x3039', B: '0xd431' });
+        expect(settleBody.nft).toEqual({ tokenType: NFT_TYPE, txHash: "0xsettle-tx" });
+        expect(settleBody.disclosed).toEqual({ A: "0x3039", B: "0xd431" });
       } finally {
         await close();
       }
     });
-    it('stages deterministic submission rands and challenger-first openings', async () => {
+    it("stages deterministic submission rands and challenger-first openings", async () => {
       const { postTo, deps, close } = await freshSidecar();
       try {
-        await postTo('/attest', { artifacts: { identifier: 'fixture-A' } });
-        await postTo('/attest', { athlete: 'B', artifacts: { identifier: 'fixture-B' } });
-        await postTo('/wager/create', {
-          athlete: 'A',
-          opponent: 'B',
-          metricId: '0x1',
+        await postTo("/attest", { artifacts: { identifier: "fixture-A" } });
+        await postTo("/attest", { athlete: "B", artifacts: { identifier: "fixture-B" } });
+        await postTo("/wager/create", {
+          athlete: "A",
+          opponent: "B",
+          metricId: "0x1",
           stake: stakeOf(10),
           deadlineBlock: pastDeadline(),
         });
-        await postTo('/wager/accept', { athlete: 'B', id: '0x0' });
-        await postTo('/wager/submit', { athlete: 'A', id: '0x0' });
-        await postTo('/wager/submit', { athlete: 'B', id: '0x0' });
+        await postTo("/wager/accept", { athlete: "B", id: "0x0" });
+        await postTo("/wager/submit", { athlete: "A", id: "0x0" });
+        await postTo("/wager/submit", { athlete: "B", id: "0x0" });
 
         const submissionStages = deps.staged.filter((s) => s.fields.submissionRand !== undefined);
         expect(submissionStages).toHaveLength(2);
-        const randA = submissionStages.find((s) => s.athlete === 'A')!.fields.submissionRand;
-        const randB = submissionStages.find((s) => s.athlete === 'B')!.fields.submissionRand;
-        expect(randA).toEqual(submissionRandFor(0n, 'A'));
-        expect(randB).toEqual(submissionRandFor(0n, 'B'));
+        const randA = submissionStages.find((s) => s.athlete === "A")!.fields.submissionRand;
+        const randB = submissionStages.find((s) => s.athlete === "B")!.fields.submissionRand;
+        expect(randA).toEqual(submissionRandFor(0n, "A"));
+        expect(randB).toEqual(submissionRandFor(0n, "B"));
         expect(randA).not.toEqual(randB);
 
-        await postTo('/wager/settle', { id: '0x0' });
+        await postTo("/wager/settle", { id: "0x0" });
         const openingsStage = deps.staged.find((s) => s.fields.wagerOpenings !== undefined)!;
         // Challenger (A) first: [A.value, A.rand, B.value, B.rand] — contract law.
         expect(openingsStage.fields.wagerOpenings).toEqual([
           12345n,
-          submissionRandFor(0n, 'A'),
+          submissionRandFor(0n, "A"),
           54321n,
-          submissionRandFor(0n, 'B'),
+          submissionRandFor(0n, "B"),
         ]);
       } finally {
         await close();
       }
     });
-    it('settles a both-gave-up wager as a refund (winner null, no NFT)', async () => {
+    it("settles a both-gave-up wager as a refund (winner null, no NFT)", async () => {
       const { postTo, deps, close } = await freshSidecar();
       try {
-        await postTo('/wager/create', {
-          athlete: 'A',
-          opponent: 'B',
-          metricId: '0x1',
+        await postTo("/wager/create", {
+          athlete: "A",
+          opponent: "B",
+          metricId: "0x1",
           stake: stakeOf(10),
           deadlineBlock: pastDeadline(),
         });
-        await postTo('/wager/accept', { athlete: 'B', id: '0x0' });
+        await postTo("/wager/accept", { athlete: "B", id: "0x0" });
         // neither side submits — settle must refund both (winner null)
-        const settled = await postTo('/wager/settle', { id: '0x0' });
+        const settled = await postTo("/wager/settle", { id: "0x0" });
         expect(settled.status).toBe(200);
         const body = (await settled.json()) as Record<string, unknown>;
         expect(body.winner).toBeNull();
@@ -590,102 +593,110 @@ describe('demo sidecar wire contract', () => {
       }
     });
 
-    it('settles a one-sided wager as a forfeit to the submitter', async () => {
+    it("settles a one-sided wager as a forfeit to the submitter", async () => {
       const { postTo, close } = await freshSidecar();
       try {
-        await postTo('/wager/create', {
-          athlete: 'A',
-          opponent: 'B',
-          metricId: '0x1',
+        await postTo("/wager/create", {
+          athlete: "A",
+          opponent: "B",
+          metricId: "0x1",
           stake: stakeOf(10),
           deadlineBlock: pastDeadline(),
         });
-        await postTo('/wager/accept', { athlete: 'B', id: '0x0' });
-        await postTo('/attest', { artifacts: { identifier: 'fixture-A' } });
-        await postTo('/wager/submit', { athlete: 'A', id: '0x0' });
-        const settled = await postTo('/wager/settle', { id: '0x0' });
+        await postTo("/wager/accept", { athlete: "B", id: "0x0" });
+        await postTo("/attest", { artifacts: { identifier: "fixture-A" } });
+        await postTo("/wager/submit", { athlete: "A", id: "0x0" });
+        const settled = await postTo("/wager/settle", { id: "0x0" });
         expect(settled.status).toBe(200);
         const body = (await settled.json()) as Record<string, unknown>;
-        expect(body.winner).toBe('A');
+        expect(body.winner).toBe("A");
         expect(body.nft).not.toBeNull();
         expect(body.disclosed).toEqual({ A: expect.any(String), B: null });
       } finally {
         await close();
       }
     });
-    it('rejects double submission (409) and missing credentials (404)', async () => {
+    it("rejects double submission (409) and missing credentials (404)", async () => {
       const { postTo, close } = await freshSidecar();
       try {
-        await postTo('/wager/create', {
-          athlete: 'A',
-          opponent: 'B',
-          metricId: '0x1',
+        await postTo("/wager/create", {
+          athlete: "A",
+          opponent: "B",
+          metricId: "0x1",
           stake: stakeOf(10),
           deadlineBlock: pastDeadline(),
         });
-        await postTo('/wager/accept', { athlete: 'B', id: '0x0' });
-        await postTo('/attest', { artifacts: { identifier: 'fixture-A' } });
-        const first = await postTo('/wager/submit', { athlete: 'A', id: '0x0' });
+        await postTo("/wager/accept", { athlete: "B", id: "0x0" });
+        await postTo("/attest", { artifacts: { identifier: "fixture-A" } });
+        const first = await postTo("/wager/submit", { athlete: "A", id: "0x0" });
         expect(first.status).toBe(200);
-        const second = await postTo('/wager/submit', { athlete: 'A', id: '0x0' });
+        const second = await postTo("/wager/submit", { athlete: "A", id: "0x0" });
         expect(second.status).toBe(409);
-        expect(((await second.json()) as Record<string, unknown>).error).toMatch(/already submitted/);
+        expect(((await second.json()) as Record<string, unknown>).error).toMatch(
+          /already submitted/,
+        );
 
         // B has no credential yet → 404 before any tx.
-        const noCred = await postTo('/wager/submit', { athlete: 'B', id: '0x0' });
+        const noCred = await postTo("/wager/submit", { athlete: "B", id: "0x0" });
         expect(noCred.status).toBe(404);
         expect(((await noCred.json()) as Record<string, unknown>).error).toMatch(/attest first/);
       } finally {
         await close();
       }
     });
-    it('settle requires both submissions and a reached deadline', async () => {
+    it("settle requires both submissions and a reached deadline", async () => {
       const { postTo, close } = await freshSidecar();
       try {
-        await postTo('/wager/create', {
-          athlete: 'A',
-          opponent: 'B',
-          metricId: '0x1',
+        await postTo("/wager/create", {
+          athlete: "A",
+          opponent: "B",
+          metricId: "0x1",
           stake: stakeOf(10),
           deadlineBlock: futureDeadline(),
         });
-        const early = await postTo('/wager/settle', { id: '0x0' });
+        const early = await postTo("/wager/settle", { id: "0x0" });
         expect(early.status).toBe(400);
-        expect(((await early.json()) as Record<string, unknown>).error).toMatch(/deadline not reached/);
+        expect(((await early.json()) as Record<string, unknown>).error).toMatch(
+          /deadline not reached/,
+        );
 
-        await postTo('/wager/accept', { athlete: 'B', id: '0x0' });
-        await postTo('/attest', { artifacts: { identifier: 'fixture-A' } });
-        await postTo('/attest', { athlete: 'B', artifacts: { identifier: 'fixture-B' } });
-        await postTo('/wager/submit', { athlete: 'A', id: '0x0' });
-        await postTo('/wager/submit', { athlete: 'B', id: '0x0' });
-        const notYet = await postTo('/wager/settle', { id: '0x0' });
+        await postTo("/wager/accept", { athlete: "B", id: "0x0" });
+        await postTo("/attest", { artifacts: { identifier: "fixture-A" } });
+        await postTo("/attest", { athlete: "B", artifacts: { identifier: "fixture-B" } });
+        await postTo("/wager/submit", { athlete: "A", id: "0x0" });
+        await postTo("/wager/submit", { athlete: "B", id: "0x0" });
+        const notYet = await postTo("/wager/settle", { id: "0x0" });
         expect(notYet.status).toBe(400);
-        expect(((await notYet.json()) as Record<string, unknown>).error).toMatch(/deadline not reached/);
+        expect(((await notYet.json()) as Record<string, unknown>).error).toMatch(
+          /deadline not reached/,
+        );
       } finally {
         await close();
       }
     });
-    it('rejects unknown wagers and wrong acceptors', async () => {
+    it("rejects unknown wagers and wrong acceptors", async () => {
       const { postTo, close } = await freshSidecar();
       try {
-        const unknown = await postTo('/wager/accept', { athlete: 'B', id: '0x7' });
+        const unknown = await postTo("/wager/accept", { athlete: "B", id: "0x7" });
         expect(unknown.status).toBe(404);
 
-        await postTo('/wager/create', {
-          athlete: 'A',
-          opponent: 'B',
-          metricId: '0x1',
+        await postTo("/wager/create", {
+          athlete: "A",
+          opponent: "B",
+          metricId: "0x1",
           stake: stakeOf(10),
           deadlineBlock: pastDeadline(),
         });
-        const wrongAcceptor = await postTo('/wager/accept', { athlete: 'A', id: '0x0' });
+        const wrongAcceptor = await postTo("/wager/accept", { athlete: "A", id: "0x0" });
         expect(wrongAcceptor.status).toBe(400);
-        expect(((await wrongAcceptor.json()) as Record<string, unknown>).error).toMatch(/only the opponent/);
+        expect(((await wrongAcceptor.json()) as Record<string, unknown>).error).toMatch(
+          /only the opponent/,
+        );
 
-        const selfOpponent = await postTo('/wager/create', {
-          athlete: 'A',
-          opponent: 'A',
-          metricId: '0x1',
+        const selfOpponent = await postTo("/wager/create", {
+          athlete: "A",
+          opponent: "A",
+          metricId: "0x1",
           stake: stakeOf(10),
           deadlineBlock: pastDeadline(),
         });
@@ -694,54 +705,54 @@ describe('demo sidecar wire contract', () => {
         await close();
       }
     });
-    it('GET /wagers lists status with sealed submissions and the derived winner', async () => {
+    it("GET /wagers lists status with sealed submissions and the derived winner", async () => {
       const { postTo, url, close } = await freshSidecar();
       try {
-        await postTo('/wager/create', {
-          athlete: 'A',
-          opponent: 'B',
-          metricId: '0x1',
+        await postTo("/wager/create", {
+          athlete: "A",
+          opponent: "B",
+          metricId: "0x1",
           stake: stakeOf(10),
           deadlineBlock: pastDeadline(),
         });
-        await postTo('/wager/accept', { athlete: 'B', id: '0x0' });
-        await postTo('/attest', { artifacts: { identifier: 'fixture-A' } });
-        await postTo('/attest', { athlete: 'B', artifacts: { identifier: 'fixture-B' } });
-        await postTo('/wager/submit', { athlete: 'A', id: '0x0' });
-        await postTo('/wager/submit', { athlete: 'B', id: '0x0' });
-        await postTo('/wager/settle', { id: '0x0' });
+        await postTo("/wager/accept", { athlete: "B", id: "0x0" });
+        await postTo("/attest", { artifacts: { identifier: "fixture-A" } });
+        await postTo("/attest", { athlete: "B", artifacts: { identifier: "fixture-B" } });
+        await postTo("/wager/submit", { athlete: "A", id: "0x0" });
+        await postTo("/wager/submit", { athlete: "B", id: "0x0" });
+        await postTo("/wager/settle", { id: "0x0" });
 
         const res = await fetch(`${url}/wagers`);
         expect(res.status).toBe(200);
         const body = (await res.json()) as { wagers: Record<string, unknown>[] };
         expect(body.wagers).toHaveLength(1);
         expect(body.wagers[0]).toMatchObject({
-          id: '0x0',
-          challenger: 'A',
-          opponent: 'B',
-          metricId: '0x1',
+          id: "0x0",
+          challenger: "A",
+          opponent: "B",
+          metricId: "0x1",
           stake: stakeOf(10),
           accepted: true,
           settled: true,
           challengerSubmitted: true,
           opponentSubmitted: true,
-          winner: 'B',
+          winner: "B",
         });
       } finally {
         await close();
       }
     });
-    it('GET /state?athlete=B filters by identity B binding', async () => {
+    it("GET /state?athlete=B filters by identity B binding", async () => {
       const { url, close } = await freshSidecar();
       try {
         const res = await fetch(`${url}/state?athlete=B`);
         expect(res.status).toBe(200);
         const body = (await res.json()) as Record<string, unknown>;
-        expect(body.athlete).toBe('B');
+        expect(body.athlete).toBe("B");
         expect(body.vault).toEqual([]);
         const resA = await fetch(`${url}/state`);
         expect(resA.status).toBe(200);
-        expect(((await resA.json()) as Record<string, unknown>).athlete).toBe('A');
+        expect(((await resA.json()) as Record<string, unknown>).athlete).toBe("A");
       } finally {
         await close();
       }
@@ -750,35 +761,35 @@ describe('demo sidecar wire contract', () => {
 });
 
 function vaultKeyOfFirst(): string {
-  return '0x' + Buffer.from(CANNED_VAULT_KEY).toString('hex');
+  return "0x" + Buffer.from(CANNED_VAULT_KEY).toString("hex");
 }
 
-describe('sidecar pure helpers', () => {
-  it('metricsFromAssertion respects claimCount and labels distance', () => {
+describe("sidecar pure helpers", () => {
+  it("metricsFromAssertion respects claimCount and labels distance", () => {
     const metrics = metricsFromAssertion(cannedAssertion(12345n));
-    expect(metrics).toEqual([{ metricId: 1n, label: 'distance', value: 12345n }]);
+    expect(metrics).toEqual([{ metricId: 1n, label: "distance", value: 12345n }]);
   });
 
-  it('dayOfTimestamp floors to the UTC day', () => {
+  it("dayOfTimestamp floors to the UTC day", () => {
     expect(dayOfTimestamp(1786000000n)).toBe(20671n);
     expect(dayOfTimestamp(86399n)).toBe(0n);
     expect(dayOfTimestamp(86400n)).toBe(1n);
   });
 
-  it('DemoVault dedupes identifiers and vault keys', () => {
+  it("DemoVault dedupes identifiers and vault keys", () => {
     const vault = new DemoVault();
-    expect(vault.addIdentifier('id-1')).toBe(true);
-    expect(vault.addIdentifier('id-1')).toBe(false);
+    expect(vault.addIdentifier("id-1")).toBe(true);
+    expect(vault.addIdentifier("id-1")).toBe(false);
     const credential = {
       vaultKey: new Uint8Array(32).fill(1),
-      attestation: cannedAttestation('id-1'),
+      attestation: cannedAttestation("id-1"),
       commitRand: new Uint8Array(32),
       timestamp: 1786000000n,
       metrics: [],
-      txHash: '0x1',
+      txHash: "0x1",
     } as StoredCredential;
     vault.put(credential);
-    expect(vault.get('0x' + '01'.repeat(32))).toBe(credential);
+    expect(vault.get("0x" + "01".repeat(32))).toBe(credential);
     expect(() => vault.put(credential)).toThrow(/double-count/);
     expect(vault.list()).toHaveLength(1);
   });

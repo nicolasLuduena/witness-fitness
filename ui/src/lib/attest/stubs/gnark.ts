@@ -5,8 +5,10 @@
 // 'stwo', so these throw only if someone requests gnark at runtime.
 // Alias: `@reclaimprotocol/zk-symmetric-crypto/gnark` → this file.
 const unavailable = (name: string) => () => {
-  throw new Error(`${name} is not available in the browser — the WitnessFitness browser path uses the stwo ZK engine`);
+  throw new Error(
+    `${name} is not available in the browser — the WitnessFitness browser path uses the stwo ZK engine`,
+  );
 };
 
-export const makeGnarkZkOperator = unavailable('makeGnarkZkOperator');
-export const makeGnarkOPRFOperator = unavailable('makeGnarkOPRFOperator');
+export const makeGnarkZkOperator = unavailable("makeGnarkZkOperator");
+export const makeGnarkOPRFOperator = unavailable("makeGnarkOPRFOperator");

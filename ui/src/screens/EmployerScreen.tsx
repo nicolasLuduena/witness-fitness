@@ -2,15 +2,15 @@
 // employer's wellness panel verifies badge claims via proveBadge; the streak
 // data stays sealed. This screen reads nothing the chain didn't publish.
 
-import { useState } from 'react';
-import { useDemo } from '../state/DemoStore';
-import { Button, Card, Notice } from '../components/bits';
-import { EMPLOYER } from '../domain/story';
-import { logError } from '../lib/logger';
+import { useState } from "react";
+import { useDemo } from "../state/DemoStore";
+import { Button, Card, Notice } from "../components/bits";
+import { EMPLOYER } from "../domain/story";
+import { logError } from "../lib/logger";
 
 export const EmployerScreen = () => {
   const { badges, proofs, proveBadge, streak } = useDemo();
-  const [badgeId, setBadgeId] = useState('1');
+  const [badgeId, setBadgeId] = useState("1");
   const [verifier, setVerifier] = useState(EMPLOYER.holderBinding);
   const [running, setRunning] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -24,8 +24,8 @@ export const EmployerScreen = () => {
     try {
       await proveBadge(Number(badgeId), verifier);
     } catch (err) {
-      logError('EmployerScreen.proveBadge', err);
-      setError(err instanceof Error ? err.message : 'proof failed');
+      logError("EmployerScreen.proveBadge", err);
+      setError(err instanceof Error ? err.message : "proof failed");
     } finally {
       setRunning(false);
     }
@@ -36,9 +36,9 @@ export const EmployerScreen = () => {
       <div className="screen-header">
         <h1 className="screen-title">Employer panel — verify without seeing</h1>
         <p className="screen-sub">
-          {EMPLOYER.name} (a mock wellness program) verifies that an athlete holds a badge —{' '}
-          <strong>no workouts, no dates, no distances</strong>. The chain answers with a proof,
-          not a story.
+          {EMPLOYER.name} (a mock wellness program) verifies that an athlete holds a badge —{" "}
+          <strong>no workouts, no dates, no distances</strong>. The chain answers with a proof, not
+          a story.
         </p>
       </div>
 
@@ -49,14 +49,18 @@ export const EmployerScreen = () => {
             <select className="select" value={badgeId} onChange={(e) => setBadgeId(e.target.value)}>
               {badges.map((b) => (
                 <option key={b.id} value={b.id} disabled={!b.minted}>
-                  {b.label} {b.minted ? '(minted)' : '(not minted)'}
+                  {b.label} {b.minted ? "(minted)" : "(not minted)"}
                 </option>
               ))}
             </select>
           </div>
           <div className="field">
             <label>Verifier binding (0x + 64 hex — the third party's holder binding)</label>
-            <input className="input mono" value={verifier} onChange={(e) => setVerifier(e.target.value)} />
+            <input
+              className="input mono"
+              value={verifier}
+              onChange={(e) => setVerifier(e.target.value)}
+            />
           </div>
           <Button tone="primary" block onClick={() => void submit()} disabled={running || !minted}>
             {running ? <span className="spin" /> : null}
@@ -65,7 +69,7 @@ export const EmployerScreen = () => {
           {!minted ? (
             <div style={{ marginTop: 12 }}>
               <Notice tone="warn">
-                Badge not minted yet — mint it on the Streaks &amp; Badges tab (streak is currently{' '}
+                Badge not minted yet — mint it on the Streaks &amp; Badges tab (streak is currently{" "}
                 {streak?.current ?? 0}/3 days).
               </Notice>
             </div>
@@ -80,7 +84,7 @@ export const EmployerScreen = () => {
         <Card title="Verification transcript">
           {proofs.length === 0 ? (
             <div className="empty-state">
-              No proofs yet. The transcript fills here — each line is a real on-chain{' '}
+              No proofs yet. The transcript fills here — each line is a real on-chain{" "}
               <code className="mono">proveBadge</code> receipt.
             </div>
           ) : (
@@ -96,14 +100,15 @@ export const EmployerScreen = () => {
                   <div>
                     <div>{proof.statement}</div>
                     <div className="faint" style={{ fontSize: 11.5 }}>
-                      verifier {proof.verifier} · proof {proof.proofId.slice(0, 18)}… ·{' '}
+                      verifier {proof.verifier} · proof {proof.proofId.slice(0, 18)}… ·{" "}
                       {new Date(proof.verifiedAt).toLocaleTimeString()}
                     </div>
                   </div>
                 </div>
               ))}
               <div className="verify-line verify-line--sealed">
-                <span>🔒</span> athlete streak data: <strong>sealed</strong> — never part of the proof
+                <span>🔒</span> athlete streak data: <strong>sealed</strong> — never part of the
+                proof
               </div>
             </div>
           )}

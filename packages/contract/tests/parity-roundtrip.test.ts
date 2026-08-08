@@ -8,12 +8,12 @@
 // challenge mod 2^248, compute s = (k + c*sk) mod JUBJUB_ORDER (JUBJUB_ORDER
 // exported from the contract package), and submit (R = k*G, s) as
 // { announcement: {x, y}, response }.
-import { randomBytes } from 'node:crypto';
-import { describe, expect, it } from 'vitest';
-import { StrideSim } from './helpers/sim.js';
-import { makeAssertion, makeNotaryKey, privateStateWith } from './helpers/fixtures.js';
-import { createPrivateState } from '../src/private-state.js';
-import { JUBJUB_ORDER, derivePublicKey, signAssertion } from '../src/offchain.js';
+import { randomBytes } from "node:crypto";
+import { describe, expect, it } from "vitest";
+import { StrideSim } from "./helpers/sim.js";
+import { makeAssertion, makeNotaryKey, privateStateWith } from "./helpers/fixtures.js";
+import { createPrivateState } from "../src/private-state.js";
+import { JUBJUB_ORDER, derivePublicKey, signAssertion } from "../src/offchain.js";
 
 const adminSecret = randomBytes(32);
 const holderSecret = randomBytes(32);
@@ -22,14 +22,14 @@ const notaryKeys = [makeNotaryKey(1), makeNotaryKey(2), makeNotaryKey(3)];
 const ps = (overrides = {}) => ({ ...createPrivateState(adminSecret, holderSecret), ...overrides });
 
 const register = (sim: StrideSim) => {
-  sim.call('registerAdmin', ps());
+  sim.call("registerAdmin", ps());
   for (let i = 0; i < 3; i += 1) {
-    sim.call('registerNotary', ps(), notaryKeys[i].pk, BigInt(i));
+    sim.call("registerNotary", ps(), notaryKeys[i].pk, BigInt(i));
   }
 };
 
-describe('signature parity roundtrip', () => {
-  it('accepts an off-chain signed assertion (2-of-3 and 3-of-3)', () => {
+describe("signature parity roundtrip", () => {
+  it("accepts an off-chain signed assertion (2-of-3 and 3-of-3)", () => {
     const sim = new StrideSim(ps());
     register(sim);
 
@@ -44,7 +44,7 @@ describe('signature parity roundtrip', () => {
       commitRand: randomBytes(32),
       holderSecret,
     };
-    expect(() => sim.call('verifyAttestation', privateStateWith(ps(), att2))).not.toThrow();
+    expect(() => sim.call("verifyAttestation", privateStateWith(ps(), att2))).not.toThrow();
 
     const threeOfThree = makeAssertion();
     const att3 = {
@@ -53,10 +53,10 @@ describe('signature parity roundtrip', () => {
       commitRand: randomBytes(32),
       holderSecret,
     };
-    expect(() => sim.call('verifyAttestation', privateStateWith(ps(), att3))).not.toThrow();
+    expect(() => sim.call("verifyAttestation", privateStateWith(ps(), att3))).not.toThrow();
   });
 
-  it('rejects a tampered assertion (flipped claim value)', () => {
+  it("rejects a tampered assertion (flipped claim value)", () => {
     const sim = new StrideSim(ps());
     register(sim);
 
@@ -75,12 +75,10 @@ describe('signature parity roundtrip', () => {
       ...original,
       claims: original.claims.map((c, i) => (i === 0 ? { ...c, value: 54321n } : c)),
     };
-    expect(() => sim.call('verifyAttestation', signed)).toThrow(
-      'Insufficient valid signatures'
-    );
+    expect(() => sim.call("verifyAttestation", signed)).toThrow("Insufficient valid signatures");
   });
 
-  it('rejects a signature from an unregistered key', () => {
+  it("rejects a signature from an unregistered key", () => {
     const sim = new StrideSim(ps());
     register(sim);
 
@@ -96,12 +94,12 @@ describe('signature parity roundtrip', () => {
       commitRand: randomBytes(32),
       holderSecret,
     };
-    expect(() => sim.call('verifyAttestation', privateStateWith(ps(), bad))).toThrow(
-      'Insufficient valid signatures'
+    expect(() => sim.call("verifyAttestation", privateStateWith(ps(), bad))).toThrow(
+      "Insufficient valid signatures",
     );
   });
 
-  it('exposes the exact JUBJUB_ORDER used for response reduction', () => {
+  it("exposes the exact JUBJUB_ORDER used for response reduction", () => {
     expect(JUBJUB_ORDER).toBe(0x0e7db4ea6533afa906673b0101343b00a6682093ccc81082d0970e5ed6f72cb7n);
     expect(derivePublicKey(1n)).toBeDefined();
   });

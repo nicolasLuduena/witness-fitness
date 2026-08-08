@@ -2,24 +2,24 @@
 // ?mode=live for maintainer debugging with the identity sidecar). The live
 // client is lazy-imported so the default wallet mode never pays for it.
 
-import type { DemoMode } from '../config';
-import type { WfClient } from './wf-client';
+import type { DemoMode } from "../config";
+import type { WfClient } from "./wf-client";
 
 let cached: WfClient | null = null;
 
 export const createWfClient = (mode: DemoMode): WfClient => {
   if (cached?.mode === mode) return cached;
-  cached = mode === 'live' ? new LiveClientProxy() : new WalletClientProxy();
+  cached = mode === "live" ? new LiveClientProxy() : new WalletClientProxy();
   return cached;
 };
 
 class WalletClientProxy implements WfClient {
-  readonly mode: DemoMode = 'wallet';
+  readonly mode: DemoMode = "wallet";
   private inner: WfClient | null = null;
 
   private async real(): Promise<WfClient> {
     if (!this.inner) {
-      const { WalletClient } = await import('./wallet-client');
+      const { WalletClient } = await import("./wallet-client");
       this.inner = new WalletClient();
     }
     return this.inner;
@@ -37,7 +37,7 @@ class WalletClientProxy implements WfClient {
   listWagers() {
     return this.real().then((c) => c.listWagers());
   }
-  createWager(req: Parameters<WfClient['createWager']>[0]) {
+  createWager(req: Parameters<WfClient["createWager"]>[0]) {
     return this.real().then((c) => c.createWager(req));
   }
   acceptWager(id: number) {
@@ -69,19 +69,19 @@ class WalletClientProxy implements WfClient {
   }
   backupPrivateState(password: string) {
     return this.real().then((c) => {
-      if (!c.backupPrivateState) throw new Error('backup not supported in this mode');
+      if (!c.backupPrivateState) throw new Error("backup not supported in this mode");
       return c.backupPrivateState(password);
     });
   }
   restorePrivateState(password: string, payload: string) {
     return this.real().then((c) => {
-      if (!c.restorePrivateState) throw new Error('restore not supported in this mode');
+      if (!c.restorePrivateState) throw new Error("restore not supported in this mode");
       return c.restorePrivateState(password, payload);
     });
   }
   resetPrivateState() {
     return this.real().then((c) => {
-      if (!c.resetPrivateState) throw new Error('reset not supported in this mode');
+      if (!c.resetPrivateState) throw new Error("reset not supported in this mode");
       return c.resetPrivateState();
     });
   }
@@ -90,12 +90,12 @@ class WalletClientProxy implements WfClient {
   // screen's `client.connectStrava?.()` silently no-oped (the proxy-drift
   // bug: "Connect Strava — OAuth did absolutely nothing").
   connectStrava(): void {
-    if (!this.inner?.connectStrava) throw new Error('wallet not connected');
+    if (!this.inner?.connectStrava) throw new Error("wallet not connected");
     this.inner.connectStrava();
   }
   handleStravaRedirect(): Promise<boolean> {
     return this.real().then((c) => {
-      if (!c.handleStravaRedirect) throw new Error('strava redirect not supported in this mode');
+      if (!c.handleStravaRedirect) throw new Error("strava redirect not supported in this mode");
       return c.handleStravaRedirect();
     });
   }
@@ -107,12 +107,12 @@ class WalletClientProxy implements WfClient {
 }
 
 class LiveClientProxy implements WfClient {
-  readonly mode: DemoMode = 'live';
+  readonly mode: DemoMode = "live";
   private inner: WfClient | null = null;
 
   private async real(): Promise<WfClient> {
     if (!this.inner) {
-      const { LiveClient } = await import('./live-client');
+      const { LiveClient } = await import("./live-client");
       this.inner = new LiveClient();
     }
     return this.inner;
@@ -130,7 +130,7 @@ class LiveClientProxy implements WfClient {
   listWagers() {
     return this.real().then((c) => c.listWagers());
   }
-  createWager(req: Parameters<WfClient['createWager']>[0]) {
+  createWager(req: Parameters<WfClient["createWager"]>[0]) {
     return this.real().then((c) => c.createWager(req));
   }
   acceptWager(id: number) {
@@ -162,28 +162,28 @@ class LiveClientProxy implements WfClient {
   }
   backupPrivateState(password: string) {
     return this.real().then((c) => {
-      if (!c.backupPrivateState) throw new Error('backup not supported in this mode');
+      if (!c.backupPrivateState) throw new Error("backup not supported in this mode");
       return c.backupPrivateState(password);
     });
   }
   restorePrivateState(password: string, payload: string) {
     return this.real().then((c) => {
-      if (!c.restorePrivateState) throw new Error('restore not supported in this mode');
+      if (!c.restorePrivateState) throw new Error("restore not supported in this mode");
       return c.restorePrivateState(password, payload);
     });
   }
   resetPrivateState() {
     return this.real().then((c) => {
-      if (!c.resetPrivateState) throw new Error('reset not supported in this mode');
+      if (!c.resetPrivateState) throw new Error("reset not supported in this mode");
       return c.resetPrivateState();
     });
   }
   connectStrava(): void {
-    throw new Error('Strava connect is wallet-mode only');
+    throw new Error("Strava connect is wallet-mode only");
   }
   handleStravaRedirect(): Promise<boolean> {
     return this.real().then((c) => {
-      if (!c.handleStravaRedirect) throw new Error('strava redirect not supported in this mode');
+      if (!c.handleStravaRedirect) throw new Error("strava redirect not supported in this mode");
       return c.handleStravaRedirect();
     });
   }

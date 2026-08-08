@@ -5,17 +5,17 @@ import {
   createConstructorContext,
   createCircuitContext,
   dummyContractAddress,
-} from '@midnight-ntwrk/compact-runtime';
+} from "@midnight-ntwrk/compact-runtime";
 import {
   Contract,
   ledger,
   witnesses,
   type Ledger,
   type PrivateState,
-} from '@witnessfitness/contract';
+} from "@witnessfitness/contract";
 
 const ADDR = dummyContractAddress();
-const COIN_PK = '0'.repeat(64);
+const COIN_PK = "0".repeat(64);
 
 export class StrideSim {
   private state: unknown;
@@ -29,9 +29,9 @@ export class StrideSim {
 
   call(name: string, ps: PrivateState, ...args: unknown[]): unknown {
     const ctx = createCircuitContext(ADDR, COIN_PK, this.state, ps);
-    const circuit = (this.contract.circuits as Record<string, (c: unknown, ...a: unknown[]) => unknown>)[
-      name
-    ];
+    const circuit = (
+      this.contract.circuits as Record<string, (c: unknown, ...a: unknown[]) => unknown>
+    )[name];
     const res = circuit(ctx, ...args);
     this.state = res.context.currentQueryContext.state;
     return res.result;
