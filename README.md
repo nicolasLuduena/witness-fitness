@@ -50,6 +50,58 @@ pnpm dev:ui           # demo frontend
 pnpm test             # all workspace tests
 ```
 
+## Deploy a fresh contract (the manual cycle)
+
+Run this whenever the contract source changed, or after `pnpm devnet:down`
+(the compose file has **no volumes** — `down` wipes the chain and every
+deployment with it). A plain machine reboot does **not** — the containers
+persist, and the deployed contract survives. Prereqs: devnet up, 3 notary
+instances running (see `packages/notary/.env.sample` + `.env.notary-1..3`),
+attestor up.
+
+```bash
+# 1. Contract build — regenerates the ZK verifier keys (few minutes; wait for it)
+cd packages/contract && pnpm build
+
+# 2. Deploy to the devnet — pins the admin at the constructor, registers the
+#    notary slots, writes packages/contract/deploy-output.json
+cd packages/contract && pnpm exec tsx scripts/deploy.ts
+
+# 3. Rotate the on-chain registry to the 3 RUNNING instances' real keys
+#    (the deploy above registers demo keys; this overwrites them with the
+#    /pubkey of 8101/8102/8103 and updates deploy-output.json)
+cd .. && pnpm --filter @witnessfitness/contract run rotate-notaries
+
+# 4. Wipe the sidecar's local vault and restart it — it joins the NEW
+#    contract address from deploy-output.json
+rm -rf packages/api/midnight-level-db
+pnpm --filter @witnessfitness/api start:sidecar
+curl -s http://127.0.0.1:8200/health     # wait for "ready":true
+
+# 5. Refresh the UI's copy of the deploy artifacts, then (re)start the dev server
+pnpm --filter ui copy-keys
+pnpm dev:ui                               # http://localhost:5173
+
+# 6. Full on-chain E2E — real attestations (fixtures) → wager → settle →
+#    winner NFT + balance deltas. Takes ~2.5 min (waits out the settle deadline).
+pnpm --filter @witnessfitness/api run e2e:wager
+```
+
+Notes:
+
+- **Freshness window:** the deployed contract accepts attestations whose
+  timestamp is within 30 days of the current block time. Old fixture proofs
+  get rejected ("Timestamp too old") — regenerate them demo-morning via
+  `packages/client` (Strava OAuth + the self-hosted attestor).
+- **Notary instances are untouched by redeploys** — their keys live in
+  `packages/notary/.env.notary-*`; only the on-chain registry (step 3) changes.
+- **Admin is pinned at deploy** (constructor): the deployer's
+  `admin-secret.local` (gitignored) is the only admin; there is no
+  first-call race on `registerAdmin`.
+- After step 6, the browser demo runs in wallet mode: connect Lace to the
+  devnet, attest a real workout, challenge a second wallet by its
+  holder-binding ID. Full walkthrough: `docs/DEMO-PLAYBOOK.md`.
+
 ## Documentation map
 
 | File | Audience | Content |
