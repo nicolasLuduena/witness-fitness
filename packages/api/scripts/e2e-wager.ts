@@ -153,7 +153,11 @@ const main = async () => {
   console.log('[e2e] ✅ WAGER E2E PASSED — winner A, pot paid, NFT', nft.tokenType.slice(0, 24));
 };
 
-main().catch((error) => {
-  console.error('[e2e] FAILED:', error);
-  process.exitCode = 1;
-});
+// The built wallets hold open node/indexer WebSocket connections — without an
+// explicit exit the process hangs after PASSED.
+main()
+  .then(() => process.exit(0))
+  .catch((error) => {
+    console.error('[e2e] FAILED:', error);
+    process.exitCode = 1;
+  });
