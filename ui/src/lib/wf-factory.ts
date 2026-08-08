@@ -28,8 +28,8 @@ class WalletClientProxy implements WfClient {
   connect(rdns?: string) {
     return this.real().then((c) => c.connect(rdns));
   }
-  attest() {
-    return this.real().then((c) => c.attest());
+  attest(onProgress?: Parameters<WfClient["attest"]>[0]) {
+    return this.real().then((c) => c.attest(onProgress));
   }
   vault() {
     return this.real().then((c) => c.vault());
@@ -69,19 +69,22 @@ class WalletClientProxy implements WfClient {
   }
   backupPrivateState(password: string) {
     return this.real().then((c) => {
-      if (!c.backupPrivateState) throw new Error("backup not supported in this mode");
+      if (!c.backupPrivateState)
+        throw new Error("backup not supported in this mode");
       return c.backupPrivateState(password);
     });
   }
   restorePrivateState(password: string, payload: string) {
     return this.real().then((c) => {
-      if (!c.restorePrivateState) throw new Error("restore not supported in this mode");
+      if (!c.restorePrivateState)
+        throw new Error("restore not supported in this mode");
       return c.restorePrivateState(password, payload);
     });
   }
   resetPrivateState() {
     return this.real().then((c) => {
-      if (!c.resetPrivateState) throw new Error("reset not supported in this mode");
+      if (!c.resetPrivateState)
+        throw new Error("reset not supported in this mode");
       return c.resetPrivateState();
     });
   }
@@ -95,13 +98,18 @@ class WalletClientProxy implements WfClient {
   }
   handleStravaRedirect(): Promise<boolean> {
     return this.real().then((c) => {
-      if (!c.handleStravaRedirect) throw new Error("strava redirect not supported in this mode");
+      if (!c.handleStravaRedirect)
+        throw new Error("strava redirect not supported in this mode");
       return c.handleStravaRedirect();
     });
   }
   // Synchronous by contract: delegates to the cached inner client (connect()
   // initializes it before any Strava interaction). Before connect: not connected.
-  stravaStatus(): { connected: boolean; athleteName?: string; stravaId?: number } {
+  stravaStatus(): {
+    connected: boolean;
+    athleteName?: string;
+    stravaId?: number;
+  } {
     return this.inner?.stravaStatus?.() ?? { connected: false };
   }
 }
@@ -121,8 +129,8 @@ class LiveClientProxy implements WfClient {
   connect(rdns?: string) {
     return this.real().then((c) => c.connect(rdns));
   }
-  attest() {
-    return this.real().then((c) => c.attest());
+  attest(onProgress?: Parameters<WfClient["attest"]>[0]) {
+    return this.real().then((c) => c.attest(onProgress));
   }
   vault() {
     return this.real().then((c) => c.vault());
@@ -162,19 +170,22 @@ class LiveClientProxy implements WfClient {
   }
   backupPrivateState(password: string) {
     return this.real().then((c) => {
-      if (!c.backupPrivateState) throw new Error("backup not supported in this mode");
+      if (!c.backupPrivateState)
+        throw new Error("backup not supported in this mode");
       return c.backupPrivateState(password);
     });
   }
   restorePrivateState(password: string, payload: string) {
     return this.real().then((c) => {
-      if (!c.restorePrivateState) throw new Error("restore not supported in this mode");
+      if (!c.restorePrivateState)
+        throw new Error("restore not supported in this mode");
       return c.restorePrivateState(password, payload);
     });
   }
   resetPrivateState() {
     return this.real().then((c) => {
-      if (!c.resetPrivateState) throw new Error("reset not supported in this mode");
+      if (!c.resetPrivateState)
+        throw new Error("reset not supported in this mode");
       return c.resetPrivateState();
     });
   }
@@ -183,7 +194,8 @@ class LiveClientProxy implements WfClient {
   }
   handleStravaRedirect(): Promise<boolean> {
     return this.real().then((c) => {
-      if (!c.handleStravaRedirect) throw new Error("strava redirect not supported in this mode");
+      if (!c.handleStravaRedirect)
+        throw new Error("strava redirect not supported in this mode");
       return c.handleStravaRedirect();
     });
   }

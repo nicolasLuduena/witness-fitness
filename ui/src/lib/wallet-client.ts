@@ -20,6 +20,7 @@ import { NETWORK_ID, NOTARY_URLS } from "../config";
 import { ATHLETE_A, BADGES } from "../domain/story";
 import type {
   Athlete,
+  AttestationProgress,
   AttestationStage,
   AttestedCredential,
   AttestOutcome,
@@ -37,7 +38,10 @@ import type {
 } from "../domain/types";
 import { metricById } from "../domain/types";
 import { attestStrava, proofToNotaryArtifacts } from "./attest/attest-browser";
-import { type AthleteIdentity, athleteIdentityFromExchange } from "./attest/identity";
+import {
+  type AthleteIdentity,
+  athleteIdentityFromExchange,
+} from "./attest/identity";
 import {
   buildAuthUrl,
   emptyAccountGuard,
@@ -120,7 +124,10 @@ const parseHolderBinding = (input: string): bigint => {
   return BigInt("0x" + hex);
 };
 
-const syntheticAthlete = (holderBinding: string, role: Athlete["role"]): Athlete => ({
+const syntheticAthlete = (
+  holderBinding: string,
+  role: Athlete["role"],
+): Athlete => ({
   name: `Athlete ${hexShort(holderBinding, 8, 6)}`,
   handle: hexShort(holderBinding, 8, 6),
   role,
@@ -134,7 +141,9 @@ export class WalletClient implements WfClient {
 
   // Test seam: inject a bridge (the stub) instead of loading the real api
   // module. Production code always uses loadWalletBridge().
-  constructor(private readonly bridgeOverride?: import("./wallet-bridge").WalletBridge) {}
+  constructor(
+    private readonly bridgeOverride?: import("./wallet-bridge").WalletBridge,
+  ) {}
 
   private async bridge(): Promise<import("./wallet-bridge").WalletBridge> {
     return this.bridgeOverride ?? (await loadWalletBridge());
@@ -226,10 +235,18 @@ export class WalletClient implements WfClient {
 
   // ------------------------------------------------------------ Strava -----
 
-  stravaStatus(): { connected: boolean; athleteName?: string; stravaId?: number } {
+  stravaStatus(): {
+    connected: boolean;
+    athleteName?: string;
+    stravaId?: number;
+  } {
     const identity = this.stravaIdentity ?? this.readStravaIdentity();
     if (!identity) return { connected: false };
-    return { connected: true, athleteName: identity.name, stravaId: identity.stravaId };
+    return {
+      connected: true,
+      athleteName: identity.name,
+      stravaId: identity.stravaId,
+    };
   }
 
   // Opens the Strava authorize page (same tab). The redirect lands on
@@ -252,17 +269,22 @@ export class WalletClient implements WfClient {
 
   // ----------------------------------------------------------- attest -----
 
-  async attest(): Promise<AttestOutcome> {
+  async attest(onProgress?: AttestationProgress): Promise<AttestOutcome> {
     const session = this.requireSession();
     const stages = walletStages();
+    const publish = () => onProgress?.(stages.map((stage) => ({ ...stage })));
     const mark = (id: string, state: AttestationStage["state"]) => {
       for (const s of stages) if (s.id === id) s.state = state;
+      publish();
     };
 
+    publish();
+    mark("guard", "active");
     let token: string;
     try {
       token = await getValidAccessToken();
     } catch (err) {
+      mark("guard", "error");
       logError("wallet-client.getToken", err);
       throw new StravaFlowError(
         "strava-auth-required",
@@ -270,18 +292,22 @@ export class WalletClient implements WfClient {
       );
     }
 
-    mark("guard", "active");
-    const guard = await emptyAccountGuard(token);
-    mark("guard", "done");
+    const guard = await emptyAccountGuard(token).catch((err) => {
+      mark("guard", "error");
+      throw err;
+    });
     if (!guard.canInteract) {
+      mark("guard", "error");
       throw new StravaFlowError(
         "no-activities",
         "Strava account has no activities yet — upload a real workout on Strava, then retry",
       );
     }
+    mark("guard", "done");
 
     mark("tls", "active");
     const result = await attestStrava(token).catch((err) => {
+      mark("tls", "error");
       throw new StravaFlowError(
         "strava-api",
         `attestation failed: ${err instanceof Error ? err.message : String(err)}`,
@@ -291,15 +317,28 @@ export class WalletClient implements WfClient {
     mark("tls", "done");
 
     mark("notarize", "active");
-    const attested = await session.attest(artifacts);
-    mark("notarize", "done");
-
-    mark("chain", "active");
-    await delay(180);
+    const attested = await session
+      .attest(artifacts, () => {
+        mark("notarize", "done");
+        mark("chain", "active");
+      })
+      .catch((err) => {
+        const active = stages.find((stage) => stage.state === "active");
+        if (active) mark(active.id, "error");
+        throw err;
+      });
+    if (stages.find((stage) => stage.id === "notarize")?.state === "active") {
+      mark("notarize", "done");
+      mark("chain", "active");
+    }
     mark("chain", "done");
     this.rememberAttestation(attested);
 
-    return { credential: this.credentialFrom(attested), stages, replayed: false };
+    return {
+      credential: this.credentialFrom(attested),
+      stages,
+      replayed: false,
+    };
   }
 
   private rememberAttestation(attested: WalletAttestResult): void {
@@ -322,7 +361,12 @@ export class WalletClient implements WfClient {
 
   private credentialFrom(attested: WalletAttestResult): AttestedCredential {
     const key = bytesToHex(attested.vaultKey);
-    const base = credentialFromVaultEntry(key, attested.txHash, Date.now(), attested.metrics);
+    const base = credentialFromVaultEntry(
+      key,
+      attested.txHash,
+      Date.now(),
+      attested.metrics,
+    );
     return {
       ...base,
       athlete: this.stravaAthlete(),
@@ -338,7 +382,11 @@ export class WalletClient implements WfClient {
     const myBig = this.myBindingBig();
     const result: AttestedCredential[] = [];
     for (const entry of vaultEntriesOf(state.vault)) {
-      if (myBig !== null && entry.holderBinding !== null && entry.holderBinding !== myBig) {
+      if (
+        myBig !== null &&
+        entry.holderBinding !== null &&
+        entry.holderBinding !== myBig
+      ) {
         continue;
       }
       const record = this.attestations.get(entry.vaultKey);
@@ -385,12 +433,16 @@ export class WalletClient implements WfClient {
     for (let attempt = 0; attempt < 10; attempt += 1) {
       const all = await session.listWagers();
       const created = all.find(
-        (w) => w.id > maxBefore && (myBinding === null || w.challenger === myBinding),
+        (w) =>
+          w.id > maxBefore &&
+          (myBinding === null || w.challenger === myBinding),
       );
       if (created) return this.wagerView(created);
       await delay(1_000);
     }
-    throw new Error("created on-chain but not yet indexed — refresh the Wagers tab");
+    throw new Error(
+      "created on-chain but not yet indexed — refresh the Wagers tab",
+    );
   }
 
   async acceptWager(id: number): Promise<WagerView> {
@@ -424,7 +476,8 @@ export class WalletClient implements WfClient {
     this.openings.set(id, { value, rand });
     // Relay MY opening immediately (the contract seals transientCommit(value,
     // rand)); the settler (either side) polls until both are present.
-    const mySide = wager.challenger === BigInt(session.holderBinding) ? "A" : "B";
+    const mySide =
+      wager.challenger === BigInt(session.holderBinding) ? "A" : "B";
     await postWagerOpening(id, mySide, value, rand).catch((err) => {
       logError("wallet-client.relayOpening", err);
       throw new Error(
@@ -447,15 +500,18 @@ export class WalletClient implements WfClient {
     const wagers = await session.listWagers();
     const wager = wagers.find((w) => Number(w.id) === id);
     if (!wager) throw new Error(`unknown wager ${id}`);
-    const bothSubmitted = wager.challengerSubmission.is_some && wager.opponentSubmission.is_some;
+    const bothSubmitted =
+      wager.challengerSubmission.is_some && wager.opponentSubmission.is_some;
 
     let openings: {
       challenger: { value: bigint; rand: Uint8Array };
       opponent: { value: bigint; rand: Uint8Array };
     };
     if (bothSubmitted) {
-      const mySide = wager.challenger === BigInt(session.holderBinding) ? "A" : "B";
-      let myOpening: { value: bigint; rand: Uint8Array } | null = this.openings.get(id) ?? null;
+      const mySide =
+        wager.challenger === BigInt(session.holderBinding) ? "A" : "B";
+      let myOpening: { value: bigint; rand: Uint8Array } | null =
+        this.openings.get(id) ?? null;
       if (!myOpening) {
         // The (value, rand) pair is session-only — after a page reload the
         // relay is the source of truth: BOTH sides posted at submit time
@@ -469,7 +525,9 @@ export class WalletClient implements WfClient {
       }
       await postWagerOpening(id, mySide, myOpening.value, myOpening.rand);
 
-      const relayed = await waitForBothOpenings(id, { timeoutMs: OPENING_RELAY_TIMEOUT.ms });
+      const relayed = await waitForBothOpenings(id, {
+        timeoutMs: OPENING_RELAY_TIMEOUT.ms,
+      });
       openings = {
         challenger: {
           value: BigInt(relayed.challenger.value),
@@ -486,7 +544,9 @@ export class WalletClient implements WfClient {
         (relayed.opponent.rand === bytesToHex(myOpening.rand) &&
           relayed.opponent.value === hexOfBigint(myOpening.value));
       if (!mineRelayed) {
-        throw new Error("the relayed openings do not include your submission — retry settle");
+        throw new Error(
+          "the relayed openings do not include your submission — retry settle",
+        );
       }
     } else {
       openings = {
@@ -526,12 +586,16 @@ export class WalletClient implements WfClient {
   ): Promise<{ value: bigint; rand: Uint8Array } | null> {
     const openings = await getWagerOpenings(id);
     const mine = openings.find((o) => o.who === mySide);
-    return mine ? { value: BigInt(mine.value), rand: hexToBytes(mine.rand) } : null;
+    return mine
+      ? { value: BigInt(mine.value), rand: hexToBytes(mine.rand) }
+      : null;
   }
 
   private claimValueFor(record: AttestationRecord, metricId: bigint): bigint {
     const claims = (
-      record.attestation.assertion as { claims?: { metricId: bigint; value: bigint }[] }
+      record.attestation.assertion as {
+        claims?: { metricId: bigint; value: bigint }[];
+      }
     ).claims;
     const claim = (claims ?? []).find((c) => c.metricId === metricId);
     if (!claim) {
@@ -550,9 +614,8 @@ export class WalletClient implements WfClient {
   private async myRouting(): Promise<WalletWagerRouting> {
     const connection = this.requireConnection();
     const { unshieldedAddress } = await connection.api.getUnshieldedAddress();
-    const { MidnightBech32m, UnshieldedAddress } = await import(
-      "@midnight-ntwrk/wallet-sdk-address-format"
-    );
+    const { MidnightBech32m, UnshieldedAddress } =
+      await import("@midnight-ntwrk/wallet-sdk-address-format");
     // The wallet hands us a bech32m STRING; the codec decodes parsed instances.
     const decoded = UnshieldedAddress.codec.decode(
       NETWORK_ID,
@@ -583,11 +646,11 @@ export class WalletClient implements WfClient {
       }
       return out;
     }
-    const { MidnightBech32m, ShieldedCoinPublicKey } = await import(
-      "@midnight-ntwrk/wallet-sdk-address-format"
-    );
+    const { MidnightBech32m, ShieldedCoinPublicKey } =
+      await import("@midnight-ntwrk/wallet-sdk-address-format");
     return (
-      ShieldedCoinPublicKey.codec.decode(NETWORK_ID, MidnightBech32m.parse(cpk)).data as Uint8Array
+      ShieldedCoinPublicKey.codec.decode(NETWORK_ID, MidnightBech32m.parse(cpk))
+        .data as Uint8Array
     ).slice();
   }
 
@@ -598,8 +661,12 @@ export class WalletClient implements WfClient {
     const mine = this.stravaAthlete();
     const challengerHex = bigintToHex(w.challenger);
     const opponentHex = bigintToHex(w.opponent);
-    const challenger: Athlete = amChallenger ? mine : syntheticAthlete(challengerHex, "opponent");
-    const opponent: Athlete = !amChallenger ? mine : syntheticAthlete(opponentHex, "opponent");
+    const challenger: Athlete = amChallenger
+      ? mine
+      : syntheticAthlete(challengerHex, "opponent");
+    const opponent: Athlete = !amChallenger
+      ? mine
+      : syntheticAthlete(opponentHex, "opponent");
 
     const status: WagerStatus = w.settled
       ? "settled"
@@ -739,7 +806,11 @@ export class WalletClient implements WfClient {
   async streak(): Promise<StreakView> {
     const session = this.requireSession();
     const state = await session.readState();
-    return streakViewFrom(state.streaks, "wallet:streak", this.myBindingBig() ?? undefined);
+    return streakViewFrom(
+      state.streaks,
+      "wallet:streak",
+      this.myBindingBig() ?? undefined,
+    );
   }
 
   async advanceStreak(): Promise<StreakView> {
@@ -764,7 +835,8 @@ export class WalletClient implements WfClient {
     const result = await session.mintBadge(badgeId, vaultKey);
     const badge = BADGES.find((b) => b.id === badgeId);
     if (!badge) throw new Error(`unknown badge ${badgeId}`);
-    if (!result.minted) throw new Error(`badge ${badgeId} not minted — requirement unmet?`);
+    if (!result.minted)
+      throw new Error(`badge ${badgeId} not minted — requirement unmet?`);
     return { ...badge, minted: true, mintedAt: Date.now() };
   }
 
@@ -775,7 +847,8 @@ export class WalletClient implements WfClient {
     // rejected loudly instead of being hashed into a 32-bit guess (audit P2-H).
     const verifierBinding = parseHolderBinding(verifier);
     const result = await session.proveBadge(badgeId, verifierBinding);
-    if (!result.verified) throw new Error(`verification failed for badge ${badgeId}`);
+    if (!result.verified)
+      throw new Error(`verification failed for badge ${badgeId}`);
     const badge = BADGES.find((b) => b.id === badgeId);
     return {
       badgeId,
@@ -824,7 +897,9 @@ export class WalletClient implements WfClient {
   // STAGED attestation (the only one the private state holds). No
   // vault-iteration guesses — those can pick a credential whose assertion is
   // not staged and fail with "Credential does not open to this assertion".
-  private async stagedVaultKey(session: WalletStrideSession): Promise<Uint8Array> {
+  private async stagedVaultKey(
+    session: WalletStrideSession,
+  ): Promise<Uint8Array> {
     const key = await session.stagedVaultKey();
     if (!key) throw new Error("no attestation staged — attest a workout first");
     return key;

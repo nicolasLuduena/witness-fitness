@@ -18,6 +18,7 @@ import type { DemoMode } from "../config";
 import { INITIAL_MODE } from "../config";
 import type {
   AttestedCredential,
+  AttestationStage,
   AttestOutcome,
   BadgeProof,
   BadgeView,
@@ -46,6 +47,7 @@ export interface DemoState {
   notaries: NotaryInfo[];
 
   attestRunning: boolean;
+  attestStages: AttestationStage[];
   attestOutcome: AttestOutcome | null;
   settleReveal: WagerSettleResult | null;
 
@@ -86,8 +88,13 @@ export const DemoProvider = ({ children }: { children: ReactNode }) => {
   const [notaries, setNotaries] = useState<NotaryInfo[]>([]);
 
   const [attestRunning, setAttestRunning] = useState(false);
-  const [attestOutcome, setAttestOutcome] = useState<AttestOutcome | null>(null);
-  const [settleReveal, setSettleReveal] = useState<WagerSettleResult | null>(null);
+  const [attestStages, setAttestStages] = useState<AttestationStage[]>([]);
+  const [attestOutcome, setAttestOutcome] = useState<AttestOutcome | null>(
+    null,
+  );
+  const [settleReveal, setSettleReveal] = useState<WagerSettleResult | null>(
+    null,
+  );
 
   const notaryTimer = useRef<number | undefined>(undefined);
 
@@ -157,9 +164,11 @@ export const DemoProvider = ({ children }: { children: ReactNode }) => {
   const attest = useCallback(async () => {
     setAttestRunning(true);
     setAttestOutcome(null);
+    setAttestStages([]);
     try {
-      const outcome = await client.attest();
+      const outcome = await client.attest(setAttestStages);
       setAttestOutcome(outcome);
+      setAttestStages(outcome.stages);
       await refresh();
       await refreshNotaries();
     } finally {
@@ -263,6 +272,7 @@ export const DemoProvider = ({ children }: { children: ReactNode }) => {
     proofs,
     notaries,
     attestRunning,
+    attestStages,
     attestOutcome,
     settleReveal,
     connect,

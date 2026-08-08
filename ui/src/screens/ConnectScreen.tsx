@@ -31,19 +31,25 @@ export const ConnectScreen = () => {
     client,
     attest,
     attestRunning,
+    attestStages,
     attestOutcome,
     credentials,
     backupPrivateState,
     restorePrivateState,
   } = useDemo();
   const [attestError, setAttestError] = useState<string | null>(null);
-  const [strava, setStrava] = useState<{ connected: boolean; athleteName?: string } | null>(null);
+  const [strava, setStrava] = useState<{
+    connected: boolean;
+    athleteName?: string;
+  } | null>(null);
   const [backupPassword, setBackupPassword] = useState("");
   const [backupPayload, setBackupPayload] = useState<string | null>(null);
   const [backupBusy, setBackupBusy] = useState(false);
   const [backupNotice, setBackupNotice] = useState<string | null>(null);
   const [restoreOpen, setRestoreOpen] = useState(false);
-  const [restoreMode, setRestoreMode] = useState<"restore" | "resume">("restore");
+  const [restoreMode, setRestoreMode] = useState<"restore" | "resume">(
+    "restore",
+  );
   const [restorePassword, setRestorePassword] = useState("");
   const [restoreBusy, setRestoreBusy] = useState(false);
   const [restoreNotice, setRestoreNotice] = useState<string | null>(null);
@@ -540,18 +546,25 @@ export const ConnectScreen = () => {
         </Card>
 
         <Card title="Attestation pipeline">
-          {attestRunning || attestOutcome ? (
-            <StatusLine stages={attestOutcome?.stages ?? runningStages()} />
+          {attestStages.length > 0 || attestOutcome ? (
+            <StatusLine
+              stages={
+                attestStages.length > 0
+                  ? attestStages
+                  : (attestOutcome?.stages ?? [])
+              }
+            />
           ) : (
             <div className="empty-state">
-              The pipeline lights up here when an attestation runs: TLS witness → ZK proof → notary
-              signing (2-of-3) → on-chain vaulting.
+              The pipeline lights up here when an attestation runs: TLS witness
+              → ZK proof → notary signing (2-of-3) → on-chain vaulting.
             </div>
           )}
           {outcome ? (
             <div style={{ marginTop: 12 }}>
               <Notice tone="success">
-                Credential vaulted — <strong>{outcome.provableChips.join(" · ")}</strong>.
+                Credential vaulted —{" "}
+                <strong>{outcome.provableChips.join(" · ")}</strong>.
                 {attestOutcome?.replayed
                   ? " Session replayed from the attested log (identical crypto path)."
                   : ""}
@@ -593,36 +606,3 @@ export const ConnectScreen = () => {
     </div>
   );
 };
-
-const runningStages = () => [
-  {
-    id: "guard",
-    label: "Strava account check",
-    detail: "real API check — no fabricated data",
-    state: "active" as const,
-  },
-  {
-    id: "tls",
-    label: "Witnessing TLS session",
-    detail: "attestor-core tunnels to www.strava.com",
-    state: "pending" as const,
-  },
-  {
-    id: "proof",
-    label: "ZK proof generated",
-    detail: "extracted parameters committed (stwo)",
-    state: "pending" as const,
-  },
-  {
-    id: "notarize",
-    label: "Notarizing — 2 of 3 keys",
-    detail: "independent verification + Schnorr signing",
-    state: "pending" as const,
-  },
-  {
-    id: "chain",
-    label: "Vaulting on-chain",
-    detail: "persistentCommit stored",
-    state: "pending" as const,
-  },
-];

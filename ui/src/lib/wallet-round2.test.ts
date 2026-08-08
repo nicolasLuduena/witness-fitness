@@ -27,7 +27,10 @@ const storageBacking = new Map<string, string>();
   clear: () => storageBacking.clear(),
 };
 
-import type { ConnectedAPI, InitialAPI } from "@midnight-ntwrk/dapp-connector-api";
+import type {
+  ConnectedAPI,
+  InitialAPI,
+} from "@midnight-ntwrk/dapp-connector-api";
 import { attestStrava } from "./attest/attest-browser";
 import { localStorageTokenStore } from "./attest/strava";
 import { createStubWalletBridge, type WalletBridge } from "./wallet-bridge";
@@ -41,7 +44,8 @@ const TEST_UNSHIELDED =
   "mn_addr_undeployed1qurswpc8qurswpc8qurswpc8qurswpc8qurswpc8qurswpc8qursn4yfte";
 
 vi.mock("./attest/attest-browser", async (importOriginal) => {
-  const mod = (await importOriginal()) as typeof import("./attest/attest-browser");
+  const mod =
+    (await importOriginal()) as typeof import("./attest/attest-browser");
   return { ...mod, attestStrava: vi.fn() };
 });
 
@@ -70,7 +74,9 @@ const jsonResponse = (body: unknown, status = 200): Response =>
     text: async () => (typeof body === "string" ? body : JSON.stringify(body)),
   }) as Response;
 
-const createConnectedStub = (opts: { address?: string; unshielded?: string } = {}): ConnectedAPI =>
+const createConnectedStub = (
+  opts: { address?: string; unshielded?: string } = {},
+): ConnectedAPI =>
   ({
     getConfiguration: async () => ({
       indexerUri: "http://localhost:8088/api/v4/graphql",
@@ -78,7 +84,10 @@ const createConnectedStub = (opts: { address?: string; unshielded?: string } = {
       substrateNodeUri: "ws://localhost:9944",
       networkId: "undeployed",
     }),
-    getConnectionStatus: async () => ({ status: "connected", networkId: "undeployed" }),
+    getConnectionStatus: async () => ({
+      status: "connected",
+      networkId: "undeployed",
+    }),
     getShieldedAddresses: async () => ({
       shieldedAddress: `mn_shield-${opts.address ?? "alice"}`,
       // 64-hex coin public key (wallet-SDK style) — decoded to 32 bytes by the client
@@ -117,7 +126,9 @@ const hexKey = (name: string): string => {
   return "0x" + h.toString(16).padStart(8, "0").repeat(8).slice(0, 64);
 };
 
-const setWindowMidnight = (wallets: Record<string, InitialAPI> | undefined): void => {
+const setWindowMidnight = (
+  wallets: Record<string, InitialAPI> | undefined,
+): void => {
   if (wallets === undefined) {
     delete windowShim.midnight;
   } else {
@@ -146,7 +157,11 @@ const attestResult = (distance: number) => ({
   },
 });
 
-const stravaTokens = (firstname = "Ada", lastname = "Lovelace", stravaId = 42) => ({
+const stravaTokens = (
+  firstname = "Ada",
+  lastname = "Lovelace",
+  stravaId = 42,
+) => ({
   access_token: "acc-live",
   refresh_token: "ref-live",
   expires_at: Math.floor(Date.now() / 1000) + 3600,
@@ -155,7 +170,10 @@ const stravaTokens = (firstname = "Ada", lastname = "Lovelace", stravaId = 42) =
 
 const sharedBridge = createStubWalletBridge();
 
-const connectClient = async (address: string, bridge: WalletBridge = sharedBridge) => {
+const connectClient = async (
+  address: string,
+  bridge: WalletBridge = sharedBridge,
+) => {
   setWindowMidnight({ "com.test.wallet": createWalletStub({ address }) });
   const client = new WalletClient(bridge);
   const session = await client.connect();
@@ -165,7 +183,9 @@ const connectClient = async (address: string, bridge: WalletBridge = sharedBridg
 beforeEach(() => {
   attestStravaMock.mockReset();
   storageBacking.clear();
-  setWindowMidnight({ "com.test.wallet": createWalletStub({ address: "alice" }) });
+  setWindowMidnight({
+    "com.test.wallet": createWalletStub({ address: "alice" }),
+  });
 });
 
 afterEach(() => {
@@ -193,7 +213,8 @@ describe("strava oauth surface (wallet mode)", () => {
     const url = windowShim.location.href;
     expect(url).toContain("https://www.strava.com/oauth/authorize");
     expect(url).toContain(
-      "redirect_uri=" + encodeURIComponent("http://localhost:5173/strava/callback"),
+      "redirect_uri=" +
+        encodeURIComponent("http://localhost:5173/strava/callback"),
     );
     expect(url).toContain("scope=read%2Cactivity%3Aread_all");
     // never a client secret in the URL
@@ -217,9 +238,13 @@ describe("strava oauth surface (wallet mode)", () => {
     const handled = await client.handleStravaRedirect!();
     expect(handled).toBe(true);
     const calls = fetchMock.mock.calls as unknown as [string, RequestInit][];
-    const exchangeCall = calls.find((call) => call[0].endsWith("/strava/exchange"));
+    const exchangeCall = calls.find((call) =>
+      call[0].endsWith("/strava/exchange"),
+    );
     expect(exchangeCall).toBeDefined();
-    expect(JSON.parse(String(exchangeCall![1].body))).toEqual({ code: "oauth-code-123" });
+    expect(JSON.parse(String(exchangeCall![1].body))).toEqual({
+      code: "oauth-code-123",
+    });
     expect(client.stravaStatus!()).toEqual({
       connected: true,
       athleteName: "Grace Hopper",
@@ -236,7 +261,9 @@ describe("strava oauth surface (wallet mode)", () => {
     const handled = await client.handleStravaRedirect!();
     expect(handled).toBe(false);
     const calls = fetchMock.mock.calls as unknown as [string, RequestInit][];
-    expect(calls.some((call) => call[0].includes("/strava/exchange"))).toBe(false);
+    expect(calls.some((call) => call[0].includes("/strava/exchange"))).toBe(
+      false,
+    );
   });
 });
 
@@ -244,7 +271,9 @@ describe("attest — the real browser flow", () => {
   it("requires a connected Strava account first", async () => {
     const { client } = await connectClient("alice");
     await expect(client.attest()).rejects.toThrow(StravaFlowError);
-    await expect(client.attest()).rejects.toMatchObject({ code: "strava-auth-required" });
+    await expect(client.attest()).rejects.toMatchObject({
+      code: "strava-auth-required",
+    });
   });
 
   it("blocks attestation for an empty Strava account (guard gating)", async () => {
@@ -259,11 +288,17 @@ describe("attest — the real browser flow", () => {
 
   it("runs the full staged pipeline and vaults a real credential", async () => {
     localStorageTokenStore.save(stravaTokens());
-    (globalThis as { fetch?: unknown }).fetch = vi.fn(async () => jsonResponse([{ id: 1 }]));
+    (globalThis as { fetch?: unknown }).fetch = vi.fn(async () =>
+      jsonResponse([{ id: 1 }]),
+    );
     attestStravaMock.mockResolvedValue(attestResult(3900) as never);
     const { client } = await connectClient("alice");
+    const progress: string[] = [];
 
-    const outcome = await client.attest();
+    const outcome = await client.attest((stages) => {
+      const active = stages.find((stage) => stage.state === "active");
+      if (active && progress.at(-1) !== active.id) progress.push(active.id);
+    });
     expect(outcome.replayed).toBe(false);
     expect(outcome.credential.athlete.name).toBe("Ada Lovelace");
     expect(outcome.credential.source).toBe("live-session");
@@ -273,6 +308,7 @@ describe("attest — the real browser flow", () => {
     const stageIds = outcome.stages.map((s) => s.id);
     expect(stageIds).toEqual(["guard", "tls", "notarize", "chain"]);
     expect(outcome.stages.every((s) => s.state === "done")).toBe(true);
+    expect(progress).toEqual(["guard", "tls", "notarize", "chain"]);
     // the artifacts reached the bridge with the notary ProofArtifacts shape
     expect(attestStravaMock).toHaveBeenCalledWith("acc-live");
 
@@ -284,7 +320,10 @@ describe("attest — the real browser flow", () => {
 });
 
 describe("two-browser wager flow (create → accept → submit → relay → settle)", () => {
-  const relayOpenings = new Map<number, { who: string; value: string; rand: string }[]>();
+  const relayOpenings = new Map<
+    number,
+    { who: string; value: string; rand: string }[]
+  >();
   let relayFetch: ReturnType<typeof vi.fn>;
 
   const setupRelay = () => {
@@ -314,7 +353,10 @@ describe("two-browser wager flow (create → accept → submit → relay → set
           !/^0x[0-9a-f]+$/i.test(body.rand)
         ) {
           return jsonResponse(
-            { error: 'body must be { wagerId, who: "A"|"B", value: 0x-hex, rand: 0x-hex }' },
+            {
+              error:
+                'body must be { wagerId, who: "A"|"B", value: 0x-hex, rand: 0x-hex }',
+            },
             400,
           );
         }
@@ -324,7 +366,10 @@ describe("two-browser wager flow (create → accept → submit → relay → set
         return jsonResponse({ stored: true });
       }
       const match = u.match(/\/wager-openings\/(\d+)$/);
-      if (match) return jsonResponse({ openings: relayOpenings.get(Number(match[1])) ?? [] });
+      if (match)
+        return jsonResponse({
+          openings: relayOpenings.get(Number(match[1])) ?? [],
+        });
       return jsonResponse({}, 404);
     });
     (globalThis as { fetch?: unknown }).fetch = relayFetch;
@@ -371,7 +416,12 @@ describe("two-browser wager flow (create → accept → submit → relay → set
     // invalid challenge IDs are rejected up front
     await expect(
       clientA.createWager({
-        opponent: { name: "x", handle: "x", role: "opponent", holderBinding: "not-a-binding" },
+        opponent: {
+          name: "x",
+          handle: "x",
+          role: "opponent",
+          holderBinding: "not-a-binding",
+        },
         metricId: 1n,
         stake: 1,
         deadlineBlock: 0n,
@@ -399,23 +449,33 @@ describe("two-browser wager flow (create → accept → submit → relay → set
       deadlineBlock: BigInt(Math.floor(Date.now() / 1000) + 90),
     });
     const wagerId = created.id;
-    expect(sessionA.athlete.holderBinding).not.toBe(sessionB.athlete.holderBinding);
+    expect(sessionA.athlete.holderBinding).not.toBe(
+      sessionB.athlete.holderBinding,
+    );
 
     // B accepts from their own wallet
     const accepted = await clientB.acceptWager(wagerId);
     expect(accepted.status).toBe("accepted");
 
     // both athletes seal their own submissions — each relayed immediately
-    const afterA = await clientA.submitWorkout(wagerId, (await clientA.vault())[0].id);
+    const afterA = await clientA.submitWorkout(
+      wagerId,
+      (await clientA.vault())[0].id,
+    );
     expect(afterA.submissions).toHaveLength(1);
-    const afterB = await clientB.submitWorkout(wagerId, (await clientB.vault())[0].id);
+    const afterB = await clientB.submitWorkout(
+      wagerId,
+      (await clientB.vault())[0].id,
+    );
     expect(afterB.submissions).toHaveLength(2);
     expect(afterB.status).toBe("submitted");
     // relay got both openings (A = challenger, B = opponent), rands in hex
     const relayed = relayOpenings.get(wagerId)!;
     expect(relayed.map((o) => o.who).sort()).toEqual(["A", "B"]);
     expect(
-      relayed.every((o) => /^0x[0-9a-f]+$/.test(o.value) && /^0x[0-9a-f]+$/.test(o.rand)),
+      relayed.every(
+        (o) => /^0x[0-9a-f]+$/.test(o.value) && /^0x[0-9a-f]+$/.test(o.rand),
+      ),
     ).toBe(true);
     // the sealed values are the real distances — but never in the view
     expect(afterB.submissions.every((s) => s.sealed)).toBe(true);
@@ -424,7 +484,10 @@ describe("two-browser wager flow (create → accept → submit → relay → set
     // A settles: relays again (idempotent), waits for both, stages + settles
     const result = await clientA.settleWager(wagerId);
     expect(result.reveal.sealedForRoom).toBe(true);
-    expect(result.reveal.comparison).toEqual({ challengerValue: 3900, opponentValue: 2426 });
+    expect(result.reveal.comparison).toEqual({
+      challengerValue: 3900,
+      opponentValue: 2426,
+    });
     const settled = result.wager;
     expect(settled.status).toBe("settled");
     expect(settled.result?.winner?.name).toBe("Nicolás Ludueña");
@@ -473,12 +536,17 @@ describe("two-browser wager flow (create → accept → submit → relay → set
     // A's opening from the relay (both sides posted at submit time).
     const { client: freshA } = await connectClient("alice");
     const result = await freshA.settleWager(wagerId);
-    expect(result.reveal.comparison).toEqual({ challengerValue: 3900, opponentValue: 2426 });
+    expect(result.reveal.comparison).toEqual({
+      challengerValue: 3900,
+      opponentValue: 2426,
+    });
     expect(result.wager.status).toBe("settled");
     // The winner is the challenger (A) — the fresh client sees itself as the
     // challenger (same holder binding); the shared test localStorage carries
     // B's Strava tokens, so assert by binding, not by name.
-    expect(result.wager.result?.winner?.holderBinding).toBe(sessionA.athlete.holderBinding);
+    expect(result.wager.result?.winner?.holderBinding).toBe(
+      sessionA.athlete.holderBinding,
+    );
   });
 
   it("settles a both-gave-up wager as a refund (no openings needed)", async () => {
@@ -505,7 +573,9 @@ describe("two-browser wager flow (create → accept → submit → relay → set
     expect(result.wager.status).toBe("settled");
     expect(result.wager.result?.forfeit).toBe(false);
     expect(result.wager.result?.winner).toBeUndefined();
-    expect(result.wager.result?.summary).toContain("Neither submitted — both stakes refunded");
+    expect(result.wager.result?.summary).toContain(
+      "Neither submitted — both stakes refunded",
+    );
     expect(result.reveal.comparison).toBeUndefined();
   });
 
@@ -534,7 +604,9 @@ describe("two-browser wager flow (create → accept → submit → relay → set
     const result = await clientB.settleWager(wagerId);
     expect(result.wager.status).toBe("settled");
     expect(result.wager.result?.forfeit).toBe(true);
-    expect(result.wager.result?.winner?.holderBinding).toBe(sessionA.athlete.holderBinding);
+    expect(result.wager.result?.winner?.holderBinding).toBe(
+      sessionA.athlete.holderBinding,
+    );
     expect(result.wager.result?.summary).toContain("by forfeit");
     expect(result.reveal.comparison).toBeUndefined();
   });
@@ -554,7 +626,9 @@ describe("two-browser wager flow (create → accept → submit → relay → set
         handle: "opponent",
         role: "opponent",
         holderBinding:
-          sessionA.athlete.holderBinding === "0x0" ? "0x1" : sessionB.athlete.holderBinding,
+          sessionA.athlete.holderBinding === "0x0"
+            ? "0x1"
+            : sessionB.athlete.holderBinding,
       },
       metricId: 1n,
       stake: 1,
@@ -568,7 +642,9 @@ describe("two-browser wager flow (create → accept → submit → relay → set
     const result = await clientA.settleWager(wagerId);
     expect(result.wager.status).toBe("settled");
     expect(result.wager.result?.forfeit).toBe(true);
-    expect(result.wager.result?.winner?.holderBinding).toBe(sessionA.athlete.holderBinding);
+    expect(result.wager.result?.winner?.holderBinding).toBe(
+      sessionA.athlete.holderBinding,
+    );
     expect(relayOpenings.get(wagerId)?.map((o) => o.who)).toEqual(["A"]);
   });
 });
@@ -577,46 +653,63 @@ describe("settle edge cases (tie)", () => {
   it("maps a tie to a refund summary", async () => {
     const relay = createStubWalletBridge();
     localStorageTokenStore.save(stravaTokens("A", "One", 1));
-    const { client: clientA, session: sessionA } = await connectClient("alice", relay);
+    const { client: clientA, session: sessionA } = await connectClient(
+      "alice",
+      relay,
+    );
     localStorageTokenStore.save(stravaTokens("B", "Two", 2));
-    const { client: clientB, session: sessionB } = await connectClient("bob", relay);
+    const { client: clientB, session: sessionB } = await connectClient(
+      "bob",
+      relay,
+    );
     attestStravaMock.mockResolvedValueOnce(attestResult(3000) as never);
     await clientA.attest();
     attestStravaMock.mockResolvedValueOnce(attestResult(3000) as never);
     await clientB.attest();
-    const relayOpenings = new Map<number, { who: string; value: string; rand: string }[]>();
-    (globalThis as { fetch?: unknown }).fetch = vi.fn(async (url: unknown, init?: RequestInit) => {
-      const u = String(url);
-      if (u.endsWith("/wager-openings") && init?.method === "POST") {
-        const body = JSON.parse(String(init.body)) as {
-          wagerId: unknown;
-          who: string;
-          value: string;
-          rand: string;
-        };
-        if (
-          typeof body.wagerId !== "string" ||
-          body.wagerId === "" ||
-          (body.who !== "A" && body.who !== "B") ||
-          typeof body.value !== "string" ||
-          typeof body.rand !== "string" ||
-          !/^0x[0-9a-f]+$/i.test(body.value) ||
-          !/^0x[0-9a-f]+$/i.test(body.rand)
-        ) {
-          return jsonResponse(
-            { error: 'body must be { wagerId, who: "A"|"B", value: 0x-hex, rand: 0x-hex }' },
-            400,
-          );
+    const relayOpenings = new Map<
+      number,
+      { who: string; value: string; rand: string }[]
+    >();
+    (globalThis as { fetch?: unknown }).fetch = vi.fn(
+      async (url: unknown, init?: RequestInit) => {
+        const u = String(url);
+        if (u.endsWith("/wager-openings") && init?.method === "POST") {
+          const body = JSON.parse(String(init.body)) as {
+            wagerId: unknown;
+            who: string;
+            value: string;
+            rand: string;
+          };
+          if (
+            typeof body.wagerId !== "string" ||
+            body.wagerId === "" ||
+            (body.who !== "A" && body.who !== "B") ||
+            typeof body.value !== "string" ||
+            typeof body.rand !== "string" ||
+            !/^0x[0-9a-f]+$/i.test(body.value) ||
+            !/^0x[0-9a-f]+$/i.test(body.rand)
+          ) {
+            return jsonResponse(
+              {
+                error:
+                  'body must be { wagerId, who: "A"|"B", value: 0x-hex, rand: 0x-hex }',
+              },
+              400,
+            );
+          }
+          const list = relayOpenings.get(Number(body.wagerId)) ?? [];
+          list.push({ who: body.who, value: body.value, rand: body.rand });
+          relayOpenings.set(Number(body.wagerId), list);
+          return jsonResponse({ stored: true });
         }
-        const list = relayOpenings.get(Number(body.wagerId)) ?? [];
-        list.push({ who: body.who, value: body.value, rand: body.rand });
-        relayOpenings.set(Number(body.wagerId), list);
-        return jsonResponse({ stored: true });
-      }
-      const match = u.match(/\/wager-openings\/(\d+)$/);
-      if (match) return jsonResponse({ openings: relayOpenings.get(Number(match[1])) ?? [] });
-      return jsonResponse({}, 404);
-    });
+        const match = u.match(/\/wager-openings\/(\d+)$/);
+        if (match)
+          return jsonResponse({
+            openings: relayOpenings.get(Number(match[1])) ?? [],
+          });
+        return jsonResponse({}, 404);
+      },
+    );
     const created = await clientA.createWager({
       opponent: {
         name: "o",

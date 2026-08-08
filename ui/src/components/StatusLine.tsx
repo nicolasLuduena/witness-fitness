@@ -4,7 +4,7 @@
 import type { AttestationStage } from "../domain/types";
 
 export const StatusLine = ({ stages }: { stages: AttestationStage[] }) => (
-  <div className="steps">
+  <div className="steps" role="status" aria-live="polite" aria-atomic="true">
     {stages.map((stage) => (
       <div
         key={stage.id}

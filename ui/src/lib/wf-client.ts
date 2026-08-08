@@ -9,6 +9,7 @@
 import type { DemoMode } from "../config";
 import type {
   AttestedCredential,
+  AttestationProgress,
   AttestOutcome,
   BadgeProof,
   BadgeView,
@@ -31,7 +32,7 @@ export interface WfClient {
 
   // attest → vault (NOTARY.md §5 flow 1). Runs the staged pipeline:
   // witnessing TLS → proof generated → notarizing → on-chain.
-  attest(): Promise<AttestOutcome>;
+  attest(onProgress?: AttestationProgress): Promise<AttestOutcome>;
 
   vault(): Promise<AttestedCredential[]>;
 
@@ -61,7 +62,11 @@ export interface WfClient {
   // Wallet mode only (Round 2D): browser Strava OAuth + identity. The
   // Strava client secret never exists in the browser — the stateless service
   // (:8200) performs the token exchange/refresh.
-  stravaStatus?(): { connected: boolean; athleteName?: string; stravaId?: number };
+  stravaStatus?(): {
+    connected: boolean;
+    athleteName?: string;
+    stravaId?: number;
+  };
   connectStrava?(): void; // opens the Strava authorize URL (same tab)
   handleStravaRedirect?(): Promise<boolean>; // process ?code= on /strava/callback; true when handled
 }
