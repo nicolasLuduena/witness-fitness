@@ -97,20 +97,22 @@ export const DemoProvider = ({ children }: { children: ReactNode }) => {
   const refresh = useCallback(
     async (force = false) => {
       if (mode === "wallet" && !session && !force) return;
-      try {
-        const [creds, wgs, strk, bdgs] = await Promise.all([
-          client.vault(),
-          client.listWagers(),
-          client.streak(),
-          client.badges(),
-        ]);
-        setCredentials(creds);
-        setWagers(wgs);
-        setStreak(strk);
-        setBadges(bdgs);
-      } catch (err) {
-        logError("DemoStore.refresh", err);
-      }
+      // Per-slice allSettled: one failing read (e.g. indexer lag) must not
+      // blank every slice — wagers/credentials already fetched stay visible.
+      const [creds, wgs, strk, bdgs] = await Promise.allSettled([
+        client.vault(),
+        client.listWagers(),
+        client.streak(),
+        client.badges(),
+      ]);
+      if (creds.status === "fulfilled") setCredentials(creds.value);
+      else logError("DemoStore.refresh.vault", creds.reason);
+      if (wgs.status === "fulfilled") setWagers(wgs.value);
+      else logError("DemoStore.refresh.wagers", wgs.reason);
+      if (strk.status === "fulfilled") setStreak(strk.value);
+      else logError("DemoStore.refresh.streak", strk.reason);
+      if (bdgs.status === "fulfilled") setBadges(bdgs.value);
+      else logError("DemoStore.refresh.badges", bdgs.reason);
     },
     [client, mode, session],
   );

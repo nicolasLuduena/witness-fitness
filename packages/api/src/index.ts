@@ -200,18 +200,49 @@ export class StrideContract {
     );
   }
 
+  // The stored private state is the single source of truth across reloads.
+  // findDeployedContract writes whatever initialPrivateState is supplied back
+  // into the provider — so the seed may only be used when the store is EMPTY.
+  // A rejoin with a stored identity must resolve to the STORED state (a
+  // write-back of the same content, not a fresh identity): otherwise every
+  // reload mints a new holder secret and the wallet-mode restore/resume flow
+  // is silently undone (the browser path relies on this).
+  static async resolveInitialPrivateState(
+    providers: StrideProviders,
+    contractAddress: string,
+    privateStateId: string,
+    seed?: PrivateState,
+  ): Promise<PrivateState | undefined> {
+    providers.privateStateProvider.setContractAddress(contractAddress);
+    const existing = await providers.privateStateProvider.get(privateStateId);
+    return existing ?? seed;
+  }
+
   static async join(
     providers: StrideProviders,
     contractAddress: string,
     privateStateId: string,
-    initialPrivateState: PrivateState,
+    seedPrivateState?: PrivateState,
   ): Promise<StrideContract> {
-    const deployedContract = await findDeployedContract<StrideContractType>(providers, {
+    const initialPrivateState = await StrideContract.resolveInitialPrivateState(
+      providers,
       contractAddress,
-      compiledContract: CompactCompiledContract,
       privateStateId,
-      initialPrivateState,
-    });
+      seedPrivateState,
+    );
+    const deployedContract =
+      initialPrivateState === undefined
+        ? await findDeployedContract<StrideContractType>(providers, {
+            contractAddress,
+            compiledContract: CompactCompiledContract,
+            privateStateId,
+          })
+        : await findDeployedContract<StrideContractType>(providers, {
+            contractAddress,
+            compiledContract: CompactCompiledContract,
+            privateStateId,
+            initialPrivateState,
+          });
     return new StrideContract(
       providers,
       deployedContract,

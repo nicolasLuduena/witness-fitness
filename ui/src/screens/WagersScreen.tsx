@@ -144,7 +144,7 @@ export const WagersScreen = () => {
             names and wallet identities never enter the wager.
           </p>
         </div>
-        {session && wagers.length > 0 ? (
+        {session ? (
           <div className="heading-actions">
             <button
               type="button"
@@ -155,9 +155,11 @@ export const WagersScreen = () => {
             >
               <RefreshCw aria-hidden="true" />
             </button>
-            <Button tone="primary" onClick={() => setCreating(true)}>
-              Create private wager <ArrowRight aria-hidden="true" />
-            </Button>
+            {wagers.length > 0 ? (
+              <Button tone="primary" onClick={() => setCreating(true)}>
+                Create private wager <ArrowRight aria-hidden="true" />
+              </Button>
+            ) : null}
           </div>
         ) : null}
       </header>
@@ -193,12 +195,18 @@ export const WagersScreen = () => {
             <h2 id="wager-empty-title">No private wagers yet</h2>
             <p>
               Paste another athlete's holder binding, choose the terms, and escrow your stake. Their
-              name and wallet never become part of the challenge.
+              name and wallet never become part of the challenge. If you created one recently,
+              refresh — the indexer can lag the chain.
             </p>
           </div>
-          <Button tone="primary" onClick={() => setCreating(true)}>
-            Create private wager
-          </Button>
+          <div className="heading-actions">
+            <Button tone="ghost" onClick={() => void refresh()}>
+              <RefreshCw aria-hidden="true" /> Refresh wagers
+            </Button>
+            <Button tone="primary" onClick={() => setCreating(true)}>
+              Create private wager
+            </Button>
+          </div>
         </section>
       ) : (
         <div className="wager-workspace">

@@ -195,6 +195,10 @@ describe("wallet bridge stub", () => {
     const session2 = await bridge2.joinStrideFromBrowser(alice, "0xcontract", "wf-test-store");
     const state2 = await session2.readState();
     expect(vaultEntriesOf(state2.vault)).toHaveLength(1);
+    // Identity survives restore + rejoin — the join must not mint a fresh
+    // holder binding over the restored private state (real-path regression
+    // covered in packages/api/tests/join-private-state.test.ts).
+    expect(session2.holderBinding).toBe(session.holderBinding);
 
     // wrong password on a fresh bridge → rejected
     const bridge3 = createStubWalletBridge();
