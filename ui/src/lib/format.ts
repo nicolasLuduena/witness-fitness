@@ -14,7 +14,8 @@ export const fmtMinutes = (seconds: number): string => {
   return `${m}:${s.toString().padStart(2, "0")} min`;
 };
 
-export const fmtTnight = (amount: number): string => `${amount} tNIGHT`;
+export const fmtToken = (amount: number, currency = "NIGHT"): string =>
+  `${new Intl.NumberFormat(undefined, { maximumFractionDigits: 4 }).format(amount)} ${currency}`;
 
 export const fmtClock = (epochMs: number): string =>
   new Date(epochMs).toLocaleTimeString([], {

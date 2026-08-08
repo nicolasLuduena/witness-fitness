@@ -163,6 +163,7 @@ const stubSession = (): WalletStrideSession => ({
   stagedVaultKey: async () => {
     throw new Error("not used in the Map-shape regression test");
   },
+  stagedAttestation: async () => null,
   advanceStreak: async () => {
     throw new Error("not used in the Map-shape regression test");
   },

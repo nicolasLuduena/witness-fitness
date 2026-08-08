@@ -28,8 +28,8 @@ class WalletClientProxy implements WfClient {
   connect(rdns?: string) {
     return this.real().then((c) => c.connect(rdns));
   }
-  attest() {
-    return this.real().then((c) => c.attest());
+  attest(onProgress?: Parameters<WfClient["attest"]>[0]) {
+    return this.real().then((c) => c.attest(onProgress));
   }
   vault() {
     return this.real().then((c) => c.vault());
@@ -101,7 +101,11 @@ class WalletClientProxy implements WfClient {
   }
   // Synchronous by contract: delegates to the cached inner client (connect()
   // initializes it before any Strava interaction). Before connect: not connected.
-  stravaStatus(): { connected: boolean; athleteName?: string; stravaId?: number } {
+  stravaStatus(): {
+    connected: boolean;
+    athleteName?: string;
+    stravaId?: number;
+  } {
     return this.inner?.stravaStatus?.() ?? { connected: false };
   }
 }
@@ -121,8 +125,8 @@ class LiveClientProxy implements WfClient {
   connect(rdns?: string) {
     return this.real().then((c) => c.connect(rdns));
   }
-  attest() {
-    return this.real().then((c) => c.attest());
+  attest(onProgress?: Parameters<WfClient["attest"]>[0]) {
+    return this.real().then((c) => c.attest(onProgress));
   }
   vault() {
     return this.real().then((c) => c.vault());

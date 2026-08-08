@@ -218,13 +218,15 @@ describe("browser provider stack", () => {
     ).rejects.toThrow(/Malformed payload/);
   });
 
-  it("short passwords are rejected up front", async () => {
+  it("short demo passwords can export and restore private state", async () => {
     const provider = inMemoryPrivateStateProvider<string, PrivateState>();
     provider.setContractAddress("0xabc");
-    await provider.set("wf-demo", realisticPrivateState());
-    await expect(provider.exportPrivateState("short", "demo-store")).rejects.toThrow(
-      /at least 16 characters/,
-    );
+    const original = realisticPrivateState();
+    await provider.set("wf-demo", original);
+    const payload = await provider.exportPrivateState("demo", "demo-store");
+    provider.resetPrivateState("demo-store");
+    await provider.importPrivateState("demo", "demo-store", payload);
+    await expect(provider.get("wf-demo")).resolves.toEqual(original);
   });
 
   it("deriveBrowserHolderSecret yields 32 random bytes", () => {

@@ -19,6 +19,7 @@ import { NOTARY_URLS, SIDECAR_URL } from "../config";
 import { ATHLETE_A, ATHLETE_B, ATTESTATION_LOG, BADGES } from "../domain/story";
 import type {
   Athlete,
+  AttestationProgress,
   AttestationStage,
   AttestedCredential,
   AttestOutcome,
@@ -73,12 +74,15 @@ export class LiveClient implements WfClient {
     };
   }
 
-  async attest(): Promise<AttestOutcome> {
+  async attest(onProgress?: AttestationProgress): Promise<AttestOutcome> {
     if (!this.sidecar) throw new Error("live client not connected — start the sidecar first");
     const stages = liveStages();
+    const publish = () => onProgress?.(stages.map((stage) => ({ ...stage })));
     const mark = (id: string, state: AttestationStage["state"]) => {
       for (const s of stages) if (s.id === id) s.state = state;
+      publish();
     };
+    publish();
 
     // Round 1B: no pre-recorded proof artifacts live in the UI anymore — the
     // attest workstream's flow (ui/src/lib/attest/*) replaces this replay.
@@ -92,7 +96,11 @@ export class LiveClient implements WfClient {
       claim: unknown;
       signatureHex: string;
       attestorAddress: string;
-      request?: { url: string; method: string; publicHeaders: Record<string, string> };
+      request?: {
+        url: string;
+        method: string;
+        publicHeaders: Record<string, string>;
+      };
       responseText: string;
       proof?: { extractedParameterValues?: Record<string, string> };
     };
@@ -111,7 +119,10 @@ export class LiveClient implements WfClient {
     mark("tls", "done");
 
     mark("notarize", "active");
-    const result = await this.sidecar.attest(artifacts);
+    const result = await this.sidecar.attest(artifacts).catch((err) => {
+      mark("notarize", "error");
+      throw err;
+    });
     mark("notarize", "done");
 
     mark("chain", "active");
@@ -179,7 +190,10 @@ export class LiveClient implements WfClient {
     const sidecar = this.requireSidecar();
     const wager = (await this.listWagers()).find((w) => w.id === id);
     if (!wager) throw new Error(`wager ${id} not found`);
-    await sidecar.acceptWager({ athlete: athleteLetter(wager.opponent), id: String(id) });
+    await sidecar.acceptWager({
+      athlete: athleteLetter(wager.opponent),
+      id: String(id),
+    });
     const updated = (await this.listWagers()).find((w) => w.id === id);
     if (!updated) throw new Error(`wager ${id} not found after accept`);
     return updated;

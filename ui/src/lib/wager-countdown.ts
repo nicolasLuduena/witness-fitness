@@ -1,10 +1,13 @@
 // Live-wager UI helpers (Phase C): countdown math + challenge-ID parsing.
-// The sidecar's settle unlocks at deadlineBlock (unix seconds) + 60 s grace.
+// `deadlineBlock` is the legacy ABI name; Compact's blockTimeLt compares the
+// current block timestamp, so the value is Unix seconds, not a block height.
 
 export const SETTLE_GRACE_MS = 60_000;
 
 export const settleReadyAtMs = (deadlineBlock: bigint): number =>
   Number(deadlineBlock) * 1000 + SETTLE_GRACE_MS;
+
+export const deadlineAtMs = (deadlineBlock: bigint): number => Number(deadlineBlock) * 1000;
 
 export const formatCountdown = (msLeft: number): string => {
   const seconds = Math.max(0, Math.ceil(msLeft / 1000));

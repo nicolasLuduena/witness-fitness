@@ -17,6 +17,7 @@ import {
 import type { DemoMode } from "../config";
 import { INITIAL_MODE } from "../config";
 import type {
+  AttestationStage,
   AttestedCredential,
   AttestOutcome,
   BadgeProof,
@@ -46,6 +47,7 @@ export interface DemoState {
   notaries: NotaryInfo[];
 
   attestRunning: boolean;
+  attestStages: AttestationStage[];
   attestOutcome: AttestOutcome | null;
   settleReveal: WagerSettleResult | null;
 
@@ -86,27 +88,32 @@ export const DemoProvider = ({ children }: { children: ReactNode }) => {
   const [notaries, setNotaries] = useState<NotaryInfo[]>([]);
 
   const [attestRunning, setAttestRunning] = useState(false);
+  const [attestStages, setAttestStages] = useState<AttestationStage[]>([]);
   const [attestOutcome, setAttestOutcome] = useState<AttestOutcome | null>(null);
   const [settleReveal, setSettleReveal] = useState<WagerSettleResult | null>(null);
 
   const notaryTimer = useRef<number | undefined>(undefined);
 
-  const refresh = useCallback(async () => {
-    try {
-      const [creds, wgs, strk, bdgs] = await Promise.all([
-        client.vault(),
-        client.listWagers(),
-        client.streak(),
-        client.badges(),
-      ]);
-      setCredentials(creds);
-      setWagers(wgs);
-      setStreak(strk);
-      setBadges(bdgs);
-    } catch (err) {
-      logError("DemoStore.refresh", err);
-    }
-  }, [client]);
+  const refresh = useCallback(
+    async (force = false) => {
+      if (mode === "wallet" && !session && !force) return;
+      try {
+        const [creds, wgs, strk, bdgs] = await Promise.all([
+          client.vault(),
+          client.listWagers(),
+          client.streak(),
+          client.badges(),
+        ]);
+        setCredentials(creds);
+        setWagers(wgs);
+        setStreak(strk);
+        setBadges(bdgs);
+      } catch (err) {
+        logError("DemoStore.refresh", err);
+      }
+    },
+    [client, mode, session],
+  );
 
   const refreshNotaries = useCallback(async () => {
     try {
@@ -132,7 +139,7 @@ export const DemoProvider = ({ children }: { children: ReactNode }) => {
       try {
         const s = await client.connect(rdns);
         setSession(s);
-        await refresh();
+        await refresh(true);
         await refreshNotaries();
       } catch (err) {
         logError("DemoStore.connect", err);
@@ -147,9 +154,11 @@ export const DemoProvider = ({ children }: { children: ReactNode }) => {
   const attest = useCallback(async () => {
     setAttestRunning(true);
     setAttestOutcome(null);
+    setAttestStages([]);
     try {
-      const outcome = await client.attest();
+      const outcome = await client.attest(setAttestStages);
       setAttestOutcome(outcome);
+      setAttestStages(outcome.stages);
       await refresh();
       await refreshNotaries();
     } finally {
@@ -226,12 +235,14 @@ export const DemoProvider = ({ children }: { children: ReactNode }) => {
   );
 
   const restorePrivateState = useCallback(
-    (password: string, payload: string) => {
-      if (!client.restorePrivateState)
-        return Promise.reject(new Error("not supported in this mode"));
-      return client.restorePrivateState(password, payload);
+    async (password: string, payload: string) => {
+      if (!client.restorePrivateState) throw new Error("not supported in this mode");
+      const restoredSession = await client.restorePrivateState(password, payload);
+      setSession(restoredSession);
+      setAttestOutcome(null);
+      await refresh(true);
     },
-    [client],
+    [client, refresh],
   );
 
   const resetPrivateState = useCallback(() => {
@@ -252,6 +263,7 @@ export const DemoProvider = ({ children }: { children: ReactNode }) => {
     proofs,
     notaries,
     attestRunning,
+    attestStages,
     attestOutcome,
     settleReveal,
     connect,

@@ -101,15 +101,16 @@ export const credentialFromVaultEntry = (
   timestamp: number | string | bigint | undefined,
   metrics: LedgerMetricLike[],
 ): AttestedCredential => {
-  const chips =
-    metrics.length > 0
-      ? metrics.map((m) => {
-          const id = toNumber(m.metricId, 0);
-          const metric = metricById(BigInt(id));
-          const value = toNumber(m.value, 0);
-          return value > 0 ? metric.provableChip(value) : `attested ${m.label ?? metric.label}`;
-        })
-      : ["attested credential (sealed on-chain)"];
+  const chips = Array.from(
+    new Set(
+      metrics.flatMap((m) => {
+        const value = toNumber(m.value, 0);
+        if (value <= 0) return [];
+        const id = toNumber(m.metricId, 0);
+        return [metricById(BigInt(id)).provableChip(value)];
+      }),
+    ),
+  );
   return {
     id: hexShort(vaultKey, 12, 8),
     athlete: ATHLETE_A,
@@ -119,7 +120,7 @@ export const credentialFromVaultEntry = (
     commitment: vaultKey,
     txHash,
     timestamp: toEpochMs(timestamp),
-    provableChips: chips,
+    provableChips: chips.length > 0 ? chips : ["workout attested and sealed"],
     notarySignatures: 2,
     assertionId: hexShort(vaultKey, 6, 4),
   };

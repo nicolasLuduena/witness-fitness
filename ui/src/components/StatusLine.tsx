@@ -4,8 +4,14 @@
 import type { AttestationStage } from "../domain/types";
 
 export const StatusLine = ({ stages }: { stages: AttestationStage[] }) => (
-  <div className="steps">
-    {stages.map((stage) => (
+  <div
+    className="steps"
+    role="status"
+    aria-live="polite"
+    aria-atomic="true"
+    aria-busy={stages.some((stage) => stage.state === "active")}
+  >
+    {stages.map((stage, index) => (
       <div
         key={stage.id}
         className={[
@@ -17,8 +23,16 @@ export const StatusLine = ({ stages }: { stages: AttestationStage[] }) => (
           .filter(Boolean)
           .join(" ")}
       >
-        <div className="step__index">
-          {stage.state === "done" ? "✓" : stage.state === "error" ? "✕" : "·"}
+        <div className="step__index" aria-hidden="true">
+          {stage.state === "done" ? (
+            "✓"
+          ) : stage.state === "error" ? (
+            "✕"
+          ) : stage.state === "active" ? (
+            <span className="step__pulse" />
+          ) : (
+            index + 1
+          )}
         </div>
         <div>
           <div className="step__label">{stage.label}</div>

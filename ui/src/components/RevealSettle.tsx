@@ -1,148 +1,110 @@
-// The settle reveal — demo centerpiece. Three beats:
-//   1. "Winner + pot" (envelopes flip; the comparison happened under seal)
-//   2. "Find the losing number" — the comparison appears with the loser masked
-//   3. "Comparison disclosed" — both openings are revealed: the chain publishes
-//      them at settlement to decide the winner; they were sealed until then.
-
+import { Award, Check, LockKeyhole, Trophy } from "lucide-react";
 import { useState } from "react";
 import type { WagerSettleResult } from "../domain/types";
-import { fmtKm, fmtTnight } from "../lib/format";
+import { fmtKm, fmtToken } from "../lib/format";
+import { athleteLabel } from "../lib/identity-label";
 import { Button, Notice } from "./bits";
 
 export const RevealSettle = ({ result }: { result: WagerSettleResult }) => {
   const { wager } = result;
-  const [phase, setPhase] = useState<"reveal" | "room" | "disclosed">("reveal");
-  const res = wager.result;
-  if (!res) return null;
+  const [showComparison, setShowComparison] = useState(false);
+  const settlement = wager.result;
+  if (!settlement) return null;
 
-  const challengerValue = res.challengerValue ?? 0;
-  const opponentValue = res.opponentValue ?? 0;
-  const winnerIsChallenger = res.winner?.role === "local";
-  const winnerValue = winnerIsChallenger ? challengerValue : opponentValue;
+  const winner = settlement.winner ? athleteLabel(settlement.winner) : null;
+  const noSubmissions = wager.submissions.length === 0;
+  const challengerSubmitted = wager.submissions.some(
+    ({ athlete }) => athlete.holderBinding === wager.challenger.holderBinding,
+  );
+  const opponentSubmitted = wager.submissions.some(
+    ({ athlete }) => athlete.holderBinding === wager.opponent.holderBinding,
+  );
+  const challengerValue = settlement.challengerValue ?? 0;
+  const opponentValue = settlement.opponentValue ?? 0;
 
   return (
-    <div className="reveal-card">
-      <div className="row-between">
+    <div className="settlement-reveal">
+      <div className="settlement-reveal__mark" aria-hidden="true">
+        {settlement.tie || noSubmissions ? <Check /> : <Trophy />}
+      </div>
+      <p className="page-context">Settlement confirmed</p>
+      <h2>
+        {noSubmissions
+          ? "No workouts were submitted. Both stakes were refunded."
+          : settlement.tie
+            ? "The wager ended in a tie."
+            : settlement.forfeit
+              ? settlement.summary
+              : winner === "You"
+                ? "You won the private wager."
+                : winner
+                  ? `${winner} won the private wager.`
+                  : "The wager settled under seal."}
+      </h2>
+      <p className="settlement-pot">
+        {fmtToken(settlement.pot, settlement.currency)}{" "}
+        {noSubmissions || settlement.tie ? "returned" : "pot settled"}
+      </p>
+
+      <div className="settlement-identities">
         <div>
-          <div className="card-title" style={{ margin: 0 }}>
-            Settlement — {wager.title}
-          </div>
-          <div className="hero" style={{ marginTop: 8 }}>
-            {res.tie
-              ? "Dead heat — stakes returned to both athletes."
-              : res.forfeit
-                ? res.summary
-                : `Winner: ${res.winner?.name} — ${fmtTnight(res.pot)} ${res.currency} pot moves.`}
-          </div>
+          <span>{athleteLabel(wager.challenger)}</span>
+          <strong>
+            {challengerSubmitted
+              ? showComparison
+                ? fmtKm(challengerValue)
+                : "Sealed"
+              : "No submission"}
+          </strong>
         </div>
-        <Chip />
-      </div>
-
-      <div className="reveal-grid">
-        <div className="reveal-side">
-          <div className="reveal-side__name">{wager.challenger.name}</div>
-          {phase === "disclosed" ? (
-            <div
-              className={`reveal-side__value ${winnerIsChallenger ? "" : "reveal-side__value--loser"}`}
-            >
-              {fmtKm(challengerValue)}
-            </div>
-          ) : phase === "room" ? (
-            <div className="reveal-side__value">
-              {winnerIsChallenger ? fmtKm(winnerValue) : <Masked />}
-            </div>
-          ) : (
-            <div className="reveal-masked">••••</div>
-          )}
-        </div>
-        <div className="reveal-vs">VS</div>
-        <div className="reveal-side">
-          <div className="reveal-side__name">{wager.opponent.name}</div>
-          {phase === "disclosed" ? (
-            <div
-              className={`reveal-side__value ${winnerIsChallenger ? "reveal-side__value--loser" : ""}`}
-            >
-              {fmtKm(opponentValue)}
-            </div>
-          ) : phase === "room" ? (
-            <div className="reveal-side__value">
-              {winnerIsChallenger ? <Masked /> : fmtKm(winnerValue)}
-            </div>
-          ) : (
-            <div className="reveal-masked">••••</div>
-          )}
+        <span aria-hidden="true">versus</span>
+        <div>
+          <span>{athleteLabel(wager.opponent)}</span>
+          <strong>
+            {opponentSubmitted
+              ? showComparison
+                ? fmtKm(opponentValue)
+                : "Sealed"
+              : "No submission"}
+          </strong>
         </div>
       </div>
 
-      {res.nft ? (
-        <div
-          className="reveal-card"
-          style={{
-            marginTop: 14,
-            borderColor: "rgba(217, 164, 65, 0.45)",
-            background:
-              "linear-gradient(180deg, rgba(217, 164, 65, 0.07), rgba(217, 164, 65, 0.02))",
-            boxShadow: "0 0 34px rgba(217, 164, 65, 0.1)",
-          }}
-        >
-          <div className="row" style={{ gap: 14 }}>
-            <div className="medal" style={{ width: 40, height: 40, fontSize: 17 }}>
-              🏅
-            </div>
-            <div>
-              <div style={{ fontWeight: 700 }}>Winner receives the WitnessFitness NFT</div>
-              <div className="muted" style={{ fontSize: 13 }}>
-                A shielded coin — the winner can prove they own it without revealing anything about
-                the wager.
-              </div>
-              <div className="row" style={{ marginTop: 8, gap: 14, flexWrap: "wrap" }}>
-                <span className="chip chip--gold">token {res.nft.tokenType.slice(0, 18)}…</span>
-                <span className="hash">minted in tx {res.nft.txHash.slice(0, 20)}…</span>
-              </div>
-            </div>
-          </div>
+      <div className="settlement-privacy">
+        <LockKeyhole aria-hidden="true" />
+        <span>
+          <strong>No athlete names or wallets were used.</strong>
+          {noSubmissions
+            ? " The room-safe result reveals only that both stakes were refunded."
+            : showComparison
+              ? " You chose to show the values available after settlement."
+              : " The room-safe result reveals only the outcome and pot."}
+        </span>
+      </div>
+
+      {!showComparison && settlement.disclosed ? (
+        <Button tone="ghost" onClick={() => setShowComparison(true)}>
+          Show settled comparison
+        </Button>
+      ) : null}
+
+      {settlement.nft ? (
+        <div className="nft-receipt">
+          <Award aria-hidden="true" />
+          <span>
+            <strong>Winner badge received</strong>
+            Shielded token {settlement.nft.tokenType.slice(0, 12)}…
+          </span>
         </div>
       ) : null}
 
-      {phase === "reveal" && (
-        <Notice tone="info">
-          The chain compared two sealed distances and paid the winner — the values stayed sealed
-          until the deadline and were revealed only at settlement, never before.
-        </Notice>
-      )}
-      {phase === "room" && (
-        <Notice tone="warn">
-          <strong>Challenge the room:</strong> the winner ran {fmtKm(winnerValue)}. The losing
-          number is somewhere between — nobody saw it before settlement.
-        </Notice>
-      )}
-      {phase === "disclosed" && (
-        <Notice tone="success">
-          The comparison was <strong>revealed on-chain at settlement</strong> — both openings were
-          published to decide the winner. {fmtTnight(res.pot)} already moved under seal.
-        </Notice>
-      )}
-
-      <div className="row" style={{ marginTop: 16, justifyContent: "center" }}>
-        {phase === "reveal" && (
-          <Button tone="primary" onClick={() => setPhase("room")}>
-            Show the room — winner only
-          </Button>
-        )}
-        {phase === "room" && (
-          <Button tone="seal" onClick={() => setPhase("disclosed")}>
-            Athletes choose to disclose
-          </Button>
-        )}
-      </div>
+      <Notice tone="success">
+        {noSubmissions
+          ? "The contract refunded both stakes. Both participants remain pseudonymous."
+          : settlement.tie
+            ? "The contract refunded both stakes after the tie. Both participants remain pseudonymous."
+            : "The contract enforced the wager and moved the pot. Both participants remain pseudonymous."}
+      </Notice>
     </div>
   );
 };
-
-const Masked = () => (
-  <span className="reveal-masked" title="revealed only at settlement">
-    ▮▮▮▮
-  </span>
-);
-
-const Chip = () => <span className="chip chip--provable">settled under seal</span>;
