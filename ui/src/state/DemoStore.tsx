@@ -39,7 +39,7 @@ export interface DemoState {
   attestOutcome: AttestOutcome | null;
   settleReveal: WagerSettleResult | null;
 
-  connect: () => Promise<void>;
+  connect: (rdns?: string) => Promise<void>;
   attest: () => Promise<void>;
   refresh: () => Promise<void>;
   refreshNotaries: () => Promise<void>;
@@ -115,11 +115,11 @@ export const DemoProvider = ({ children }: { children: ReactNode }) => {
     };
   }, [refresh, refreshNotaries]);
 
-  const connect = useCallback(async () => {
+  const connect = useCallback(async (rdns?: string) => {
     setConnecting(true);
     setConnectError(null);
     try {
-      const s = await client.connect();
+      const s = await client.connect(rdns);
       setSession(s);
       await refresh();
       await refreshNotaries();

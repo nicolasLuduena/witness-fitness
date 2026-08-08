@@ -1105,3 +1105,34 @@ body::before {
 ::-webkit-scrollbar-track {
   background: transparent;
 }
+
+/* Wallet picker (multi-wallet Connect screen) */
+.wallet-pick {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  padding: 10px 12px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 8px;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  text-align: left;
+}
+.wallet-pick:hover {
+  background: rgba(255, 255, 255, 0.06);
+}
+.wallet-pick.selected {
+  border-color: rgba(34, 211, 238, 0.6);
+  box-shadow: 0 0 0 1px rgba(34, 211, 238, 0.3);
+}
+.wallet-pick-name {
+  font-weight: 600;
+}
+.wallet-pick-meta {
+  opacity: 0.6;
+  font-size: 0.8em;
+}

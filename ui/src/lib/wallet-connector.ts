@@ -40,17 +40,45 @@ export const discoverWallets = (): InitialAPI[] => {
   return Object.values(midnight);
 };
 
-export const connectWallet = async (networkId = NETWORK_ID): Promise<WalletConnection> => {
+export interface WalletSummary {
+  rdns: string;
+  name: string;
+  icon: string;
+  apiVersion: string;
+}
+
+// All installed Midnight wallets (Lace, 1am, …) with their display metadata —
+// the Connect screen shows this list when more than one wallet is installed.
+export const discoverWalletSummaries = (): WalletSummary[] => {
+  const midnight = (window as Window & { midnight?: Record<string, InitialAPI> }).midnight;
+  if (!midnight) return [];
+  return Object.entries(midnight).map(([rdns, api]) => ({
+    rdns,
+    name: api.name ?? rdns,
+    icon: api.icon ?? '',
+    apiVersion: api.apiVersion,
+  }));
+};
+
+export const connectWallet = async (
+  networkId = NETWORK_ID,
+  rdns?: string,
+): Promise<WalletConnection> => {
+  const midnight = (window as Window & { midnight?: Record<string, InitialAPI> }).midnight;
   const wallets = discoverWallets();
   if (wallets.length === 0) {
     throw new WalletUnavailableError(
-      'No Midnight wallet detected — install the Lace wallet extension, or switch to demo mode'
+      'No Midnight wallet detected — install a wallet extension (e.g. Lace)'
     );
   }
-  const wallet = wallets[0];
+  const chosen = rdns ? midnight?.[rdns] : wallets[0];
+  if (!chosen) {
+    throw new WalletUnavailableError(`Wallet "${rdns}" not found`);
+  }
+  const wallet = chosen;
   if (!versionAtLeast(wallet.apiVersion, MIN_WALLET_API_VERSION)) {
     throw new WalletUnavailableError(
-      `Wallet apiVersion ${wallet.apiVersion} is too old — need >= ${MIN_WALLET_API_VERSION}. Or switch to demo mode.`
+      `Wallet apiVersion ${wallet.apiVersion} is too old — need >= ${MIN_WALLET_API_VERSION}.`
     );
   }
 
@@ -72,7 +100,7 @@ export const connectWallet = async (networkId = NETWORK_ID): Promise<WalletConne
 
   return {
     api,
-    rdns: Object.keys(window.midnight ?? {})[0] ?? 'unknown',
+    rdns: rdns ?? Object.keys(window.midnight ?? {})[0] ?? 'unknown',
     name: wallet.name,
     apiVersion: wallet.apiVersion,
     shieldedAddress: shielded.shieldedAddress,

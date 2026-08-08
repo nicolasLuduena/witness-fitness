@@ -25,8 +25,8 @@ class WalletClientProxy implements WfClient {
     return this.inner;
   }
 
-  connect() {
-    return this.real().then((c) => c.connect());
+  connect(rdns?: string) {
+    return this.real().then((c) => c.connect(rdns));
   }
   attest() {
     return this.real().then((c) => c.attest());
@@ -99,8 +99,8 @@ class LiveClientProxy implements WfClient {
     return this.inner;
   }
 
-  connect() {
-    return this.real().then((c) => c.connect());
+  connect(rdns?: string) {
+    return this.real().then((c) => c.connect(rdns));
   }
   attest() {
     return this.real().then((c) => c.attest());

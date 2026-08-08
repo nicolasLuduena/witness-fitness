@@ -25,8 +25,9 @@ export type { AttestOutcome } from '../domain/types';
 export interface WfClient {
   readonly mode: DemoMode;
 
-  // Connection — returns the active session (athlete identity).
-  connect(): Promise<ClientSession>;
+  // Connection — returns the active session (athlete identity). `rdns` picks
+  // a specific installed wallet (multi-wallet picker); undefined = the first.
+  connect(rdns?: string): Promise<ClientSession>;
 
   // attest → vault (NOTARY.md §5 flow 1). Runs the staged pipeline:
   // witnessing TLS → proof generated → notarizing → on-chain.

@@ -185,8 +185,8 @@ export class WalletClient implements WfClient {
     };
   }
 
-  async connect(): Promise<ClientSession> {
-    const connection = await connectWallet();
+  async connect(rdns?: string): Promise<ClientSession> {
+    const connection = await connectWallet(undefined, rdns);
     this.connection = connection;
     const bridge = await this.bridge();
     const { loadDeployInfo } = await import('./deploy-info');

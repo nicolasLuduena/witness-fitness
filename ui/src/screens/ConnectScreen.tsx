@@ -9,6 +9,7 @@ import { Button, Card, Chip, Notice, Stat } from '../components/bits';
 import { StatusLine } from '../components/StatusLine';
 import { EMPLOYER } from '../domain/story';
 import { hexShort } from '../lib/format';
+import { discoverWalletSummaries, type WalletSummary } from '../lib/wallet-connector';
 import { hasStoredBackup, performRestore, shouldAutoResume, storeBackupPayload, walletBackupKey } from '../lib/wallet-restore';
 
 export const ConnectScreen = () => {
@@ -38,10 +39,24 @@ export const ConnectScreen = () => {
   const [restoreBusy, setRestoreBusy] = useState(false);
   const [restoreNotice, setRestoreNotice] = useState<string | null>(null);
   const resumePrompted = useRef(false);
+  const [wallets, setWallets] = useState<WalletSummary[]>([]);
+  const [pickedRdns, setPickedRdns] = useState<string | null>(null);
 
   const isWallet = mode === 'wallet';
   const isLive = mode === 'live';
   const outcome = attestOutcome?.credential;
+
+  // Wallet discovery: when more than one Midnight wallet is installed
+  // (Lace, 1am, …), let the user pick; a single wallet auto-connects.
+  useEffect(() => {
+    if (!isWallet || session) {
+      setWallets([]);
+      return;
+    }
+    setWallets(discoverWalletSummaries());
+  }, [isWallet, session]);
+
+  const handleConnect = () => void connect(pickedRdns ?? undefined);
 
   // Strava surface (wallet mode): process a /strava/callback redirect on
   // load, then show the live connect state from the token store.
@@ -314,11 +329,35 @@ export const ConnectScreen = () => {
               <p className="hero muted">
                 {isLive
                   ? 'Live mode talks to the demo sidecar (packages/api on :8200), which runs the full pipeline: notary collection (2-of-3) → contract submit → vault. No browser wallet required.'
-                  : 'Wallet mode connects Lace (DApp Connector) straight to the contract: your wallet authorizes every transaction, and the private state (holder secret, attestations) is backed up encrypted on this browser.'}
+                  : 'Wallet mode connects a Midnight wallet (Lace / DApp Connector) straight to the contract: your wallet authorizes every transaction, and the private state (holder secret, attestations) is backed up encrypted on this browser.'}
               </p>
-              <Button tone="primary" block onClick={() => void connect()} disabled={connecting}>
+              {isWallet && wallets.length > 1 ? (
+                <div style={{ display: 'grid', gap: 8, marginBottom: 12 }}>
+                  {wallets.map((w) => (
+                    <button
+                      key={w.rdns}
+                      className={pickedRdns === w.rdns ? 'wallet-pick selected' : 'wallet-pick'}
+                      onClick={() => setPickedRdns(w.rdns)}
+                      disabled={connecting}
+                    >
+                      <span className="wallet-pick-name">
+                        {w.icon ? (
+                          <img src={w.icon} alt="" style={{ width: 20, height: 20, marginRight: 8, verticalAlign: 'middle' }} />
+                        ) : null}
+                        {w.name}
+                      </span>
+                      <span className="wallet-pick-meta">{w.apiVersion}</span>
+                    </button>
+                  ))}
+                </div>
+              ) : null}
+              <Button tone="primary" block onClick={() => void handleConnect()} disabled={connecting}>
                 {connecting ? <span className="spin" /> : null}
-                {isLive ? 'Connect to demo service' : 'Connect Lace wallet'}
+                {isLive
+                  ? 'Connect to demo service'
+                  : wallets.length > 1
+                    ? 'Connect selected wallet'
+                    : 'Connect wallet'}
               </Button>
               {connectError ? (
                 <div style={{ marginTop: 12 }}>

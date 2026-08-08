@@ -9,7 +9,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 const windowShim = {} as Window & { midnight?: Record<string, InitialAPI> };
 (globalThis as { window?: unknown }).window = windowShim;
 import type { ConnectedAPI, InitialAPI } from '@midnight-ntwrk/dapp-connector-api';
-import { connectWallet, WalletUnavailableError } from './wallet-connector';
+import { connectWallet, discoverWalletSummaries, WalletUnavailableError } from './wallet-connector';
 import { createStubWalletBridge } from './wallet-bridge';
 import { walletStoreName } from './wallet-client';
 import {
@@ -26,6 +26,8 @@ interface StubWalletOptions {
   networkId?: string;
   connectError?: Error;
   address?: string;
+  rdns?: string;
+  name?: string;
 }
 
 const createConnectedStub = (opts: StubWalletOptions): ConnectedAPI =>
@@ -57,8 +59,8 @@ const createConnectedStub = (opts: StubWalletOptions): ConnectedAPI =>
 
 const createWalletStub = (opts: StubWalletOptions = {}): InitialAPI =>
   ({
-    rdns: 'com.test.wallet',
-    name: 'Test Wallet',
+    rdns: opts.rdns ?? 'com.test.wallet',
+    name: opts.name ?? 'Test Wallet',
     icon: 'data:image/png;base64,stub',
     apiVersion: opts.apiVersion ?? '4.0.1',
     connect: async () => {
@@ -92,7 +94,7 @@ describe('wallet connector', () => {
   it('no wallet installed → switch-to-demo error', async () => {
     setWindowMidnight(undefined);
     await expect(connectWallet('undeployed')).rejects.toThrow(WalletUnavailableError);
-    await expect(connectWallet('undeployed')).rejects.toThrow(/switch to demo mode/);
+    await expect(connectWallet('undeployed')).rejects.toThrow(/install a wallet extension/);
   });
 
   it('apiVersion too old → rejected with CTA', async () => {
@@ -103,6 +105,37 @@ describe('wallet connector', () => {
   it('network mismatch vs the devnet → rejected with CTA', async () => {
     setWindowMidnight({ 'com.test.wallet': createWalletStub({ networkId: 'testnet' }) });
     await expect(connectWallet('undeployed')).rejects.toThrow(/network "testnet"/);
+  });
+
+  it('multi-wallet: connectWallet(rdns) picks the requested wallet', async () => {
+    setWindowMidnight({
+      'io.lace.wallet': createWalletStub({ address: 'lace', rdns: 'io.lace.wallet', name: 'Lace' }),
+      'io.oneam.wallet': createWalletStub({ address: 'oneam', rdns: 'io.oneam.wallet', name: '1am' }),
+    });
+    const lace = await connectWallet('undeployed', 'io.lace.wallet');
+    expect(lace.rdns).toBe('io.lace.wallet');
+    expect(lace.name).toBe('Lace');
+    expect(lace.coinPublicKey).toBe('mn_cpk-lace');
+    const oneam = await connectWallet('undeployed', 'io.oneam.wallet');
+    expect(oneam.rdns).toBe('io.oneam.wallet');
+    expect(oneam.coinPublicKey).toBe('mn_cpk-oneam');
+  });
+
+  it('multi-wallet: unknown rdns → clear error', async () => {
+    setWindowMidnight({ 'io.lace.wallet': createWalletStub({ address: 'lace' }) });
+    await expect(connectWallet('undeployed', 'io.ghost.wallet')).rejects.toThrow(/not found/);
+  });
+
+  it('discoverWalletSummaries lists all installed wallets with metadata', () => {
+    setWindowMidnight({
+      'io.lace.wallet': createWalletStub({ address: 'lace', rdns: 'io.lace.wallet', name: 'Lace' }),
+      'io.oneam.wallet': createWalletStub({ address: 'oneam', rdns: 'io.oneam.wallet', name: '1am' }),
+    });
+    const summaries = discoverWalletSummaries();
+    expect(summaries.map((w) => w.name)).toEqual(['Lace', '1am']);
+    expect(summaries[0].rdns).toBe('io.lace.wallet');
+    expect(summaries[0].apiVersion).toBe('4.0.1');
+    expect(summaries[0].icon).toContain('data:image');
   });
 });
 

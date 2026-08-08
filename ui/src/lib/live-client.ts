@@ -62,7 +62,7 @@ export class LiveClient implements WfClient {
   private attestCount = 0;
   private lastVaultKey: string | null = null;
 
-  async connect(): Promise<ClientSession> {
+  async connect(_rdns?: string): Promise<ClientSession> {
     const sidecar = await joinSidecar(SIDECAR_URL);
     this.sidecar = sidecar;
     return {
