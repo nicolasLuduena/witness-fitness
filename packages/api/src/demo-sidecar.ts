@@ -14,6 +14,7 @@ import { createHash, randomBytes } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import { firstValueFrom } from 'rxjs';
+import { createAuthRequest } from '@reclaimprotocol/attestor-core';
 import { configureProviders } from '@witnessfitness/contract/providers';
 import { buildWallet, registerForDustGeneration, type WalletContext } from '@witnessfitness/contract/wallet';
 import { getNetworkId } from '@midnight-ntwrk/midnight-js-network-id';
@@ -62,9 +63,33 @@ export interface DemoSidecarConfig {
   privateStateIdB: string;
   stakeNight: bigint;
   wagerDeadlineSeconds: number;
+  // Stateless surface config (Round 1A): attestor auth relay + strava token
+  // relay + wager-openings relay. Secrets come from env with file fallbacks
+  // (attestor/.env PRIVATE_KEY, packages/client/.env STRAVA_*).
+  attestorUrl: string;
+  attestorPrivateKey: string;
+  attestorUserId: string;
+  attestorHostWhitelist: string[];
+  stravaClientId: string;
+  stravaClientSecret: string;
+  openingsTtlMs: number;
 }
 
 const DEPLOY_OUTPUT_URL = new URL('../../contract/deploy-output.json', import.meta.url);
+const ATTESTOR_ENV_URL = new URL('../../../attestor/.env', import.meta.url);
+const CLIENT_ENV_URL = new URL('../../client/.env', import.meta.url);
+
+// Read a KEY=VALUE line from an env-style file (key names only in logs —
+// never the values).
+const envFileValue = (fileUrl: URL, key: string): string => {
+  try {
+    const content = readFileSync(fileUrl, 'utf-8');
+    const line = content.split('\n').find((l) => l.startsWith(`${key}=`));
+    return line === undefined ? '' : line.slice(key.length + 1).trim();
+  } catch {
+    return '';
+  }
+};
 
 export const loadSidecarConfig = (env: NodeJS.ProcessEnv = process.env): DemoSidecarConfig => {
   let contractAddress = env.CONTRACT_ADDRESS ?? '';
@@ -105,6 +130,17 @@ export const loadSidecarConfig = (env: NodeJS.ProcessEnv = process.env): DemoSid
     privateStateIdB: env.DEMO_SIDECAR_PRIVATE_STATE_ID_B ?? 'wf-demo-athlete-b',
     stakeNight: BigInt(env.DEMO_WAGER_STAKE_NIGHT ?? 10) * 10n ** 12n,
     wagerDeadlineSeconds: Number(env.DEMO_WAGER_DEADLINE_SECONDS ?? 90),
+    attestorUrl: env.ATTESTOR_URL ?? 'ws://localhost:8001/ws',
+    attestorPrivateKey: (env.ATTESTOR_PRIVATE_KEY ?? '').trim() || envFileValue(ATTESTOR_ENV_URL, 'PRIVATE_KEY'),
+    attestorUserId: env.ATTESTOR_USER_ID ?? 'witnessfitness-demo',
+    attestorHostWhitelist: (env.ATTESTOR_HOST_WHITELIST ?? 'www.strava.com')
+      .split(',')
+      .map((h) => h.trim())
+      .filter(Boolean),
+    stravaClientId: (env.STRAVA_CLIENT_ID ?? '').trim() || envFileValue(CLIENT_ENV_URL, 'STRAVA_CLIENT_ID'),
+    stravaClientSecret:
+      (env.STRAVA_CLIENT_SECRET ?? '').trim() || envFileValue(CLIENT_ENV_URL, 'STRAVA_CLIENT_SECRET'),
+    openingsTtlMs: Number(env.DEMO_SIDECAR_OPENINGS_TTL_MS ?? 30 * 60_000),
   };
 };
 
@@ -938,6 +974,129 @@ export const createDemoSidecarWithDeps = (
     return { status: 200, json: { wagers: wagerList } };
   };
 
+  // -------------------------------------------------------------------------
+  // Stateless surface (Round 1A): per-request relays — no wallet, no identity,
+  // no serial queue. Served before the ready gate.
+  // -------------------------------------------------------------------------
+  const openingsRelay = new Map<
+    string,
+    { who: string; value: string; rand: string; at: number }[]
+  >();
+
+  const pruneOpenings = (): void => {
+    const cutoff = Date.now() - config.openingsTtlMs;
+    for (const [wagerId, openings] of openingsRelay) {
+      if (openings.every((o) => o.at < cutoff)) {
+        openingsRelay.delete(wagerId);
+      }
+    }
+  };
+
+  const handleAttestorAuthRequest = async (): Promise<{ status: number; json: unknown }> => {
+    if (config.attestorPrivateKey === '') {
+      return {
+        status: 500,
+        json: { error: 'ATTESTOR_PRIVATE_KEY not configured (env or attestor/.env)' },
+      };
+    }
+    const authRequest = await createAuthRequest(
+      { id: config.attestorUserId, hostWhitelist: config.attestorHostWhitelist },
+      config.attestorPrivateKey
+    );
+    return { status: 200, json: { authRequest } };
+  };
+
+  const stravaTokenRequest = async (
+    grantType: 'authorization_code' | 'refresh_token',
+    grantValue: string
+  ): Promise<{ status: number; json: unknown }> => {
+    if (config.stravaClientId === '' || config.stravaClientSecret === '') {
+      return {
+        status: 500,
+        json: { error: 'STRAVA_CLIENT_ID/STRAVA_CLIENT_SECRET not configured (env or packages/client/.env)' },
+      };
+    }
+    try {
+      const res = await fetch('https://www.strava.com/oauth/token', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(
+          grantType === 'authorization_code'
+            ? {
+                client_id: config.stravaClientId,
+                client_secret: config.stravaClientSecret,
+                code: grantValue,
+                grant_type: grantType,
+              }
+            : {
+                client_id: config.stravaClientId,
+                client_secret: config.stravaClientSecret,
+                refresh_token: grantValue,
+                grant_type: grantType,
+              }
+        ),
+      });
+      const body = (await res.json()) as Record<string, unknown>;
+      if (!res.ok) {
+        return { status: 400, json: { error: `strava token request failed: ${String(body.message ?? res.status)}` } };
+      }
+      return { status: 200, json: body };
+    } catch (error) {
+      return { status: 502, json: { error: `strava unreachable: ${error instanceof Error ? error.message : String(error)}` } };
+    }
+  };
+
+  const handleStravaExchange = async (body: unknown): Promise<{ status: number; json: unknown }> => {
+    const code = (body as { code?: unknown } | null)?.code;
+    if (typeof code !== 'string' || code === '') {
+      return { status: 400, json: { error: 'body must be { code }' } };
+    }
+    return stravaTokenRequest('authorization_code', code);
+  };
+
+  const handleStravaRefresh = async (body: unknown): Promise<{ status: number; json: unknown }> => {
+    const refreshToken = (body as { refresh_token?: unknown } | null)?.refresh_token;
+    if (typeof refreshToken !== 'string' || refreshToken === '') {
+      return { status: 400, json: { error: 'body must be { refresh_token }' } };
+    }
+    return stravaTokenRequest('refresh_token', refreshToken);
+  };
+
+  const handleOpeningsDeposit = async (body: unknown): Promise<{ status: number; json: unknown }> => {
+    const raw = body as { wagerId?: unknown; who?: unknown; value?: unknown; rand?: unknown } | null;
+    if (
+      typeof raw?.wagerId !== 'string' ||
+      raw.wagerId === '' ||
+      (raw.who !== 'A' && raw.who !== 'B') ||
+      typeof raw.value !== 'string' ||
+      typeof raw.rand !== 'string' ||
+      !/^0x[0-9a-f]+$/i.test(raw.value) ||
+      !/^0x[0-9a-f]+$/i.test(raw.rand)
+    ) {
+      return {
+        status: 400,
+        json: { error: 'body must be { wagerId, who: "A"|"B", value: 0x-hex, rand: 0x-hex }' },
+      };
+    }
+    pruneOpenings();
+    const openings = openingsRelay.get(raw.wagerId) ?? [];
+    openings.push({ who: raw.who, value: raw.value, rand: raw.rand, at: Date.now() });
+    openingsRelay.set(raw.wagerId, openings);
+    return { status: 200, json: { stored: true } };
+  };
+
+  const handleOpeningsGet = async (wagerId: string): Promise<{ status: number; json: unknown }> => {
+    pruneOpenings();
+    const openings = openingsRelay.get(wagerId);
+    if (openings === undefined || openings.length === 0) {
+      return { status: 404, json: { error: 'no openings for wager (or expired)' } };
+    }
+    return {
+      status: 200,
+      json: { openings: openings.map(({ who, value, rand }) => ({ who, value, rand })) },
+    };
+  };
+
   const handleState = async (athlete: Athlete): Promise<{ status: number; json: unknown }> => {
     const { readState, identities } = requireReady();
     const state = await withTimeout(readState(), config.txTimeoutMs, 'readState');
@@ -976,8 +1135,41 @@ export const createDemoSidecarWithDeps = (
           ready,
           contractAddress: config.contractAddress,
           network: config.network,
+          stateless: true,
+          hasStrava: config.stravaClientId !== '' && config.stravaClientSecret !== '',
+          hasAttestorKey: config.attestorPrivateKey !== '',
           ...(error !== null ? { error } : {}),
         });
+        return;
+      }
+      // Stateless surface: served before the ready gate (no wallet needed).
+      if (req.method === 'POST' && url.pathname === '/attestor-auth-request') {
+        const result = await handleAttestorAuthRequest();
+        sendJson(res, result.status, result.json);
+        return;
+      }
+      if (req.method === 'POST' && url.pathname === '/strava/exchange') {
+        const body = JSON.parse(await readBody(req));
+        const result = await handleStravaExchange(body);
+        sendJson(res, result.status, result.json);
+        return;
+      }
+      if (req.method === 'POST' && url.pathname === '/strava/refresh') {
+        const body = JSON.parse(await readBody(req));
+        const result = await handleStravaRefresh(body);
+        sendJson(res, result.status, result.json);
+        return;
+      }
+      if (req.method === 'POST' && url.pathname === '/wager-openings') {
+        const body = JSON.parse(await readBody(req));
+        const result = await handleOpeningsDeposit(body);
+        sendJson(res, result.status, result.json);
+        return;
+      }
+      if (req.method === 'GET' && url.pathname.startsWith('/wager-openings/')) {
+        const wagerId = url.pathname.slice('/wager-openings/'.length);
+        const result = await handleOpeningsGet(decodeURIComponent(wagerId));
+        sendJson(res, result.status, result.json);
         return;
       }
       if (req.method !== 'POST' && req.method !== 'GET') {

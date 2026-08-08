@@ -52,7 +52,8 @@
     "@witnessfitness/contract": "workspace:*",
     "rxjs": "^7.8.2",
     "zod": "^4.3.6",
-    "@witnessfitness/notary": "workspace:*"
+    "@witnessfitness/notary": "workspace:*",
+    "@reclaimprotocol/attestor-core": "5.0.8"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",

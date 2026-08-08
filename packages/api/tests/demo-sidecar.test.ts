@@ -350,15 +350,17 @@ describe('demo sidecar wire contract', () => {
     expect(res.headers.get('access-control-allow-origin')).toBeNull();
   });
 
-  it('GET /health reports ok/ready/contractAddress/network', async () => {
+  it('GET /health reports ok/ready/contractAddress/network + stateless flags', async () => {
     const res = await fetch(`${baseUrl}/health`);
     expect(res.status).toBe(200);
-    expect(await res.json()).toEqual({
-      ok: true,
-      ready: true,
-      contractAddress: '0xdeadbeef',
-      network: 'devnet',
-    });
+    const body = (await res.json()) as Record<string, unknown>;
+    expect(body.ok).toBe(true);
+    expect(body.ready).toBe(true);
+    expect(body.contractAddress).toBe('0xdeadbeef');
+    expect(body.network).toBe('devnet');
+    expect(body.stateless).toBe(true);
+    expect(typeof body.hasStrava).toBe('boolean');
+    expect(typeof body.hasAttestorKey).toBe('boolean');
   });
 
   it('POST /attest returns { vaultKey, txHash, timestamp, metrics } (hex wire)', async () => {
