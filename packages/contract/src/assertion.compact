@@ -8,21 +8,29 @@ pragma language_version >= 0.22;
 module assertion {
     import CompactStandardLibrary;
 
+    // One metric claim. metricId: 1 = distance (m), 2 = moving time (s);
+    // value is the raw number of the unit.
     export struct Claim {
         metricId: Uint<8>;
         value: Uint<64>;
     }
 
+    // Versioned, typed assertion — the common interface between the notary
+    // signer and the contract. The field order (and thus the challenge hash
+    // and every signature) is frozen; see encodeAssertion.
     export struct Assertion {
-        version: Uint<8>;
-        provider: Uint<8>;
-        claims: Vector<8, Claim>;
+        version: Uint<8>;           // schema version (1)
+        provider: Uint<8>;          // 1 = reclaim-attestor
+        claims: Vector<8, Claim>;   // fixed capacity; actual count in claimCount
         claimCount: Uint<8>;
-        timestamp: Uint<32>;
-        nonce: Bytes<32>;
-        reclaimProofHash: Bytes<32>;
+        timestamp: Uint<32>;        // Unix seconds of the API interaction
+        nonce: Bytes<32>;           // per-assertion randomness (replay protection)
+        reclaimProofHash: Bytes<32>; // hash of the Reclaim proof artifacts (binding)
     }
 
+    // Fixed-22 challenge preimage: the assertion encoding is always 22
+    // Fields, so this module's challenge is non-generic (it mirrors
+    // SchnorrHashInput in schnorr.compact).
     struct SchnorrHashInput22 {
         ann_x: Field;
         ann_y: Field;
@@ -31,6 +39,10 @@ module assertion {
         msg: Vector<22, Field>;
     }
 
+    // The frozen 22-field encoding every notary signature commits to —
+    // field order is contract law (see packages/contract/README.md for the
+    // index map). Never reimplement off-chain: import the compiled
+    // pureCircuits.
     export pure circuit encodeAssertion(assertion: Assertion): Vector<22, Field> {
         return [
             assertion.version as Field,
@@ -58,6 +70,10 @@ module assertion {
         ];
     }
 
+    // Poseidon challenge hash (transientHash) over (ann_x, ann_y, pk_x,
+    // pk_y, msg) — the exact hash the notary must sign. Exported as a pure
+    // circuit for signing parity with the in-circuit challenge
+    // (schnorr.compact).
     export pure circuit schnorrChallenge(
         ann_x: Field,
         ann_y: Field,

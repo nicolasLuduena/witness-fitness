@@ -1,5 +1,16 @@
-// WitnessFitness main contract: notary registry + verifyAttestation + vault +
-// wager / streak / badge mechanics over sealed, attested credentials.
+// WitnessFitness main contract — on-chain Strava, ZK-private.
+//
+// Trust anchor: >= 2 of 3 registered notary signatures over the frozen
+// assertion encoding (assertion.compact). verifyAttestation stores a sealed
+// credential (persistentCommit, bound to a pseudonymous holder binding);
+// wager / streak / badge circuits run predicates over those credentials
+// without revealing the underlying data.
+//
+// Known privacy boundary (planned hardening): wager funds move as unshielded
+// NIGHT (receiveUnshielded / sendUnshielded to pinned UserAddresses) and
+// settle necessarily publishes the opening values. The planned direction is
+// a fully shielded design — internal points with a shielded treasury
+// passthrough, no unshielded tokens.
 pragma language_version >= 0.22;
 
 import CompactStandardLibrary;
@@ -8,6 +19,8 @@ import "schnorr" prefix Schnorr_;
 
 export { A_Assertion, A_Claim };
 export { Schnorr_SchnorrSignature };
+
+///////// LEDGER TYPES /////////
 
 export struct VaultEntry {
     holderBinding: Field;
@@ -22,16 +35,19 @@ export struct Wager {
     deadlineBlock: Uint<64>;
     accepted: Boolean;
     // Sealed submissions: persistentCommit<Field>(value, rand) → Bytes<32>
-    // (audit L1 — persistent commitments must be stored as bytes, not Field).
+    // (commitments must be stored as bytes, not Field — persistentCommit
+    // outputs are not representable as a stable Field).
     challengerSubmission: Maybe<Bytes<32>>;
     opponentSubmission: Maybe<Bytes<32>>;
     settled: Boolean;
-    // Real-money payout routing, fixed at create/accept (contract law: settle
-    // pays ONLY these stored values — no caller-supplied payout args).
-    // 32-byte UserAddress payloads (encodeUserAddress of the wallet's
-    // unshielded address) — NOT bech32m (96-byte) strings: the kernel's
-    // sendUnshielded requires a UserAddress struct, which cannot be decoded
-    // from bech32m in-circuit.
+    // Payout routing, fixed at create/accept (contract law: settle pays ONLY
+    // these stored values — no caller-supplied payout args). Unshielded
+    // payout: 32-byte UserAddress payloads (encodeUserAddress of the
+    // wallet's unshielded address) — NOT bech32m (96-byte) strings: the
+    // kernel's sendUnshielded requires a UserAddress struct, which cannot be
+    // decoded from bech32m in-circuit. Privacy note: these addresses are
+    // public on-chain; planned hardening replaces them with shielded coin
+    // keys + internal points.
     challengerPayout: Bytes<32>;
     opponentPayout: Bytes<32>;
     challengerCoinKey: ZswapCoinPublicKey; // shielded NFT recipient (winner's coin key)
@@ -43,43 +59,63 @@ export struct Streak {
     lastDay: Uint<32>;
 }
 
+///////// LEDGER /////////
+// registry: the 3 notary public keys; an empty (default) slot is a
+// blacklisted or rotated-out key whose signatures never count.
 export ledger registry: Vector<3, JubjubPoint>;
+// adminSecret: admin identity binding, pinned at deploy by the constructor.
 export ledger adminSecret: Field;
+// vault: credential commitment → { holder binding, attestation timestamp }.
 export ledger vault: Map<Bytes<32>, VaultEntry>;
+// nullifiers: spent assertion nonces + per-(credential, wager) submission
+// counters — global replay protection.
 export ledger nullifiers: Set<Bytes<32>>;
+// wagers: id → wager record (sealed submissions, pinned payout routing).
 export ledger wagers: Map<Uint<64>, Wager>;
 export ledger nextWagerId: Uint<64>;
+// streaks / badges: keyed by the pseudonymous holder binding.
 export ledger streaks: Map<Field, Streak>;
 export ledger badges: Map<Field, Set<Uint<8>>>;
+// nftCounter / nftNonce: winner-NFT mint bookkeeping.
 export ledger nftCounter: Counter;
 export ledger nftNonce: Bytes<32>;
 
+///////// WITNESSES /////////
+// Prover-side private inputs (implemented in witnesses.ts — never on-chain).
 witness adminSecretKey(): Bytes<32>;
 witness getHolderSecret(): Bytes<32>;
 witness getAttestationWitness(): [A_Assertion, Vector<3, Schnorr_SchnorrSignature>, Bytes<32>];
 witness getSubmissionRand(): Bytes<32>;
 witness getWagerOpenings(): [Field, Bytes<32>, Field, Bytes<32>];
 
+///////// CONSTRUCTOR /////////
 // Pin the admin identity at deploy time — the deploy tx's private state
-// carries the admin secret, so no post-deploy race can seize admin (audit
-// M1: the old first-call-wins registerAdmin let a front-runner pin their own
-// secret between deploy and the deployer's registerAdmin tx).
+// carries the admin secret, so no post-deploy race can seize admin (a
+// first-call-wins registerAdmin would have let a front-runner pin their own
+// secret between deploy and the deployer's registration tx).
 constructor() {
     adminSecret = disclose(deriveAdminBinding(adminSecretKey()));
 }
 
+///////// IDENTITY CIRCUITS /////////
+// Admin identity binding: hashToCurve over a domain-separated secret — the
+// admin proves identity by knowledge of the secret, never an address.
 circuit deriveAdminBinding(secret: Bytes<32>): Field {
     return jubjubPointX(hashToCurve<Vector<2, Bytes<32>>>([
         pad(32, "witnessfitness:admin:v1"), secret
     ]));
 }
 
+// Pseudonymous holder identity: hashToCurve over a domain-separated holder
+// secret. The resulting binding is the on-chain pseudonym for vault entries,
+// streaks, badges, and wager participants.
 circuit deriveHolderBinding(secret: Bytes<32>): Field {
     return jubjubPointX(hashToCurve<Vector<2, Bytes<32>>>([
         pad(32, "witnessfitness:holder:v1"), secret
     ]));
 }
 
+///////// CONFIG CIRCUITS /////////
 // Attestation freshness window (seconds): 30 days — demo build decision
 // (AGENTS.md §8): fixture proofs must survive the demo without regeneration
 // pressure; 7 days was too tight for replayed fixtures.
@@ -87,20 +123,30 @@ circuit freshnessWindow(): Uint<64> {
     return 2592000;
 }
 
+// Extra time (seconds) past the deadline before settleWager unlocks — gives
+// both players until deadline + grace to submit.
 circuit settleGrace(): Uint<64> {
     return 60;
 }
 
+///////// ACCESS CONTROL /////////
+// True only while an admin secret is pinned (constructor) and the caller
+// knows it. Guards every admin circuit.
 circuit isAdmin(): Boolean {
     return adminSecret != 0 && adminSecret == disclose(deriveAdminBinding(adminSecretKey()));
 }
 
-// Day of a Unix timestamp without division: day*86400 <= ts < (day+1)*86400.
+///////// TIME HELPERS /////////
+// True if Unix timestamp ts falls in calendar day day (UTC), computed
+// without division: day*86400 <= ts < (day+1)*86400.
 circuit dayOfTimestamp(ts: Uint<32>, day: Uint<32>): Boolean {
     return (day as Uint<64>) * 86400 <= (ts as Uint<64>)
         && (ts as Uint<64>) < ((day + 1) as Uint<64>) * 86400;
 }
 
+///////// SIGNATURE & CLAIM HELPERS /////////
+// Verify one signature against one registry slot; an empty slot (default
+// point) is never valid, so blacklisted keys stop counting.
 circuit verifySlot(
     msg: Vector<22, Field>,
     sig: Schnorr_SchnorrSignature,
@@ -113,6 +159,8 @@ circuit verifySlot(
     return Schnorr_schnorrVerifyOk<22>(msg, sig, pk);
 }
 
+// Number of the 3 signatures that verify against their registry slot —
+// verifyAttestation requires >= 2.
 circuit countValidSignatures(
     msg: Vector<22, Field>,
     sigs: Vector<3, Schnorr_SchnorrSignature>
@@ -123,6 +171,8 @@ circuit countValidSignatures(
     return (c0 + c1 + c2) as Uint<64>;
 }
 
+// Value of the last claim (scanning slots 0..7) whose metricId matches —
+// claims are filled front-to-back, so the last match is the claim.
 circuit claimValueFor(assertion: A_Assertion, metricId: Uint<8>): Uint<64> {
     const v0 = assertion.claims[0].metricId == metricId ? assertion.claims[0].value : 0;
     const v1 = assertion.claims[1].metricId == metricId ? assertion.claims[1].value : v0;
@@ -135,6 +185,7 @@ circuit claimValueFor(assertion: A_Assertion, metricId: Uint<8>): Uint<64> {
     return v7;
 }
 
+// True if any of the 8 claim slots carries the metric.
 circuit hasClaim(assertion: A_Assertion, metricId: Uint<8>): Boolean {
     return assertion.claims[0].metricId == metricId
         || assertion.claims[1].metricId == metricId
@@ -146,6 +197,7 @@ circuit hasClaim(assertion: A_Assertion, metricId: Uint<8>): Boolean {
         || assertion.claims[7].metricId == metricId;
 }
 
+// The wager record with settled set; preserves every other field.
 circuit markSettled(wager: Wager): Wager {
     return Wager {
         challenger: wager.challenger,
@@ -164,6 +216,7 @@ circuit markSettled(wager: Wager): Wager {
     };
 }
 
+///////// NFT & PAYOUT HELPERS /////////
 // The wager NFT's token type: contract-scoped color derived from the domain
 // separator + this contract's address (unique per deployment).
 circuit nftTokenType(): Bytes<32> {
@@ -184,7 +237,9 @@ circuit mintWinnerNft(winnerCoinKey: ZswapCoinPublicKey): [] {
     nftNonce = newNonce;
 }
 
-// Send unshielded NIGHT out of the contract's escrowed pot to a user address.
+// Send unshielded NIGHT out of the contract's escrowed pot to a user
+// address. Privacy note: the recipient and amount are public on-chain —
+// planned hardening replaces this with shielded points credits.
 circuit sendPayout(amount: Uint<64>, to: Bytes<32>): [] {
     sendUnshielded(
         nativeToken(),
@@ -199,16 +254,19 @@ circuit payWinnerPot(payout: Bytes<32>, coinKey: ZswapCoinPublicKey, stake: Uint
     mintWinnerNft(coinKey);
 }
 
+// Return one stake to a player (cancel / tie / no-submission paths).
 circuit refundPlayer(payout: Bytes<32>, stake: Uint<64>): [] {
     sendPayout(stake, payout);
 }
 
+///////// ADMIN CIRCUITS /////////
 // The admin identity is pinned by the constructor at deploy; this circuit
-// re-asserts the caller holds the admin secret (audit M1).
+// re-asserts the caller holds the admin secret.
 export circuit registerAdmin(): [] {
     assert(isAdmin(), "Not the admin");
 }
 
+// Admin only: set one of the 3 registry slots to a notary public key.
 export circuit registerNotary(pk: JubjubPoint, index: Uint<8>): [] {
     assert(isAdmin(), "Not the admin");
     const idx = disclose(index);
@@ -219,6 +277,7 @@ export circuit registerNotary(pk: JubjubPoint, index: Uint<8>): [] {
     registry = disclose([p0, p1, p2]);
 }
 
+// Admin only: replace the key in one slot.
 export circuit rotateNotary(index: Uint<8>, newPk: JubjubPoint): [] {
     assert(isAdmin(), "Not the admin");
     const idx = disclose(index);
@@ -229,6 +288,8 @@ export circuit rotateNotary(index: Uint<8>, newPk: JubjubPoint): [] {
     registry = disclose([p0, p1, p2]);
 }
 
+// Admin only: empty a slot (default point) — signatures from that notary
+// stop counting toward the 2-of-3 threshold.
 export circuit blacklistNotary(index: Uint<8>): [] {
     assert(isAdmin(), "Not the admin");
     const idx = disclose(index);
@@ -240,9 +301,13 @@ export circuit blacklistNotary(index: Uint<8>): [] {
     registry = disclose([p0, p1, p2]);
 }
 
-// Real-money wager pot: the caller's wallet spends unshielded NIGHT UTXOs
-// into this contract (receiveUnshielded claims the stake; the transaction's
+///////// WAGER CIRCUITS /////////
+// Wager pot: the caller's wallet spends unshielded NIGHT UTXOs into this
+// contract (receiveUnshielded claims the stake; the transaction's
 // well-formedness rules require the wallet to fund the corresponding output).
+// Privacy note: the stake amount and payout address go on-chain unshielded —
+// planned hardening moves wagers to internal points with a shielded
+// on/off-ramp (no unshielded tokens).
 export circuit createWager(
     opponentBinding: Field,
     metricId: Uint<8>,
@@ -253,16 +318,16 @@ export circuit createWager(
 ): [] {
     const caller = deriveHolderBinding(getHolderSecret());
     const binding = disclose(caller);
-    // Deadline gates (audit H1): the auction closes at the deadline — a past
-    // deadline at create would let a challenger trap an accepting opponent
-    // into an instant forfeit (settle is already unlocked). blockTimeLt(x)
-    // means "now < x", i.e. the deadline is still in the future.
+    // Deadline gate: the auction closes at the deadline — a past deadline at
+    // create would let a challenger trap an accepting opponent into an
+    // instant forfeit (settle is already unlocked). blockTimeLt(x) means
+    // "now < x", i.e. the deadline is still in the future.
     assert(blockTimeLt(disclose(deadlineBlock)), "Deadline must be in the future");
     // A wager against yourself escrows both sides to the same person — a
-    // self-locked, victimless dead end (audit L4).
+    // self-locked, victimless dead end.
     assert(disclose(opponentBinding) != binding, "Cannot challenge yourself");
     // Cap the stake so the settle payout (2 * stake) always fits Uint<64>
-    // (audit L5) — an uncapped stake makes settle abort and the pot stuck.
+    // — an uncapped stake makes settle abort and the pot stuck.
     assert(stake <= 0x7fffffffffffffff as Uint<64>, "Stake too large");
     receiveUnshielded(nativeToken(), disclose(stake) as Uint<128>);
     wagers.insert(disclose(nextWagerId), Wager {
@@ -283,6 +348,9 @@ export circuit createWager(
     nextWagerId = (nextWagerId + 1) as Uint<64>;
 }
 
+// Opponent accepts: escrows their stake via receiveUnshielded and pins their
+// payout routing. Only the named opponent, only before the deadline, only
+// once.
 export circuit acceptWager(id: Uint<64>, payout: Bytes<32>, coinKey: ZswapCoinPublicKey): [] {
     const caller = deriveHolderBinding(getHolderSecret());
     const binding = disclose(caller);
@@ -326,6 +394,17 @@ export circuit cancelWager(id: Uint<64>): [] {
     sendPayout(wager.stake, wager.challengerPayout);
 }
 
+///////// CREDENTIAL CIRCUITS /////////
+// Verify one attested credential and store it in the vault. Private witness
+// inputs: the assertion, up to 3 notary signatures, commit randomness, and
+// the holder secret. Checks: (1) supported version / provider / claimCount;
+// (2) >= 2 of the 3 registered signatures verify over
+// encodeAssertion(assertion) — the frozen field layout both sides commit
+// to; (3) timestamp within [now - freshnessWindow, now]; (4) the nonce has
+// never been used. On success stores
+// vault[persistentCommit(assertion, rand)] = { holderBinding, timestamp }.
+// The ledger learns only the vault key, the timestamp, and a nullifier —
+// never the assertion fields or the workout values.
 export circuit verifyAttestation(): [] {
     const [assertion, sigs, rand] = getAttestationWitness();
     assert(assertion.version == 1, "Unsupported assertion version");
@@ -351,6 +430,13 @@ export circuit verifyAttestation(): [] {
     });
 }
 
+///////// WAGER: SUBMISSION & SETTLEMENT /////////
+// Sealed wager submission: the caller proves ownership of a vaulted
+// credential carrying the wager's metric with value == value, then stores
+// persistentCommit(value, submissionRand) on the wager. The ledger never
+// sees the value — only the commitment, opened later by settle. One
+// submission per (credential, wager) via a scoped nullifier; the same
+// credential may enter other wagers.
 export circuit submitWorkout(wagerId: Uint<64>, vaultKey: Bytes<32>, value: Uint<64>): [] {
     const [assertion, , commitRand] = getAttestationWitness();
     const caller = deriveHolderBinding(getHolderSecret());
@@ -362,7 +448,7 @@ export circuit submitWorkout(wagerId: Uint<64>, vaultKey: Bytes<32>, value: Uint
     assert(!wager.settled, "Wager settled");
     assert(wager.accepted, "Wager not accepted");
     // The sealed auction closes at the deadline — no post-deadline
-    // submissions (audit H1).
+    // submissions.
     assert(blockTimeLt(disclose(wager.deadlineBlock)), "Deadline passed");
     assert(vault.member(key), "Unknown credential");
     const entry = vault.lookup(key);
@@ -378,9 +464,9 @@ export circuit submitWorkout(wagerId: Uint<64>, vaultKey: Bytes<32>, value: Uint
     ]);
     assert(!nullifiers.member(disclose(wagerNullifier)), "Workout already counted in this wager");
     nullifiers.insert(disclose(wagerNullifier));
-    // persistentCommit (audit L1): the sealed submission is stored on-chain
-    // and opened in a LATER transaction (settle) — transientCommit output is
-    // not guaranteed stable across compiler upgrades. persistentCommit is.
+    // persistentCommit: the sealed submission is stored on-chain and opened
+    // in a LATER transaction (settle) — transientCommit output is not
+    // guaranteed stable across compiler upgrades. persistentCommit is.
     const sealedValue = persistentCommit<Field>(value, getSubmissionRand());
     const updated = wager.challenger == binding
         ? Wager {
@@ -420,6 +506,10 @@ export circuit submitWorkout(wagerId: Uint<64>, vaultKey: Bytes<32>, value: Uint
 // routing pinned at create/accept cannot be tampered with at settle). Winner
 // takes 2 * stake + the winner NFT; tie/none refund both; forfeit pays the
 // single submitter. The VM enforces that the escrowed pot covers the sends.
+// Privacy note: the payout branch is public, so settle necessarily
+// publishes both opening values — the guarantee is sealed until settlement,
+// not never-revealed. Planned hardening: payouts become internal points
+// credits (no unshielded sends at settle).
 export circuit settleWager(id: Uint<64>): [] {
     const wid = disclose(id);
     assert(wagers.member(wid), "No such wager");
@@ -452,6 +542,11 @@ export circuit settleWager(id: Uint<64>): [] {
     wagers.insert(wid, markSettled(wager));
 }
 
+///////// STREAK & BADGE CIRCUITS /////////
+// Advance or reset the caller's streak. The credential's timestamp must
+// fall in day (UTC); day == lastDay + 1 extends the streak, anything else
+// (including a same-day resubmit) resets it to 1. Only the holder binding
+// and count are stored — the workouts themselves stay private.
 export circuit advanceStreak(vaultKey: Bytes<32>, day: Uint<32>, commitRand: Bytes<32>): [] {
     const key = disclose(vaultKey);
     const caller = deriveHolderBinding(getHolderSecret());
@@ -473,6 +568,10 @@ export circuit advanceStreak(vaultKey: Bytes<32>, day: Uint<32>, commitRand: Byt
     streaks.insert(binding, Streak { count: count, lastDay: d });
 }
 
+// Mint a badge to the caller's badge set. Badge catalog: 1 = streak >= 3
+// consecutive days; 2 = a single distance claim >= 10 000 m. Predicates run
+// over sealed credentials in-circuit — the underlying values are never
+// revealed.
 export circuit mintBadge(badgeId: Uint<8>, vaultKey: Bytes<32>, commitRand: Bytes<32>): [] {
     const key = disclose(vaultKey);
     const caller = deriveHolderBinding(getHolderSecret());
@@ -502,7 +601,7 @@ export circuit mintBadge(badgeId: Uint<8>, vaultKey: Bytes<32>, commitRand: Byte
 // Prove badge ownership to a third party. The ledger learns (badgeId,
 // verifierBinding, holder binding) — the proof is pseudonymous, not
 // anonymous: the binding (a per-wallet pseudonym) is disclosed by the
-// badges.member/lookup asserts (audit L2 comment fix).
+// badges.member/lookup asserts.
 export circuit proveBadge(badgeId: Uint<8>, verifierBinding: Field): [Field] {
     const caller = deriveHolderBinding(getHolderSecret());
     const binding = disclose(caller);
@@ -512,6 +611,19 @@ export circuit proveBadge(badgeId: Uint<8>, verifierBinding: Field): [Field] {
     return [disclose(verifierBinding)];
 }
 
+///////// PURE CIRCUITS — OFF-CHAIN PARITY SURFACE /////////
+// Exported as pureCircuits: the single source of truth for off-chain
+// signing. The notary MUST use encodeAssertion / schnorrChallenge from the
+// compiled contract instead of reimplementing them (the field order is
+// contract law — any deviation invalidates every signature).
+//   encodeAssertion: the frozen 22-field encoding every notary signature
+//     commits to (see assertion.compact).
+//   schnorrChallenge: the Poseidon challenge hash over (ann, pk, msg),
+//     mirrored in assertion.compact for signing parity.
+//   computeVaultKey: vault key = persistentCommit(assertion, rand) — must
+//     match the key verifyAttestation stores under.
+//   holderBinding: derive a holder binding off-chain (wager screens,
+//     proof requests) identically to the in-circuit derivation.
 export pure circuit encodeAssertion(assertion: A_Assertion): Vector<22, Field> {
     return A_encodeAssertion(assertion);
 }

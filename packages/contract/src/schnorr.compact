@@ -8,11 +8,16 @@ pragma language_version >= 0.22 && <= 0.23;
 module schnorr {
     import CompactStandardLibrary;
 
+    // Signature over a message of n Fields: an announcement point + a scalar
+    // response (r = k + c*sk mod r_Jubjub).
     export struct SchnorrSignature {
         announcement: JubjubPoint;
         response: Field;
     }
 
+    // Fiat–Shamir challenge preimage: (ann, pk, msg). Mirrored in
+    // assertion.compact as the fixed-22 variant (the assertion encoding is
+    // always 22 Fields), which the notary uses for signing parity.
     struct SchnorrHashInput<#n> {
         ann_x: Field;
         ann_y: Field;
@@ -25,6 +30,8 @@ module schnorr {
     // hash by 2^248, so we can truncate it to fit in Jubjub's scalar field.
     witness getSchnorrReduction(challengeHash: Field): [Field, Uint<248>];
 
+    // The Fiat–Shamir challenge hash (Poseidon via transientHash) over
+    // (announcement, public key, message).
     circuit challenge<#n>(
         msg: Vector<n, Field>,
         announcement: JubjubPoint,
@@ -40,6 +47,7 @@ module schnorr {
             });
     }
 
+    // Truncate the challenge to the scalar field: c = cFull mod 2^248.
     circuit truncateChallenge(cFull: Field): Field {
         const TWO_248: Field =
             452312848583266388373324160190187140051835877600158453279131187530910662656 as Field;
@@ -50,6 +58,8 @@ module schnorr {
         return disclose(cTruncated) as Field;
     }
 
+    // Aborting wrapper: a bad signature fails the whole call (used where a
+    // single invalid signature must reject the transaction).
     export circuit schnorrVerify<#n>(
         msg: Vector<n, Field>,
         signature: SchnorrSignature,
@@ -58,6 +68,9 @@ module schnorr {
         assert(schnorrVerifyOk<n>(msg, signature, pk), "Invalid attestation signature");
     }
 
+    // Core check: response * G == announcement + c * pk over Jubjub points.
+    // Returns Boolean instead of aborting so callers can count valid
+    // signatures (the 2-of-3 rule) instead of failing on the first bad one.
     export circuit schnorrVerifyOk<#n>(
         msg: Vector<n, Field>,
         signature: SchnorrSignature,

@@ -53,7 +53,7 @@ Compiled types: `Circuits` / `ImpureCircuits` in
 
 | Circuit | Args (JS types) | Returns | Notes |
 |---|---|---|---|
-| `registerAdmin()` | — | `[]` | First call pins the admin identity (witness secret); later calls assert the caller is admin |
+| `registerAdmin()` | — | `[]` | Constructor pins the admin identity at deploy (witness secret); the circuit re-asserts the caller is admin |
 | `registerNotary(pk, index)` | `pk: JubjubPoint`, `index: bigint` (0–2) | `[]` | Admin only; 3 fixed slots |
 | `rotateNotary(index, newPk)` | `index: bigint`, `newPk: JubjubPoint` | `[]` | Admin only |
 | `blacklistNotary(index)` | `index: bigint` | `[]` | Admin only; empties slot (signatures there no longer count) |
