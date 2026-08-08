@@ -273,7 +273,7 @@ describe('attestStrava artifact contract (notary ProofArtifacts shape)', () => {
     expect(client.authRequest.data.hostWhitelist).toEqual(['www.strava.com']);
     expect(client.authRequest.signature).toBeInstanceOf(Uint8Array);
     expect(client.authRequest.signature.length).toBe(65);
-    expect(call.ownerPrivateKey).toMatch(/^[0-9a-f]{64}$/);
+    expect(call.ownerPrivateKey).toMatch(/^0x[0-9a-f]{64}$/);
   });
 
   it('produces the transformProof shape the notary accepts', async () => {
@@ -354,10 +354,17 @@ describe('attestStrava artifact contract (notary ProofArtifacts shape)', () => {
     expect(authRequest.data).toEqual({ id: 'z', hostWhitelist: ['www.strava.com'], createdAt: 1, expiresAt: 2 });
   });
 
-  it('persists a per-origin owner key', () => {
+  it('persists a 0x-prefixed per-origin owner key (ethers v6 requires BytesLike)', () => {
     const key = getOrCreateOwnerKey();
-    expect(key).toMatch(/^[0-9a-f]{64}$/);
+    expect(key).toMatch(/^0x[0-9a-f]{64}$/);
     expect(getOrCreateOwnerKey()).toBe(key);
+  });
+
+  it('normalizes legacy unprefixed stored owner keys', () => {
+    localStorage.setItem('wf-attest-owner-key', 'ab'.repeat(32));
+    const key = getOrCreateOwnerKey();
+    expect(key).toBe('0x' + 'ab'.repeat(32));
+    expect(localStorage.getItem('wf-attest-owner-key')).toBe('0x' + 'ab'.repeat(32));
   });
 });
 

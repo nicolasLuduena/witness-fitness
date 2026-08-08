@@ -194,20 +194,33 @@ export function transformProof(claim: ClaimTunnelResponse, attestorUrl: string):
 
 // The client-side claim owner key: random 32-byte ETH key persisted
 // per-origin, so a user's claims share one witness address across the demo.
+// MUST be 0x-prefixed — ethers v6 (attestor-core's createClaimOnAttestor)
+// rejects unprefixed hex ("invalid BytesLike value"). Legacy stored keys
+// (unprefixed, from before the fix) are normalized on read.
 const OWNER_KEY_STORAGE_KEY = 'wf-attest-owner-key';
+
+const normalizeOwnerKey = (raw: string): string | null => {
+  if (/^0x[0-9a-f]{64}$/.test(raw)) return raw;
+  if (/^[0-9a-f]{64}$/.test(raw)) return '0x' + raw;
+  return null;
+};
 
 export function getOrCreateOwnerKey(): string {
   try {
     const existing = localStorage.getItem(OWNER_KEY_STORAGE_KEY);
-    if (existing && /^[0-9a-f]{64}$/.test(existing)) {
-      return existing;
+    const normalized = existing ? normalizeOwnerKey(existing) : null;
+    if (normalized) {
+      if (normalized !== existing) {
+        localStorage.setItem(OWNER_KEY_STORAGE_KEY, normalized);
+      }
+      return normalized;
     }
   } catch {
     // fall through to a session-random key when localStorage is unavailable
   }
   const bytes = new Uint8Array(32);
   crypto.getRandomValues(bytes);
-  const key = bytesToHex(bytes);
+  const key = '0x' + bytesToHex(bytes);
   try {
     localStorage.setItem(OWNER_KEY_STORAGE_KEY, key);
   } catch {
