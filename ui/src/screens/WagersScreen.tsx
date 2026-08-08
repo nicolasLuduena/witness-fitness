@@ -149,9 +149,13 @@ export const WagersScreen = () => {
                 <div key={entry.id} className="chip chip--gold" style={{ padding: '6px 12px', gap: 8 }}>
                   <span style={{ fontWeight: 700 }}>{entry.athlete.name}</span>
                   <span className="faint">challenge ID</span>
-                  <span className="mono" style={{ cursor: 'pointer' }} title="copy challenge ID" onClick={() => void copyChallengeId(entry.id)}>
-                    {entry.id} {copied === entry.id ? '✓' : '⧉'}
-                  </span>
+                  <button
+                    className="copy-id-btn"
+                    title="copy challenge ID"
+                    onClick={() => void copyChallengeId(entry.athlete.holderBinding)}
+                  >
+                    {copied === entry.athlete.holderBinding ? 'Copied ✓' : 'Copy ID'}
+                  </button>
                   <span className="faint">{entry.note}</span>
                 </div>
               ))}

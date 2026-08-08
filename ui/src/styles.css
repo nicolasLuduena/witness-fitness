@@ -1136,3 +1136,18 @@ body::before {
   opacity: 0.6;
   font-size: 0.8em;
 }
+
+/* Copy-ID buttons (share challenge IDs between browsers) */
+.copy-id-btn {
+  margin-left: 6px;
+  padding: 2px 8px;
+  font-size: 0.72em;
+  border-radius: 5px;
+  border: 1px solid rgba(34, 211, 238, 0.45);
+  background: rgba(34, 211, 238, 0.08);
+  color: #67e8f9;
+  cursor: pointer;
+}
+.copy-id-btn:hover {
+  background: rgba(34, 211, 238, 0.18);
+}

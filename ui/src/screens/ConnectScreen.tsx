@@ -42,6 +42,7 @@ export const ConnectScreen = () => {
   const resumePrompted = useRef(false);
   const [wallets, setWallets] = useState<WalletSummary[]>([]);
   const [pickedRdns, setPickedRdns] = useState<string | null>(null);
+  const [copiedId, setCopiedId] = useState<string | null>(null);
 
   const isWallet = mode === 'wallet';
   const isLive = mode === 'live';
@@ -64,6 +65,19 @@ export const ConnectScreen = () => {
   const handlePickWallet = (rdns: string) => {
     setPickedRdns(rdns);
     void connect(rdns);
+  };
+
+  const handleCopyBinding = async () => {
+    const binding = session?.athlete.holderBinding;
+    if (!binding) return;
+    try {
+      await navigator.clipboard.writeText(binding);
+      setCopiedId(binding);
+      window.setTimeout(() => setCopiedId(null), 1_500);
+    } catch (err) {
+      logError('ConnectScreen.copyBinding', err);
+      setAttestError('clipboard unavailable');
+    }
   };
 
   const handleConnectStrava = () => {
@@ -203,7 +217,18 @@ export const ConnectScreen = () => {
               <div className="stat-row" style={{ marginBottom: 14 }}>
                 <Stat
                   label="Holder binding (challenge ID)"
-                  value={<span className="hash">{hexShort(session.athlete.holderBinding, 12, 10)}</span>}
+                  value={
+                    <span className="hash">
+                      {hexShort(session.athlete.holderBinding, 12, 10)}{' '}
+                      <button
+                        className="copy-id-btn"
+                        title="copy challenge ID to share"
+                        onClick={() => void handleCopyBinding()}
+                      >
+                        {copiedId === session.athlete.holderBinding ? 'Copied ✓' : 'Copy ID'}
+                      </button>
+                    </span>
+                  }
                 />
                 <Stat
                   label="Mode"
