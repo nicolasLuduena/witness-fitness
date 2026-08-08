@@ -1,5 +1,5 @@
 {
-  "contractAddress": "cf80ad421b2b85f6ca1b3c0ccfd140ae5f6fc0d5871426d7750df4d42944cbaf",
+  "contractAddress": "f4063dd77b5dd53e03892b46685c07be2204ccad8b6cd215386f6a34e2c0e9cd",
   "notaryPublicKeys": [
     {
       "x": "0x3862022a87a469108254b4530e1455cb016835894834b8c05b181cdf35de5b4f",
@@ -14,7 +14,7 @@
       "y": "0x19b59ef0dbf4b2a503d493ec7c29439384b3b38cfb29f0eed8e7ad5388d7747"
     }
   ],
-  "deployedAt": "2026-08-07T21:25:02.658Z",
+  "deployedAt": "2026-08-08T06:11:49.996Z",
   "notaryInstances": [
     {
       "id": "notary-1",
@@ -44,5 +44,5 @@
       "slot": 2
     }
   ],
-  "registryRotatedAt": "2026-08-07T21:28:55.984Z"
+  "registryRotatedAt": "2026-08-08T06:14:50.019Z"
 }
