@@ -6,7 +6,7 @@ import topLevelAwait from 'vite-plugin-top-level-await';
 import wasm from 'vite-plugin-wasm';
 
 export default defineConfig({
-  plugins: [react(), wasm(), topLevelAwait(), nodePolyfills()],
+  plugins: [react(), wasm(), topLevelAwait(), nodePolyfills({ exclude: ['crypto'] })],
   resolve: {
     alias: {
       'vite-plugin-node-polyfills/shims/buffer': path.resolve(
@@ -67,5 +67,13 @@ export default defineConfig({
       },
     },
     include: ['@midnight-ntwrk/compact-runtime'],
+    // Dev pre-bundling (esbuild) resolves bare `crypto` differently than the
+    // build's alias — exclude the reclaim stack so dev serves its source
+    // through the vite resolver (alias applies), matching build behavior.
+    exclude: [
+      '@reclaimprotocol/attestor-core',
+      '@reclaimprotocol/tls',
+      '@reclaimprotocol/zk-symmetric-crypto',
+    ],
   },
 });

@@ -17,8 +17,26 @@
 // surface.
 
 import type { ConnectedAPI } from '@midnight-ntwrk/dapp-connector-api';
-import { createHash } from 'node:crypto';
 import { NOTARY_URLS } from '../config';
+
+// Deterministic 32-byte (64-hex) digest for the TEST stub — FNV-1a expanded
+// over 32 lanes. Dependency-free + synchronous + identical in Node and the
+// browser. The stub bridge never runs in the browser's real path (the real
+// bridge uses WebCrypto via @witnessfitness/api/browser); node:crypto is
+// deliberately NOT imported here (vite externalizes it in the browser, which
+// crashed the page at import time).
+const sha256Hex = (value: string): string => {
+  const out = new Uint8Array(32);
+  for (let i = 0; i < 32; i++) {
+    let h = (0x811c9dc5 ^ (i * 0x9e3779b1)) >>> 0;
+    for (let j = 0; j < value.length; j++) {
+      h ^= value.charCodeAt(j);
+      h = Math.imul(h, 0x01000193) >>> 0;
+    }
+    out[i] = h & 0xff;
+  }
+  return Array.from(out, (b) => b.toString(16).padStart(2, '0')).join('');
+};
 
 export interface WalletMetric {
   metricId: number | string;
@@ -168,9 +186,6 @@ interface StoredState {
   badges: number[];
   attestations: Array<{ artifactsJson: string; commitRandHex: string; vaultKeyHex: string; metrics: WalletMetric[] }>;
 }
-
-const sha256Hex = (value: string): string =>
-  createHash('sha256').update(value, 'utf-8').digest('hex');
 
 const hexOf = (bytes: Uint8Array): string =>
   '0x' + Array.from(bytes).map((b) => b.toString(16).padStart(2, '0')).join('');
@@ -375,7 +390,9 @@ export const createStubWalletBridge = (): WalletBridge => {
     deriveBrowserHolderSecret: () => {
       if (!lastConnected) throw new Error('wallet not connected');
       void addressOf(lastConnected); // async probe — the real impl uses wallet signing
-      return new Uint8Array(createHash('sha256').update('witnessfitness:holder:stub').digest());
+      // Random 32 bytes, matching the real deriveBrowserHolderSecret
+      // (api/browser) — determinism comes from persistence, not derivation.
+      return crypto.getRandomValues(new Uint8Array(32));
     },
     joinStrideFromBrowser: async (api, contractAddress, privateStateId) => {
       lastConnected = api;

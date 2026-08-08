@@ -13,17 +13,32 @@
 // normalizeArtifacts accepts it via the claimData/signatures[]/witnesses[]
 // branch (verified against all 3 notary instances).
 
-import {
-  assertValidClaimSignatures,
-  createClaimOnAttestor,
-  type proto,
-} from '@reclaimprotocol/attestor-core';
-import { setCryptoImplementation } from '@reclaimprotocol/tls';
-import { webcryptoCrypto } from '@reclaimprotocol/tls/webcrypto';
+import type { proto } from '@reclaimprotocol/attestor-core';
 import { ATTESTOR_WS_URL, ATTEST_SERVICE_URL } from './config';
 import { browserStwoOperators } from './stwo-browser';
 
-setCryptoImplementation(webcryptoCrypto);
+// The attestor-core + tls stack is LAZY-loaded (attest-time only): it
+// evaluates `import { webcrypto } from 'crypto'` at module scope, which
+// crashed the page at load in the browser (crypto.subtle undefined — the
+// vite `crypto` alias fixes the resolution; lazy loading keeps the stack out
+// of the initial bundle entirely and isolates any module-eval failure to the
+// attest step where it can surface a clear error).
+let corePromise: Promise<typeof import('@reclaimprotocol/attestor-core')> | null = null;
+
+async function loadCore(): Promise<typeof import('@reclaimprotocol/attestor-core')> {
+  if (!corePromise) {
+    corePromise = (async () => {
+      const [{ webcryptoCrypto }, { setCryptoImplementation }, core] = await Promise.all([
+        import('@reclaimprotocol/tls/webcrypto'),
+        import('@reclaimprotocol/tls'),
+        import('@reclaimprotocol/attestor-core'),
+      ]);
+      setCryptoImplementation(webcryptoCrypto);
+      return core;
+    })();
+  }
+  return corePromise;
+}
 
 type ClaimTunnelResponse = proto.ClaimTunnelResponse;
 type ProviderClaimData = proto.ProviderClaimData;
@@ -206,6 +221,7 @@ export async function attestRequest(
   config: BrowserAttestorConfig = loadBrowserAttestorConfig(),
   ownerPrivateKey?: string,
 ): Promise<AttestResult> {
+  const { createClaimOnAttestor } = await loadCore();
   const client = await buildAttestorClient(config);
   const result = await createClaimOnAttestor({
     name: 'http',
@@ -260,6 +276,7 @@ export function attestStrava(
 }
 
 export async function verifyClaimSignatures(result: ClaimTunnelResponse): Promise<void> {
+  const { assertValidClaimSignatures } = await loadCore();
   await assertValidClaimSignatures(result);
 }
 

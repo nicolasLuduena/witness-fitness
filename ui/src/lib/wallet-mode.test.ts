@@ -113,15 +113,18 @@ describe('wallet bridge stub', () => {
     expect(walletStoreName('mn_cpk-alice')).toMatch(/^wf-wallet-/);
   });
 
-  it('deriveBrowserHolderSecret returns a stable 32-byte secret', async () => {
+  it('deriveBrowserHolderSecret returns 32 random bytes; stability comes from persistence', async () => {
     const bridge = createStubWalletBridge();
     const alice = createConnectedStub({ address: 'alice' });
     await bridge.initializeProviders(alice);
     const secret = bridge.deriveBrowserHolderSecret();
-    const again = bridge.deriveBrowserHolderSecret();
     expect(secret).toBeInstanceOf(Uint8Array);
     expect(secret.length).toBe(32);
-    expect(Array.from(again)).toEqual(Array.from(secret));
+    // The real api/browser deriveBrowserHolderSecret is random per call —
+    // determinism across reloads comes from the persisted private state
+    // (export/import roundtrip), never from re-derivation.
+    const fresh = bridge.deriveBrowserHolderSecret();
+    expect(Array.from(fresh)).not.toEqual(Array.from(secret));
   });
 
   it('export/import roundtrip preserves the private state; wrong password fails', async () => {
