@@ -29,6 +29,11 @@ export default defineConfig({
       // scope. The stwo alias points at the vendored wasm-bindgen WEB build
       // (same circuit set, browser-safe — see ui/src/lib/attest/stwo-browser.ts).
       koffi: path.resolve(__dirname, './src/lib/attest/stubs/koffi.ts'),
+      // @reclaimprotocol/tls/lib/crypto/webcrypto.js imports { webcrypto }
+      // from 'crypto' and reads .subtle at module scope — the node crypto
+      // shim has no subtle, crashing the page at load. Alias to the
+      // browser's real WebCrypto (secure context required).
+      crypto: path.resolve(__dirname, './src/lib/attest/stubs/crypto.ts'),
       re2: path.resolve(__dirname, './src/lib/attest/stubs/re2.ts'),
       'fs/promises': path.resolve(__dirname, './src/lib/attest/stubs/fs-promises.ts'),
       '@reclaimprotocol/zk-symmetric-crypto/gnark': path.resolve(
