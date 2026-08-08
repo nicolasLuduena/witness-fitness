@@ -23,7 +23,7 @@ describe('live path (sidecar delegation)', () => {
     try {
       const client = new LiveClient();
       await client.connect();
-      await expect(client.attest()).rejects.toThrow(/attestation log is empty/);
+      await expect(client.attest()).rejects.toThrow(/no attestation source — use wallet mode/);
     } finally {
       delete (globalThis as { fetch?: unknown }).fetch;
     }

@@ -52,11 +52,13 @@ export const WagersScreen = () => {
   const isLive = mode === 'live';
   const isWallet = mode === 'wallet';
 
-  // Poll while a wager is awaiting the opponent's sealed submission.
+  // Poll while ANY wager is mid-flight (open/accepted/submitted) — discovery
+  // of opponent actions (accept, seal) is indexer-lag-bound; also covers the
+  // post-create read-back window (audit P1-5).
   useEffect(() => {
-    const awaiting = wagers.some((w) => w.status === 'submitted');
+    const awaiting = wagers.some((w) => w.status === 'open' || w.status === 'accepted' || w.status === 'submitted');
     if (!awaiting) return;
-    const timer = window.setInterval(() => void refresh(), 1_400);
+    const timer = window.setInterval(() => void refresh(), 3_000);
     return () => window.clearInterval(timer);
   }, [wagers, refresh]);
 
@@ -87,8 +89,14 @@ export const WagersScreen = () => {
   };
 
   const handleCreate = async (req: WagerCreateRequest) => {
-    await createWager(req);
-    setCreateOpen(false);
+    setActionError(null);
+    try {
+      await createWager(req);
+      setCreateOpen(false);
+    } catch (err) {
+      logError('WagersScreen.create', err);
+      setActionError(err instanceof Error ? err.message : 'wager create failed');
+    }
   };
 
   const copyChallengeId = async (id: string) => {
@@ -125,9 +133,14 @@ export const WagersScreen = () => {
             </p>
           </div>
           {session ? (
-            <Button tone="seal" onClick={() => setCreateOpen(true)}>
-              + Create wager
-            </Button>
+            <div className="row" style={{ gap: 10 }}>
+              <Button tone="ghost" size="sm" onClick={() => void refresh()} title="Re-read wagers from the chain">
+                ↻ Refresh
+              </Button>
+              <Button tone="seal" onClick={() => setCreateOpen(true)}>
+                + Create wager
+              </Button>
+            </div>
           ) : null}
         </div>
       </div>
@@ -202,9 +215,7 @@ export const WagersScreen = () => {
                       {fmtTnight(wager.stake)} {wager.result?.currency ?? 'NIGHT'} stake
                     </Chip>
                     <Chip>
-                      {isLive
-                        ? `settle unlocks ${formatCountdown(settleReadyAtMs(wager.deadlineBlock) - now)}`
-                        : `deadline block ${wager.deadlineBlock.toString()}`}
+                      settle unlocks {formatCountdown(settleReadyAtMs(wager.deadlineBlock) - now)}
                     </Chip>
                   </div>
                   <Chip tone={wager.status === 'settled' ? 'provable' : wager.status === 'submitted' ? 'seal' : 'default'}>
@@ -227,6 +238,12 @@ export const WagersScreen = () => {
                     title="sealed submission — commitment on-chain, value never published"
                   />
                 </div>
+
+                {wager.status === 'open' && wager.challenger.role === 'local' ? (
+                  <Notice tone="info" >
+                    Waiting for the opponent to accept — their wallet must accept this challenge (ID {wager.id}).
+                  </Notice>
+                ) : null}
 
                 {wager.status === 'open' && (isLive || wager.opponent.role === 'local') ? (
                   <Button
@@ -284,7 +301,7 @@ export const WagersScreen = () => {
                   </Button>
                 ) : null}
 
-                {wager.status === 'submitted' && wager.submissions.length === 1 ? (
+                {wager.status === 'accepted' && wager.submissions.length === 1 ? (
                   <Notice tone="info">Waiting for the other athlete's sealed submission…</Notice>
                 ) : null}
 
@@ -292,11 +309,11 @@ export const WagersScreen = () => {
                   <Button
                     tone="gold"
                     block
-                    disabled={busyId !== null || (isLive && lock.locked)}
+                    disabled={busyId !== null || lock.locked}
                     onClick={() => void run(wager.id, () => settleWager(wager.id))}
                   >
                     {busyId === wager.id ? <span className="spin" /> : null}
-                    Settle — reveal winner under seal{isLive && lock.locked ? ` (${lock.label})` : ''}
+                    Settle — reveal winner under seal{lock.locked ? ` (${lock.label})` : ''}
                   </Button>
                 ) : null}
 

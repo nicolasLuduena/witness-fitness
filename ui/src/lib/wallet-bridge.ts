@@ -19,6 +19,7 @@
 import type { ConnectedAPI } from '@midnight-ntwrk/dapp-connector-api';
 import { NOTARY_URLS } from '../config';
 import { logError } from './logger';
+import type { LedgerMapLike } from './state-mappers';
 
 // Deterministic 32-byte (64-hex) digest for the TEST stub — FNV-1a expanded
 // over 32 lanes. Dependency-free + synchronous + identical in Node and the
@@ -53,10 +54,18 @@ export interface WalletVaultEntry {
   metric?: WalletMetric;
 }
 
+// readState shapes — the REAL adapter returns the contract LEDGER's Map-like
+// ADTs (member/lookup/iterator, per the stride contract index.d.ts), while the
+// stub emits plain arrays/objects. UI mappers accept both (state-mappers).
 export interface WalletLedgerState {
-  vault: WalletVaultEntry[];
-  streaks: { count?: number | string; lastDay?: number | string } | Array<{ count?: number | string; lastDay?: number | string }>;
-  badges: Array<{ badgeId?: number | string; id?: number | string; minted?: boolean }>;
+  vault: WalletVaultEntry[] | LedgerMapLike<Uint8Array, { holderBinding: bigint; timestamp: bigint }>;
+  streaks:
+    | { count?: number | string; lastDay?: number | string }
+    | Array<{ count?: number | string; lastDay?: number | string }>
+    | LedgerMapLike<bigint, { count: bigint; lastDay: bigint }>;
+  badges:
+    | Array<{ badgeId?: number | string; id?: number | string; minted?: boolean }>
+    | LedgerMapLike<bigint, Iterable<bigint>>;
 }
 
 // The proof artifacts the notary strip consumes (proofToNotaryArtifacts

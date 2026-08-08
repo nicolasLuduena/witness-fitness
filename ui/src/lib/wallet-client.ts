@@ -47,7 +47,7 @@ import {
   type WalletWagerRouting,
   type WalletWagerView,
 } from './wallet-bridge';
-import { badgeViewsFrom, credentialFromVaultEntry, streakViewFrom } from './state-mappers';
+import { badgeViewsFrom, credentialFromVaultEntry, streakViewFrom, vaultEntriesOf } from './state-mappers';
 import type { WfClient } from './wf-client';
 import { attestStrava, proofToNotaryArtifacts } from './attest/attest-browser';
 import { athleteIdentityFromExchange, type AthleteIdentity } from './attest/identity';
@@ -80,6 +80,7 @@ export class StravaFlowError extends Error {
 interface AttestationRecord {
   attestation: WalletAttestResult['attestation'];
   metrics: WalletMetric[];
+  txHash?: string;
 }
 
 const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -291,7 +292,7 @@ export class WalletClient implements WfClient {
   private rememberAttestation(attested: WalletAttestResult): void {
     const key = hexOf(attested.vaultKey);
     const shortId = hexShort(key, 12, 8);
-    this.attestations.set(key, { attestation: attested.attestation, metrics: attested.metrics });
+    this.attestations.set(key, { attestation: attested.attestation, metrics: attested.metrics, txHash: attested.txHash });
     this.shortIdIndex.set(shortId, key);
   }
 
@@ -317,12 +318,23 @@ export class WalletClient implements WfClient {
     const session = this.requireSession();
     const state = await session.readState();
     const mine = this.stravaAthlete();
-    return state.vault.map((entry) => {
-      const key = entry.vaultKey ?? entry.key ?? '';
-      const metrics = entry.metrics ?? (entry.metric ? [entry.metric] : []);
-      const credential = credentialFromVaultEntry(key, undefined, entry.timestamp, metrics);
-      return { ...credential, athlete: mine, source: 'live-session' };
-    });
+    const myBig = this.myBindingBig();
+    const result: AttestedCredential[] = [];
+    for (const entry of vaultEntriesOf(state.vault)) {
+      if (myBig !== null && entry.holderBinding !== null && entry.holderBinding !== myBig) {
+        continue;
+      }
+      const record = this.attestations.get(entry.vaultKey);
+      const metrics = record?.metrics ?? [];
+      const credential = credentialFromVaultEntry(
+        entry.vaultKey,
+        record?.txHash,
+        entry.timestamp,
+        metrics
+      );
+      result.push({ ...credential, athlete: mine, source: 'live-session' });
+    }
+    return result;
   }
 
   // ----------------------------------------------------------- wagers -----
@@ -337,6 +349,9 @@ export class WalletClient implements WfClient {
     const session = this.requireSession();
     const opponentBinding = parseHolderBinding(req.opponent.holderBinding);
     const routing = await this.myRouting();
+    const myBinding = this.myBindingBig();
+    const before = await session.listWagers();
+    const maxBefore = before.reduce((m, w) => (w.id > m ? w.id : m), 0n);
     await session.createWager({
       opponentBinding,
       metricId: req.metricId,
@@ -344,10 +359,18 @@ export class WalletClient implements WfClient {
       deadlineBlock: req.deadlineBlock,
       routing,
     });
-    const all = await this.listWagers();
-    const created = all[all.length - 1];
-    if (!created) throw new Error('wager create failed');
-    return created;
+    // Post-create read-back: poll until the NEW wager (id > any seen before,
+    // challenger = me) is visible — indexer lag is real; the last-element
+    // guess silently picked the wrong wager (audit P1-4).
+    for (let attempt = 0; attempt < 10; attempt += 1) {
+      const all = await session.listWagers();
+      const created = all.find(
+        (w) => w.id > maxBefore && (myBinding === null || w.challenger === myBinding)
+      );
+      if (created) return this.wagerView(created);
+      await delay(1_000);
+    }
+    throw new Error('created on-chain but not yet indexed — refresh the Wagers tab');
   }
 
   async acceptWager(id: number): Promise<WagerView> {
@@ -597,7 +620,7 @@ export class WalletClient implements WfClient {
   async streak(): Promise<StreakView> {
     const session = this.requireSession();
     const state = await session.readState();
-    return streakViewFrom(state.streaks, 'wallet:streak');
+    return streakViewFrom(state.streaks, 'wallet:streak', this.myBindingBig() ?? undefined);
   }
 
   async advanceStreak(): Promise<StreakView> {
@@ -613,7 +636,7 @@ export class WalletClient implements WfClient {
   async badges(): Promise<BadgeView[]> {
     const session = this.requireSession();
     const state = await session.readState();
-    return badgeViewsFrom(state.badges);
+    return badgeViewsFrom(state.badges, this.myBindingBig() ?? undefined);
   }
 
   async mintBadge(badgeId: number): Promise<BadgeView> {
@@ -679,16 +702,23 @@ export class WalletClient implements WfClient {
   private async currentVaultKey(session: WalletStrideSession): Promise<Uint8Array> {
     if (this.lastVaultKey) return this.lastVaultKey;
     const state = await session.readState();
-    const first = state.vault[0];
-    const key = first?.vaultKey ?? first?.key;
-    if (!key) throw new Error('no vaulted credential — attest a workout first');
+    const myBig = this.myBindingBig();
+    const mine = vaultEntriesOf(state.vault).find(
+      (entry) => myBig === null || entry.holderBinding === null || entry.holderBinding === myBig
+    );
+    if (!mine) throw new Error('no vaulted credential — attest a workout first');
     const bytes = new Uint8Array(32);
-    const hex = key.replace(/^0x/, '');
+    const hex = mine.vaultKey.replace(/^0x/, '');
     for (let i = 0; i < 32 && i * 2 < hex.length; i += 1) {
       bytes[i] = Number.parseInt(hex.slice(i * 2, i * 2 + 2), 16) || 0;
     }
     this.lastVaultKey = bytes;
     return bytes;
+  }
+
+  private myBindingBig(): bigint | null {
+    const binding = this.session?.holderBinding ?? '';
+    return binding ? BigInt(binding) : null;
   }
 }
 

@@ -20,6 +20,7 @@ import {
   storeBackupPayload,
   walletBackupKey,
 } from './wallet-restore';
+import { vaultEntriesOf } from './state-mappers';
 
 interface StubWalletOptions {
   apiVersion?: string;
@@ -181,7 +182,7 @@ describe('wallet bridge stub', () => {
     await bridge2.importPrivateState('pw-123', 'wf-test-store', payload);
     const session2 = await bridge2.joinStrideFromBrowser(alice, '0xcontract', 'wf-test-store');
     const state2 = await session2.readState();
-    expect(state2.vault.length).toBe(1);
+    expect(vaultEntriesOf(state2.vault)).toHaveLength(1);
 
     // wrong password on a fresh bridge → rejected
     const bridge3 = createStubWalletBridge();

@@ -84,7 +84,7 @@ export class LiveClient implements WfClient {
     // attest workstream's flow (ui/src/lib/attest/*) replaces this replay.
     const logEntry = ATTESTATION_LOG[this.attestCount % ATTESTATION_LOG.length];
     if (!logEntry) {
-      throw new Error('attestation log is empty — live attestations come from the attest flow');
+      throw new Error('live debug mode has no attestation source — use wallet mode for attestations');
     }
     const fixture = logEntry.fixture as unknown as {
       claim: unknown;

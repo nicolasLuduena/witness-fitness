@@ -109,33 +109,7 @@ export const RevealSettle = ({ result }: { result: WagerSettleResult }) => {
       )}
 
       <div className="row" style={{ marginTop: 16, justifyContent: 'center' }}>
-        {res.nft ? (
-        <div
-          className="reveal-card"
-          style={{
-            marginTop: 14,
-            borderColor: 'rgba(217, 164, 65, 0.45)',
-            background: 'linear-gradient(180deg, rgba(217, 164, 65, 0.07), rgba(217, 164, 65, 0.02))',
-            boxShadow: '0 0 34px rgba(217, 164, 65, 0.1)',
-          }}
-        >
-          <div className="row" style={{ gap: 14 }}>
-            <div className="medal" style={{ width: 40, height: 40, fontSize: 17 }}>🏅</div>
-            <div>
-              <div style={{ fontWeight: 700 }}>Winner receives the WitnessFitness NFT</div>
-              <div className="muted" style={{ fontSize: 13 }}>
-                A shielded coin — the winner can prove they own it without revealing anything about the wager.
-              </div>
-              <div className="row" style={{ marginTop: 8, gap: 14, flexWrap: 'wrap' }}>
-                <span className="chip chip--gold">token {res.nft.tokenType.slice(0, 18)}…</span>
-                <span className="hash">minted in tx {res.nft.txHash.slice(0, 20)}…</span>
-              </div>
-            </div>
-          </div>
-        </div>
-      ) : null}
-
-      {phase === 'reveal' && (
+        {phase === 'reveal' && (
           <Button tone="primary" onClick={() => setPhase('room')}>
             Show the room — winner only
           </Button>

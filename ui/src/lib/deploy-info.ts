@@ -21,7 +21,7 @@ export interface DeployInfo {
 // instance keys). Redeploy → copy-keys refreshes public/deploy-output.json →
 // these constants only matter offline.
 const FALLBACK: DeployInfo = {
-  contractAddress: '364a84dd0bc065d7ea25fd45d2072763a1477ee15011e3b5c6bf2c07d04a5ff3',
+  contractAddress: 'cf80ad421b2b85f6ca1b3c0ccfd140ae5f6fc0d5871426d7750df4d42944cbaf',
   network: 'local-devnet',
   notaryKeys: [
     { id: 'notary-1', x: '0x3862022a87a469108254b4530e1455cb016835894834b8c05b181cdf35de5b4f', y: '0x43c040874581a4434744453744aca7c2fac2d04ff9340aa9cfe3f3268b26b365' },
