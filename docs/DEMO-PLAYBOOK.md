@@ -66,14 +66,16 @@ wallet mode.**
    activity). Its own challenge ID.
 3. **Wager:** Browser 1 → Wagers → Create → paste **Browser 2's challenge ID** →
    stake (10 NIGHT), deadline ~90 s → escrow tx. Browser 2 → Accept (escrows
-   its stake).
+   its stake) — accept and both submissions must happen **before the deadline**
+   (contract-enforced; the UI locks the Seal buttons at the deadline).
 4. **Both seal their submission** (each browser, its own credential — its
    opening is relayed to the service immediately).
 5. **Settle** (either browser, after the countdown): the relay is polled until
    both openings arrive → both staged into the settling wallet's private state
    → settle tx → **reveal: winner + 2×stake pot + the shielded NFT** + the
-   athletes-choose-to-disclose comparison. The loser's view shows a synthetic
-   name (privacy by design).
+   on-chain comparison (both values are published at settlement — they were
+   sealed until then, never before). The loser's view shows a synthetic name
+   (privacy by design).
 6. **Guard demo (optional):** authorize a Strava account with zero activities →
    "no activities yet" notice, interactions disabled.
 

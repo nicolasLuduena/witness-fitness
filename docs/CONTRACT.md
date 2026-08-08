@@ -62,8 +62,8 @@ VaultEntry { holderBinding: Field; timestamp: Uint32; }
 Wager {
     challenger: Field; opponent: Field;      // holder bindings
     metricId: Uint8; stake: Uint; deadlineBlock: Uint;
-    challengerSubmission: Maybe<Field>;      // sealed value commitments
-    opponentSubmission: Maybe<Field>;
+    challengerSubmission: Maybe<Bytes32>;    // persistentCommit(value, rand)
+    opponentSubmission: Maybe<Bytes32>;
     settled: bool;
 }
 Streak { count: Uint16; lastDay: Uint32; }   // day = timestamp / 86400
@@ -71,16 +71,17 @@ Streak { count: Uint16; lastDay: Uint32; }   // day = timestamp / 86400
 
 ## 4. Entrypoints (semantics)
 
-1. **`registerAdmin(adminSecret)`** — first-call sets the admin; admin identity is witness-derived (zk-loan pattern), never an address.
+1. **`registerAdmin()`** — the admin identity is pinned by the **constructor at deploy** (audit M1: no first-call race — a front-runner can no longer seize admin between deploy and registration); the circuit re-asserts the caller holds the admin secret (zk-loan pattern), never an address.
 2. **`registerNotary(pk, index)` / `rotateNotary(index, newPk)` / `blacklistNotary(index)`** — admin only. Registry is exactly 3 slots; slots may be empty (empty slot = signature must be invalid → treat as not counted).
 3. **`verifyAttestation(...)`** — private witness: full `Assertion` fields, 3 signatures, holder secret, commit randomness.
    - Circuit: (a) for each registered key, verify signature over the assertion; count valid; **require ≥2**. (b) `timestamp` within a freshness window vs current block time — **set to ≥30 days for the demo build** (fixture proofs generated before demo day must still pass; regenerate fixtures the morning of the demo regardless). (c) `nonce` not in nullifiers; insert it. (d) compute `holderBinding = hashToCurve(holderSecret)`. (e) store `vault[persistentCommit(assertion, rand)] = {holderBinding, timestamp}`.
    - Ledger learns: commitment, timestamp, nullifier. Not the assertion, not the values.
-4. **`createWager(opponentBinding, metricId, stake, deadlineBlock)`** — caller's `balances[callerBinding] ≥ stake`; escrow both sides (opponent must accept via `acceptWager` within a window, else refund). Creates `wagers[nextWagerId]`.
-5. **`acceptWager(id)`** — escrow opponent's stake.
-6. **`submitWorkout(wagerId, vaultKey, value, revealRand)`** — (a) proves `vault[vaultKey].holderBinding == caller` (knowledge of holder secret), (b) proves `persistentCommit(assertion, revealRand) == vaultKey` with `claims[metricId] == value` (or ≥ threshold), (c) scoped nullifier `hash(vaultKey, wagerId)` — one use per (credential, challenge), (d) stores the sealed value; when both sides submitted, mark comparable.
+4. **`createWager(opponentBinding, metricId, stake, deadlineBlock)`** — **deadline gates (audit H1):** the deadline must be in the future (`blockTimeLt(deadline)`), the opponent cannot be yourself, and the stake is capped at 2⁶³−1 so the settle payout (`2 × stake`) always fits `Uint64`. Escrow both sides (opponent must accept via `acceptWager` before the deadline, else the challenger can `cancelWager` for a refund). Creates `wagers[nextWagerId]`.
+5. **`acceptWager(id)`** — escrow opponent's stake; **only while `blockTimeLt(deadline)`** — a closed wager cannot be accepted (the opponent cannot be trapped into an instant forfeit).
+6. **`submitWorkout(wagerId, vaultKey, value, revealRand)`** — (a) proves `vault[vaultKey].holderBinding == caller` (knowledge of holder secret), (b) proves `persistentCommit(assertion, revealRand) == vaultKey` with `claims[metricId] == value`, (c) scoped nullifier `hash(vaultKey, wagerId)` — one use per (credential, challenge), (d) stores the sealed value `persistentCommit(value, submissionRand)` as `Bytes32`; **only while `blockTimeLt(deadline)`** — submissions close at the deadline.
    - Values stay **sealed** — the ledger stores only commitments, never the number.
 7. **`settleWager(id)`** — require `blockTimeGte(deadlineBlock + grace)`; if both submitted: compare committed values (circuit opens both under commitments), winner receives both stakes; ties refund both. If one side never submitted: the other wins by forfeit; if neither: refunds.
+   - **Disclosure note (audit L3):** settlement necessarily publishes both opening values on-chain (the payout branch is public) — the guarantee is *sealed until settlement*, not *never revealed*.
 8. **`advanceStreak(vaultKey, day, revealRand)`** — holder-bound credential with `timestamp` in `day`; require `day == lastDay + 1` (else reset to 1); update `streaks[holder]`.
 9. **`mintBadge(badgeId, ...)`** — predicates over vaulted credentials (e.g. streak ≥ 30) or feat thresholds; store `badges[holder] += badgeId`. Badge data stays sealed.
 10. **`proveBadge(badgeId, verifierBinding)`** — proves (a) holder owns the badge, (b) holder binding matches caller, (c) optional: predicate over the underlying credential — **without revealing streak counts or dates**. This is the "prove it to an employer" moment.

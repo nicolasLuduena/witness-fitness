@@ -57,19 +57,24 @@ sidecar's A/B identities are NOT used here):
 
 1. **Challenge**: paste the opponent's holder-binding challenge ID (their
    Connect tab — `0x` + 64 hex) into the create modal. Your stake escrows real
-   NIGHT; your payout + coin key (NFT recipient) come from YOUR wallet.
+   NIGHT; your payout + coin key (NFT recipient) come from YOUR wallet. The
+   deadline must be in the future (contract-enforced).
 2. **Accept**: the other browser accepts from its own wallet (the contract
-   binds the challenger/opponent roles).
+   binds the challenger/opponent roles) — accepting after the deadline is
+   rejected ("Wager closed").
 3. **Seal**: each side seals its own submission with its latest attested
-   workout. The contract seals `transientCommit(value, submissionRand)` — a
-   fresh deterministic rand staged into the private state — and each side
-   relays its (value, rand) opening to `:8200 /wager-openings` immediately.
-4. **Settle**: either side settles once both openings have arrived (the relay
-   is polled until both are present; countdown UI locks until deadline+grace).
-   Both openings are staged into the settler's private-state `wagerOpenings`
-   (challenger first — contract law) and `settleWager` pays 2×stake + the
-   shielded NFT to the winner. The comparison is disclosed only to the settler
-   (both values were relayed); the losing opening is never published.
+   workout **before the deadline** (the contract rejects post-deadline
+   submissions — "Deadline passed"; the UI locks the Seal buttons at the
+   deadline). The contract seals `persistentCommit(value, submissionRand)` — a
+   fresh 32-byte rand staged into the private state — and each side relays its
+   (value, rand) opening to `:8200 /wager-openings` immediately.
+4. **Settle**: either side settles once the deadline + 60 s grace has passed
+   and both openings have arrived (the relay is polled until both are present;
+   countdown UI locks until deadline+grace). Both openings are staged into the
+   settler's private-state `wagerOpenings` (challenger first — contract law)
+   and `settleWager` pays 2×stake + the shielded NFT to the winner. The chain
+   publishes both opening values at settlement (sealed until then — never
+   before); the comparison is displayed in the settling browser.
 
 The opening relay is a dumb in-memory exchange (TTL 30 min) — it never sees
 the wallet or the chain.
