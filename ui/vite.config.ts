@@ -34,6 +34,10 @@ export default defineConfig({
       // shim has no subtle, crashing the page at load. Alias to the
       // browser's real WebCrypto (secure context required).
       crypto: path.resolve(__dirname, './src/lib/attest/stubs/crypto.ts'),
+      // Belt-and-braces: any residual node:crypto import in the browser graph
+      // (contract libraries must be browser-pure — offchain.ts was fixed)
+      // evaluates cleanly and fails loudly only if called.
+      'node:crypto': path.resolve(__dirname, './src/lib/attest/stubs/node-crypto.ts'),
       re2: path.resolve(__dirname, './src/lib/attest/stubs/re2.ts'),
       'fs/promises': path.resolve(__dirname, './src/lib/attest/stubs/fs-promises.ts'),
       '@reclaimprotocol/zk-symmetric-crypto/gnark': path.resolve(

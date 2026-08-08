@@ -677,9 +677,19 @@ export const loadWalletBridge = async (): Promise<WalletBridge> => {
         adaptStrideSession(api, contractAddress, privateStateId),
     };
   } catch (err) {
-    logError('wallet-bridge.load (using local stub)', err);
-    stubSingleton ??= createStubWalletBridge();
-    return stubSingleton;
+    // NO STUB FALLBACK in the browser (user decree — silent mocks are bad
+    // behavior): a real-bridge failure must be loud and visible. The local
+    // stub remains reachable ONLY in test mode (vitest) where the real api
+    // module isn't part of the graph.
+    if (import.meta.env.MODE === 'test') {
+      logError('wallet-bridge.load (using local stub in tests)', err);
+      stubSingleton ??= createStubWalletBridge();
+      return stubSingleton;
+    }
+    logError('wallet-bridge.load (REAL bridge failed — no fallback)', err);
+    throw new Error(
+      `wallet bridge failed to load: ${err instanceof Error ? err.message : String(err)} — see the console`
+    );
   }
 };
 
