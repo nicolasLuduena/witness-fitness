@@ -1,14 +1,9 @@
 # deck/assets/
 
-Three optional images. The deck works without them: each one degrades to a
-dashed placeholder box naming the file it expects, so nothing breaks on stage if
-a screenshot is missing.
-
-| File | Slide | What it should be |
+| File | Slide | Status |
 |---|---|---|
-| `strava-feed.png` | 2a — What Strava is | Screenshot of a Strava activity feed |
-| `wagers-sealed.png` | 6 — Handoff | Full-bleed screenshot of the Wagers screen with both envelopes sealed |
-| `qr.png` | 15 — Close | QR code pointing at github.com/nicolasLuduena/witness-fitness |
+| `wagers-sealed.png` | 05 — Handoff | Present — 1280×720 capture using the real `ui/src/styles.css` shell + sealed envelopes |
+| `qr.png` | 13 — Close | Present — `https://github.com/nicolasLuduena/witness-fitness` (720×720) |
+| `strava-feed.png` | 2b — What Strava is | Still missing (optional placeholder) |
 
-Drop the files in with exactly these names and reload. PNG or JPG both work as
-long as the filename matches (change the `src` in `index.html` otherwise).
+Reload the deck after replacing files.

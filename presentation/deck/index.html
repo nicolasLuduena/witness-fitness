@@ -164,7 +164,7 @@
                 <div class="delta delta--win"><span class="who">A</span><span class="val">248 → 258</span></div>
                 <div class="delta delta--lose"><span class="who">B</span><span class="val">250 → 240</span></div>
               </div>
-              <p class="rfoot">measured, on-chain</p>
+              <p class="rfoot">prior E2E on <code class="hash">cf80ad42…</code> · measured on-chain</p>
               <p class="rline">winner NFT <code class="hash">91f59aa0…</code> minted to A’s <b>shielded</b> key</p>
             </div>
             <div class="receipt">
@@ -172,6 +172,7 @@
               <p class="rline">Real Strava walk <b>3,900 m / 2,942 s</b></p>
               <p class="rline">→ <code>verifyAttestation</code> <b>18.9 s</b> → tx <code class="hash">3c105361…</code></p>
               <p class="rline denial"><code>mintBadge(2)</code> → <b>failed assert: Distance below threshold</b></p>
+              <p class="rfoot">current deploy is <code class="hash">f4063dd7…</code></p>
             </div>
           </div>
         </section>
@@ -186,7 +187,7 @@
                 <b>Provenance, verified on-chain.</b> The circuit checks that <b class="accent">2 of 3 registered notaries</b> signed an assertion derived from a witnessed Strava TLS session. A number a user typed in has no valid signatures and cannot enter the game.
               </li>
               <li>
-                <b>Sealing, for free.</b> Because the check is a ZK circuit, it proves the claim is genuine <b class="accent">without publishing the value</b>.
+                <b>Sealing, for free.</b> Vault and streak checks prove the claim <b class="accent">without publishing the value</b>. Wager openings stay sealed until settle — then both go on-chain to pick the winner.
               </li>
               <li>
                 <b>Real stakes, on both ledgers.</b> The pot is unshielded NIGHT the contract escrows and pays out. The trophy is a shielded NFT only the winner can spend.
@@ -200,7 +201,7 @@
               <li>Compact cannot verify Reclaim’s circom SNARKs.</li>
               <li>So the contract trusts <b class="accent">3 registered keys</b> and requires <b class="accent">≥2 signatures</b>.</li>
               <li>TLSNotary’s own docs prescribe exactly this: <em>“A data Verifier can also require signed data from multiple Notaries to rule out collusion between the Prover and a Notary.”</em></li>
-              <li><b>Today all three run on one laptop.</b> Three organisations is the Q1 milestone.</li>
+              <li><b>Today all three run on one laptop.</b> Three organisations is the Months milestone.</li>
             </ul>
           </section>
         </section>
@@ -214,11 +215,11 @@
           <div class="boundary">
             <div class="bcol bcol--on">
               <h3>On-chain</h3>
-              <p>notary keys · commitments · nullifiers · timestamps · who won · <b class="accent">the stake amount and the payout addresses</b></p>
+              <p>notary keys · commitments · nullifiers · timestamps · who won · stake · payout addresses · <b class="accent">both openings at settle</b></p>
             </div>
             <div class="bcol bcol--never">
-              <h3>Never</h3>
-              <p>distance · pace · route · time of day · wallet-linked identity</p>
+              <h3>Never on-chain</h3>
+              <p>route · time of day · wallet-linked identity · the value <b>before</b> settle</p>
             </div>
           </div>
         </section>
@@ -258,23 +259,15 @@
           <div class="road">
             <div class="stage stage--now">
               <span class="when">Now</span>
-              <span class="what"><b>184 tests</b> · live NIGHT wagers · two browser wallets · in-browser OAuth/ZK</span>
+              <span class="what"><b>215 tests</b> · live NIGHT wagers · two browser wallets · in-browser OAuth/ZK</span>
             </div>
             <div class="stage">
               <span class="when">Weeks</span>
               <span class="what">public testnet · hosted notaries · shielded stakes</span>
             </div>
             <div class="stage">
-              <span class="when">Q1</span>
-              <span class="what">3 independent notaries · Garmin + Apple Health</span>
-            </div>
-            <div class="stage">
-              <span class="when">H2 ’26</span>
-              <span class="what">employer &amp; race trials</span>
-            </div>
-            <div class="stage">
-              <span class="when">Then</span>
-              <span class="what">prove you showed up · prove activity to insurers</span>
+              <span class="when">Months</span>
+              <span class="what">3 independent notaries · Garmin + Apple Health · employer &amp; race trials</span>
             </div>
           </div>
         </section>
@@ -284,19 +277,23 @@
           <section data-plan="12">
             <div class="cue">6:45</div>
             <div class="kicker">12 · Who plays, who pays</div>
+            <h2>They already pay someone to check the numbers.</h2>
             <div class="two-col">
               <div class="card">
-                <h3>Players</h3>
-                <p>Athletes who already log everything. Run clubs, virtual races, challenge groups.</p>
-                <p>Peer-funded wagers — <b class="accent">no house cut</b>.</p>
+                <h3>Who</h3>
+                <p><b>Players:</b> athletes who already log everything — clubs, races, challenge groups.</p>
+                <p><b>Payers:</b> organisers who verify manually today; then employers who need attested participation without holding health data.</p>
+                <p class="tight">Path: clubs &amp; races first → employer wellness second.</p>
               </div>
               <div class="card">
-                <h3>Payers</h3>
-                <p>Race organisers and challenge platforms who verify manually today.</p>
-                <p>Then employer wellness, where the buyer needs verified participation and would rather not hold the data.</p>
+                <h3>Why it pays</h3>
+                <p>Platforms charge <b class="accent">$0.50–$4.50</b> per employee / month.</p>
+                <p>Incentive headroom is <b>thousands</b> / employee / year — verification is cheap next to money already committed.</p>
+                <p class="tight">Peer-funded pots — <b class="accent">no house cut</b>, no token to defend.</p>
               </div>
             </div>
-            <p class="foot">Corporate wellness: <b>$55.1B</b>, 3.1% CAGR (Grand View, 2025 — conservative of three estimates spanning $55–75B). Platform pricing anchor <b>$0.50–$4.50 PEPM</b> (WellSteps, published). Wellness programs cover <b>50M+ US workers</b> (<em>QJE</em> 2019).</p>
+            <p class="punch">We don’t take a cut of the wager. We charge the people who today pay humans to check the numbers.</p>
+            <p class="foot">Corporate wellness <b>$55.1B</b> (Grand View, 2025) — we only need the slice that already pays humans to check numbers.</p>
           </section>
 
           <section data-plan="12a">
@@ -313,43 +310,15 @@
             <ul class="lead">
               <li>HIPAA/ACA permits wellness incentives up to <b>30% of coverage cost</b>.</li>
               <li>Average employer coverage <b>$17,496/employee</b> (Mercer, 2025).</li>
-              <li>→ a few <b>thousand</b> dollars per employee per year of regulated incentive headroom, against platform pricing of <b>$0.50–$4.50 PEPM</b>.</li>
+              <li>→ a few <b>thousand</b> / employee / year of headroom, against <b>$0.50–$4.50</b> per employee / month for the platform.</li>
             </ul>
             <p class="punch">The incentive pool is <span class="accent">one to two orders of magnitude larger</span> than the verification budget.</p>
           </section>
         </section>
 
-        <!-- =========================================================== 14 -->
-        <section>
-          <section data-plan="13">
-            <div class="cue">7:00</div>
-            <div class="kicker">13 · Limits</div>
-            <ul class="limits">
-              <li><b>Live only</b> — no recorded demo fallback</li>
-              <li>Real NIGHT · two browser wallets</li>
-              <li>Notaries: 3 keys, 1 machine</li>
-              <li>Stakes public; prize shielded</li>
-              <li class="accent">Provenance ≠ a human ran</li>
-            </ul>
-          </section>
-
-          <section data-plan="13a">
-            <div class="kicker">↓ 13a · The Strava dependency, handled respectfully</div>
-            <p class="lead-p">Strava’s API Policy, effective <b>1 June 2026</b>:</p>
-            <dl class="prims prims--clauses">
-              <dt>§5.5</dt><dd>no storing Strava Data “or any data derived from” it in a <b>Persistent Index</b></dd>
-              <dt>§6.2</dt><dd>7-day cache cap</dd>
-              <dt>§6.3</dt><dd>deletions propagate within <b>48 hours</b></dd>
-              <dt>§5.10</dt><dd>no third-party transfer “<b>even if a user consents</b>”</dd>
-              <dt>§5.16</dt><dd>no pass-through proxies or token multiplexing</dd>
-              <dt>§6.1</dt><dd>apps with <b>≤9,999 athletes</b> may display other users’ data</dd>
-            </dl>
-          </section>
-        </section>
-
-        <!-- =========================================================== 15 -->
-        <section data-plan="14" class="slide-cover">
-          <div class="cue">7:20</div>
+        <!-- =========================================================== 13 -->
+        <section data-plan="13" class="slide-cover">
+          <div class="cue">7:05</div>
           <p class="tagline tagline--close">prove the workout, hide the data.</p>
           <p class="repo"><code>github.com/nicolasLuduena/witness-fitness</code></p>
           <figure class="shot shot--qr">

@@ -44,8 +44,7 @@ is the answer to a question you were asked.** You never press `↓` during the s
 11  Roadmap
 12  Who plays, who pays         ↓ 12a Counter-evidence
                                 ↓ 12b Sizing, honestly
-13  Limits                      ↓ 13a The Strava dependency
-14  Close
+13  Close
 ```
 
 Each slide carries its plan cue time in the top-right corner and its ID in the kicker.
@@ -54,4 +53,4 @@ Each slide carries its plan cue time in the top-right corner and its ID in the k
 
 Drop into `assets/` if you have them (placeholders otherwise):
 
-`strava-feed.png` (2b), `wagers-sealed.png` (5), `qr.png` (14).
+`strava-feed.png` (2b), `wagers-sealed.png` (5), `qr.png` (13).
