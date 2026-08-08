@@ -235,12 +235,14 @@ export const DemoProvider = ({ children }: { children: ReactNode }) => {
   );
 
   const restorePrivateState = useCallback(
-    (password: string, payload: string) => {
-      if (!client.restorePrivateState)
-        return Promise.reject(new Error("not supported in this mode"));
-      return client.restorePrivateState(password, payload);
+    async (password: string, payload: string) => {
+      if (!client.restorePrivateState) throw new Error("not supported in this mode");
+      const restoredSession = await client.restorePrivateState(password, payload);
+      setSession(restoredSession);
+      setAttestOutcome(null);
+      await refresh(true);
     },
-    [client],
+    [client, refresh],
   );
 
   const resetPrivateState = useCallback(() => {

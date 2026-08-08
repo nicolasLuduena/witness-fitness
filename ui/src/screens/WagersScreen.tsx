@@ -15,11 +15,16 @@ import { RevealSettle } from "../components/RevealSettle";
 import { ATHLETE_A, ATHLETE_B } from "../domain/story";
 import type { Athlete, WagerCreateRequest, WagerView } from "../domain/types";
 import { METRICS } from "../domain/types";
-import { fmtTnight, hexShort } from "../lib/format";
+import { fmtToken, hexShort } from "../lib/format";
 import { athleteLabel, opponentLabel } from "../lib/identity-label";
 import { logError } from "../lib/logger";
 import { navigateTo } from "../lib/navigation";
-import { challengeIdOf, formatCountdown, settleReadyAtMs } from "../lib/wager-countdown";
+import {
+  challengeIdOf,
+  deadlineAtMs,
+  formatCountdown,
+  settleReadyAtMs,
+} from "../lib/wager-countdown";
 import { useDemo } from "../state/DemoStore";
 
 const statusLabel: Record<WagerView["status"], string> = {
@@ -28,6 +33,13 @@ const statusLabel: Record<WagerView["status"], string> = {
   submitted: "Submissions sealed",
   settled: "Settled",
   cancelled: "Cancelled",
+};
+
+type WagerAction = "accept" | "submit" | "submit-a" | "submit-b" | "settle";
+
+type BusyAction = {
+  wagerId: number;
+  action: WagerAction;
 };
 
 export const WagersScreen = () => {
@@ -46,7 +58,7 @@ export const WagersScreen = () => {
   } = useDemo();
   const [creating, setCreating] = useState(false);
   const [selectedId, setSelectedId] = useState<number | null>(null);
-  const [busyId, setBusyId] = useState<number | null>(null);
+  const [busyAction, setBusyAction] = useState<BusyAction | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [now, setNow] = useState(() => Date.now());
 
@@ -80,8 +92,8 @@ export const WagersScreen = () => {
   const isLive = mode === "live";
   const myCredentialId = credentials[0]?.id;
 
-  const run = async (id: number, fn: () => Promise<unknown>) => {
-    setBusyId(id);
+  const run = async (id: number, action: WagerAction, fn: () => Promise<unknown>) => {
+    setBusyAction({ wagerId: id, action });
     setActionError(null);
     try {
       await fn();
@@ -91,7 +103,7 @@ export const WagersScreen = () => {
         err instanceof Error ? err.message : "We couldn't update this wager. Try again.",
       );
     } finally {
-      setBusyId(null);
+      setBusyAction(null);
     }
   };
 
@@ -132,18 +144,22 @@ export const WagersScreen = () => {
             names and wallet identities never enter the wager.
           </p>
         </div>
-        <div className="heading-actions">
-          <button
-            className="icon-action"
-            onClick={() => void refresh()}
-            aria-label="Refresh wagers"
-          >
-            <RefreshCw aria-hidden="true" />
-          </button>
-          <Button tone="primary" disabled={!session} onClick={() => setCreating(true)}>
-            Create private wager <ArrowRight aria-hidden="true" />
-          </Button>
-        </div>
+        {session && wagers.length > 0 ? (
+          <div className="heading-actions">
+            <button
+              type="button"
+              className="icon-action"
+              onClick={() => void refresh()}
+              aria-label="Refresh wagers"
+              title="Refresh wagers"
+            >
+              <RefreshCw aria-hidden="true" />
+            </button>
+            <Button tone="primary" onClick={() => setCreating(true)}>
+              Create private wager <ArrowRight aria-hidden="true" />
+            </Button>
+          </div>
+        ) : null}
       </header>
 
       {actionError ? <Notice tone="error">{actionError}</Notice> : null}
@@ -193,6 +209,7 @@ export const WagersScreen = () => {
             </div>
             {wagers.map((wager) => (
               <button
+                type="button"
                 key={wager.id}
                 className={
                   selected?.id === wager.id
@@ -210,7 +227,7 @@ export const WagersScreen = () => {
                   {athleteLabel(wager.challenger)} ↔ {athleteLabel(wager.opponent)}
                 </span>
                 <span>
-                  {fmtTnight(wager.stake)} NIGHT · {wager.metric.label}
+                  {fmtToken(wager.stake)} · {wager.metric.label}
                 </span>
               </button>
             ))}
@@ -223,12 +240,16 @@ export const WagersScreen = () => {
               isWallet={isWallet}
               isLive={isLive}
               myCredentialId={myCredentialId}
-              busy={busyId === selected.id}
-              onAccept={() => run(selected.id, () => acceptWager(selected.id))}
+              busyAction={busyAction?.wagerId === selected.id ? busyAction.action : null}
+              onAccept={() => run(selected.id, "accept", () => acceptWager(selected.id))}
               onSubmit={(credential) =>
-                run(selected.id, () => submitWorkout(selected.id, credential))
+                run(
+                  selected.id,
+                  credential === "A" ? "submit-a" : credential === "B" ? "submit-b" : "submit",
+                  () => submitWorkout(selected.id, credential),
+                )
               }
-              onSettle={() => run(selected.id, () => settleWager(selected.id))}
+              onSettle={() => run(selected.id, "settle", () => settleWager(selected.id))}
             />
           ) : null}
         </div>
@@ -243,7 +264,7 @@ const WagerDetail = ({
   isWallet,
   isLive,
   myCredentialId,
-  busy,
+  busyAction,
   onAccept,
   onSubmit,
   onSettle,
@@ -253,7 +274,7 @@ const WagerDetail = ({
   isWallet: boolean;
   isLive: boolean;
   myCredentialId?: string;
-  busy: boolean;
+  busyAction: WagerAction | null;
   onAccept: () => Promise<unknown>;
   onSubmit: (credential: string) => Promise<unknown>;
   onSettle: () => Promise<unknown>;
@@ -262,21 +283,28 @@ const WagerDetail = ({
     wager.submissions.some((submission) => submission.athlete.handle === athlete.handle);
   const localAthlete = wager.challenger.role === "local" ? wager.challenger : wager.opponent;
   const localSubmitted = submittedBy(localAthlete);
-  const deadlineMs = Number(wager.deadlineBlock) * 1_000;
+  const deadlineMs = deadlineAtMs(wager.deadlineBlock);
   const submissionsClosed = wager.deadlineBlock > 0n && deadlineMs <= now;
   const settleReadyAt = settleReadyAtMs(wager.deadlineBlock);
   const settleLocked = wager.deadlineBlock > 0n && settleReadyAt > now;
-  const canAccept = wager.status === "open" && (isLive || wager.opponent.role === "local");
-  const canSettle = wager.status === "accepted" || wager.status === "submitted";
-  const currentStep = stepForWager(wager, settleLocked);
+  const canAccept = wager.status === "open" && wager.opponent.role === "local";
+  const canSettle =
+    submissionsClosed && (wager.status === "accepted" || wager.status === "submitted");
+  const accepting = busyAction === "accept";
+  const submitting = busyAction === "submit";
+  const submittingA = busyAction === "submit-a";
+  const submittingB = busyAction === "submit-b";
+  const settling = busyAction === "settle";
+  const busy = busyAction !== null;
+  const currentStep = stepForWager(wager, submissionsClosed, settleLocked);
 
   return (
     <article className="wager-detail">
       <header className="wager-detail__heading">
         <div>
           <p className="section-label">Wager #{wager.id}</p>
-          <h2>{headingForWager(wager, settleLocked)}</h2>
-          <p>{copyForWager(wager, settleLocked)}</p>
+          <h2>{headingForWager(wager, submissionsClosed, settleLocked)}</h2>
+          <p>{copyForWager(wager, submissionsClosed, settleLocked)}</p>
         </div>
         <span className={`state-label state-label--${wager.status}`}>
           {statusLabel[wager.status]}
@@ -300,22 +328,26 @@ const WagerDetail = ({
               <dt>
                 <Coins aria-hidden="true" /> Stake
               </dt>
-              <dd>{fmtTnight(wager.stake)} NIGHT</dd>
+              <dd>{fmtToken(wager.stake)}</dd>
             </div>
             <div>
               <dt>
                 <CalendarClock aria-hidden="true" /> Deadline
               </dt>
               <dd>
-                {new Date(deadlineMs).toLocaleTimeString([], {
-                  hour: "2-digit",
-                  minute: "2-digit",
-                })}
+                {submissionsClosed
+                  ? "Submissions closed"
+                  : `${formatCountdown(deadlineMs - now)} remaining`}
               </dd>
               <small>
-                {settleLocked
-                  ? `Settlement opens in ${formatCountdown(settleReadyAt - now)}`
-                  : "Settlement window open"}
+                {!submissionsClosed
+                  ? `Closes at ${new Date(deadlineMs).toLocaleTimeString([], {
+                      hour: "2-digit",
+                      minute: "2-digit",
+                    })}`
+                  : settleLocked
+                    ? `Settlement opens in ${formatCountdown(settleReadyAt - now)}`
+                    : "Settlement window open"}
               </small>
             </div>
           </dl>
@@ -325,38 +357,36 @@ const WagerDetail = ({
           <StageActionIcon step={currentStep} />
           <div className="stage-action__copy">
             <p className="section-label">Current action</p>
-            <h3>{actionHeading(wager, settleLocked)}</h3>
-            <p>{actionCopy(wager, settleLocked, localSubmitted)}</p>
+            <h3>{actionHeading(wager, submissionsClosed, settleLocked)}</h3>
+            <p>{actionCopy(wager, submissionsClosed, settleLocked, localSubmitted)}</p>
           </div>
 
           {canAccept ? (
             <Button tone="primary" disabled={busy} onClick={() => void onAccept()}>
-              {busy ? <span className="spin" /> : null} Accept challenge
+              {accepting ? <span className="spin" /> : null} Accept challenge
             </Button>
           ) : null}
 
-          {isWallet && wager.status === "accepted" && !localSubmitted ? (
+          {isWallet && wager.status === "accepted" && !localSubmitted && !submissionsClosed ? (
             <Button
               tone="primary"
-              disabled={busy || !myCredentialId || submissionsClosed}
+              disabled={busy || !myCredentialId}
               onClick={() => myCredentialId && void onSubmit(myCredentialId)}
             >
-              {busy ? <span className="spin" /> : null}
-              {submissionsClosed
-                ? "Submissions closed"
-                : myCredentialId
-                  ? "Seal my workout"
-                  : "Attest a workout first"}
+              {submitting ? <span className="spin" /> : null}
+              {myCredentialId ? "Seal my workout" : "Attest a workout first"}
             </Button>
           ) : null}
 
-          {isLive && wager.status === "accepted" ? (
-            <div className="debug-actions" aria-label="Maintainer debug submissions">
+          {isLive && wager.status === "accepted" && !submissionsClosed ? (
+            <fieldset className="debug-actions">
+              <legend className="visually-hidden">Maintainer debug submissions</legend>
               <Button
                 tone="primary"
                 disabled={busy || submittedBy(wager.challenger) || submissionsClosed}
                 onClick={() => void onSubmit(athleteOf(wager.challenger))}
               >
+                {submittingA ? <span className="spin" /> : null}
                 {submittedBy(wager.challenger) ? "Side A sealed" : "Seal side A"}
               </Button>
               <Button
@@ -364,14 +394,15 @@ const WagerDetail = ({
                 disabled={busy || submittedBy(wager.opponent) || submissionsClosed}
                 onClick={() => void onSubmit(athleteOf(wager.opponent))}
               >
+                {submittingB ? <span className="spin" /> : null}
                 {submittedBy(wager.opponent) ? "Side B sealed" : "Seal side B"}
               </Button>
-            </div>
+            </fieldset>
           ) : null}
 
           {canSettle ? (
             <Button tone="primary" disabled={busy || settleLocked} onClick={() => void onSettle()}>
-              {busy ? <span className="spin" /> : null}
+              {settling ? <span className="spin" /> : null}
               {settleLocked ? `Settle in ${formatCountdown(settleReadyAt - now)}` : "Settle wager"}
             </Button>
           ) : null}
@@ -381,7 +412,7 @@ const WagerDetail = ({
               <Check aria-hidden="true" />
               <span>
                 <strong>{wager.result.summary}</strong>
-                {fmtTnight(wager.result.pot)} {wager.result.currency} settled.
+                {fmtToken(wager.result.pot, wager.result.currency)} settled.
               </span>
             </div>
           ) : null}
@@ -453,53 +484,80 @@ const StageActionIcon = ({ step }: { step: number }) => (
   </div>
 );
 
-const stepForWager = (wager: WagerView, settleLocked: boolean): number => {
+const stepForWager = (
+  wager: WagerView,
+  submissionsClosed: boolean,
+  settleLocked: boolean,
+): number => {
   if (wager.status === "settled") return 5;
   if (wager.status === "cancelled") return 2;
   if (wager.status === "open") return 2;
-  if (wager.status === "accepted" && wager.submissions.length === 0) return 3;
+  if (wager.status === "accepted" && wager.submissions.length === 0 && !submissionsClosed) return 3;
   if (settleLocked) return 4;
   return 5;
 };
 
-const headingForWager = (wager: WagerView, settleLocked: boolean): string => {
+const headingForWager = (
+  wager: WagerView,
+  submissionsClosed: boolean,
+  settleLocked: boolean,
+): string => {
   if (wager.status === "cancelled") return "Wager cancelled";
   if (wager.status === "open") return "Challenge sent";
-  if (wager.status === "accepted" && wager.submissions.length === 0) return "Challenge ready";
+  if (wager.status === "accepted" && wager.submissions.length === 0)
+    return submissionsClosed ? "Submission window closed" : "Challenge ready";
   if (wager.status === "settled") return "Wager settled";
   return settleLocked ? "Both sides are under seal" : "Settlement is ready";
 };
 
-const copyForWager = (wager: WagerView, settleLocked: boolean): string => {
+const copyForWager = (
+  wager: WagerView,
+  submissionsClosed: boolean,
+  settleLocked: boolean,
+): string => {
   if (wager.status === "cancelled")
     return "This challenge is closed and no further action is available.";
   if (wager.status === "open")
     return "The anonymous opponent must accept before either side can seal a workout.";
   if (wager.status === "accepted" && wager.submissions.length === 0)
-    return "Use your latest attested workout to lock your submission.";
-  if (wager.status === "settled") return "The contract enforced the terms and moved the pot.";
+    return submissionsClosed
+      ? "No workouts were sealed. Settlement will return both stakes."
+      : "Use your latest attested workout to lock your submission.";
+  if (wager.status === "settled")
+    return wager.submissions.length === 0
+      ? "The contract returned both stakes because neither holder submitted."
+      : "The contract enforced the final result while keeping both holders pseudonymous.";
   return settleLocked
     ? "The contract is holding the commitments until the deadline."
     : "The deadline has passed. Either side can settle.";
 };
 
-const actionHeading = (wager: WagerView, settleLocked: boolean): string => {
+const actionHeading = (
+  wager: WagerView,
+  submissionsClosed: boolean,
+  settleLocked: boolean,
+): string => {
   if (wager.status === "cancelled") return "No further action";
   if (wager.status === "open")
     return wager.opponent.role === "local" ? "Accept this challenge" : "Waiting for acceptance";
-  if (wager.status === "accepted" && wager.submissions.length < 2)
+  if (wager.status === "accepted" && wager.submissions.length < 2 && !submissionsClosed)
     return "Seal the eligible workout";
   if (wager.status === "settled") return "Outcome confirmed";
   return settleLocked ? "Wait for the settlement window" : "Settle the wager";
 };
 
-const actionCopy = (wager: WagerView, settleLocked: boolean, localSubmitted: boolean): string => {
+const actionCopy = (
+  wager: WagerView,
+  submissionsClosed: boolean,
+  settleLocked: boolean,
+  localSubmitted: boolean,
+): string => {
   if (wager.status === "cancelled")
     return "The wager remains in your history as a private receipt.";
   if (wager.status === "open") return "Acceptance binds the pseudonymous holder to these terms.";
-  if (wager.status === "accepted" && localSubmitted)
+  if (wager.status === "accepted" && localSubmitted && !submissionsClosed)
     return "Your commitment is sealed. Waiting for the other holder binding.";
-  if (wager.status === "accepted")
+  if (wager.status === "accepted" && !submissionsClosed)
     return "The value stays on your device while a commitment is added to the contract.";
   if (wager.status === "settled")
     return "The result is final. Athlete and wallet identities remain unlinked.";
@@ -529,7 +587,7 @@ const CreateWagerPage = ({
 }) => {
   const [metricId, setMetricId] = useState("1");
   const [stake, setStake] = useState("10");
-  const [deadline, setDeadline] = useState("90");
+  const [deadline, setDeadline] = useState("5");
   const [challengeId, setChallengeId] = useState("");
   const [challengeError, setChallengeError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -566,7 +624,7 @@ const CreateWagerPage = ({
         opponent,
         metricId: BigInt(metricId),
         stake: Number(stake),
-        deadlineBlock: BigInt(Math.floor(Date.now() / 1_000) + Number(deadline)),
+        deadlineBlock: BigInt(Math.floor(Date.now() / 1_000) + Number(deadline) * 60),
       });
     } finally {
       setSaving(false);
@@ -575,7 +633,7 @@ const CreateWagerPage = ({
 
   return (
     <div className="page create-wager-page">
-      <button className="back-action" onClick={onBack}>
+      <button type="button" className="back-action" onClick={onBack}>
         <ArrowLeft aria-hidden="true" /> Back to wagers
       </button>
       <header className="page-heading page-heading--compact">
@@ -651,16 +709,20 @@ const CreateWagerPage = ({
           </div>
 
           <div className="field">
-            <label htmlFor="wager-deadline">Submission window (seconds)</label>
+            <label htmlFor="wager-deadline">Submission window (minutes)</label>
             <input
               id="wager-deadline"
               className="input"
               type="number"
-              min="1"
+              min="2"
+              max="60"
               value={deadline}
               onChange={(event) => setDeadline(event.target.value)}
             />
-            <small>Settlement opens after this window plus the contract's grace period.</small>
+            <small>
+              A live countdown starts when the wager is created. Settlement opens one minute after
+              it closes.
+            </small>
           </div>
 
           <Button tone="primary" block disabled={saving} type="submit">

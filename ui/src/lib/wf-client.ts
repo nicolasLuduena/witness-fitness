@@ -56,7 +56,7 @@ export interface WfClient {
   // Wallet mode only (Track 0.2): encrypted backup/restore of the private
   // state. Absent on fixture/sidecar clients — screens must feature-check.
   backupPrivateState?(password: string): Promise<string>;
-  restorePrivateState?(password: string, payload: string): Promise<void>;
+  restorePrivateState?(password: string, payload: string): Promise<ClientSession>;
   resetPrivateState?(): Promise<void>;
 
   // Wallet mode only (Round 2D): browser Strava OAuth + identity. The

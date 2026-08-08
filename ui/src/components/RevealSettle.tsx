@@ -1,7 +1,7 @@
 import { Award, Check, LockKeyhole, Trophy } from "lucide-react";
 import { useState } from "react";
 import type { WagerSettleResult } from "../domain/types";
-import { fmtKm, fmtTnight } from "../lib/format";
+import { fmtKm, fmtToken } from "../lib/format";
 import { athleteLabel } from "../lib/identity-label";
 import { Button, Notice } from "./bits";
 
@@ -12,37 +12,61 @@ export const RevealSettle = ({ result }: { result: WagerSettleResult }) => {
   if (!settlement) return null;
 
   const winner = settlement.winner ? athleteLabel(settlement.winner) : null;
+  const noSubmissions = wager.submissions.length === 0;
+  const challengerSubmitted = wager.submissions.some(
+    ({ athlete }) => athlete.holderBinding === wager.challenger.holderBinding,
+  );
+  const opponentSubmitted = wager.submissions.some(
+    ({ athlete }) => athlete.holderBinding === wager.opponent.holderBinding,
+  );
   const challengerValue = settlement.challengerValue ?? 0;
   const opponentValue = settlement.opponentValue ?? 0;
 
   return (
     <div className="settlement-reveal">
       <div className="settlement-reveal__mark" aria-hidden="true">
-        {settlement.tie ? <Check /> : <Trophy />}
+        {settlement.tie || noSubmissions ? <Check /> : <Trophy />}
       </div>
       <p className="page-context">Settlement confirmed</p>
       <h2>
-        {settlement.tie
-          ? "The wager ended in a tie."
-          : settlement.forfeit
-            ? settlement.summary
-            : winner === "You"
-              ? "You won the private wager."
-              : `${winner ?? "The opposing holder"} won the private wager.`}
+        {noSubmissions
+          ? "No workouts were submitted. Both stakes were refunded."
+          : settlement.tie
+            ? "The wager ended in a tie."
+            : settlement.forfeit
+              ? settlement.summary
+              : winner === "You"
+                ? "You won the private wager."
+                : winner
+                  ? `${winner} won the private wager.`
+                  : "The wager settled under seal."}
       </h2>
       <p className="settlement-pot">
-        {fmtTnight(settlement.pot)} {settlement.currency} pot settled
+        {fmtToken(settlement.pot, settlement.currency)}{" "}
+        {noSubmissions || settlement.tie ? "returned" : "pot settled"}
       </p>
 
       <div className="settlement-identities">
         <div>
           <span>{athleteLabel(wager.challenger)}</span>
-          <strong>{showComparison ? fmtKm(challengerValue) : "Sealed"}</strong>
+          <strong>
+            {challengerSubmitted
+              ? showComparison
+                ? fmtKm(challengerValue)
+                : "Sealed"
+              : "No submission"}
+          </strong>
         </div>
         <span aria-hidden="true">versus</span>
         <div>
           <span>{athleteLabel(wager.opponent)}</span>
-          <strong>{showComparison ? fmtKm(opponentValue) : "Sealed"}</strong>
+          <strong>
+            {opponentSubmitted
+              ? showComparison
+                ? fmtKm(opponentValue)
+                : "Sealed"
+              : "No submission"}
+          </strong>
         </div>
       </div>
 
@@ -50,9 +74,11 @@ export const RevealSettle = ({ result }: { result: WagerSettleResult }) => {
         <LockKeyhole aria-hidden="true" />
         <span>
           <strong>No athlete names or wallets were used.</strong>
-          {showComparison
-            ? " You chose to show the values available after settlement."
-            : " The room-safe result reveals only the outcome and pot."}
+          {noSubmissions
+            ? " The room-safe result reveals only that both stakes were refunded."
+            : showComparison
+              ? " You chose to show the values available after settlement."
+              : " The room-safe result reveals only the outcome and pot."}
         </span>
       </div>
 
@@ -73,7 +99,11 @@ export const RevealSettle = ({ result }: { result: WagerSettleResult }) => {
       ) : null}
 
       <Notice tone="success">
-        The contract enforced the wager and moved the pot. Both participants remain pseudonymous.
+        {noSubmissions
+          ? "The contract refunded both stakes. Both participants remain pseudonymous."
+          : settlement.tie
+            ? "The contract refunded both stakes after the tie. Both participants remain pseudonymous."
+            : "The contract enforced the wager and moved the pot. Both participants remain pseudonymous."}
       </Notice>
     </div>
   );

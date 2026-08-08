@@ -1,10 +1,10 @@
 import { Award, CalendarDays, Shield, Trophy } from "lucide-react";
 import { useEffect, useState } from "react";
+import { type AppRoute, navigateTo, routeFromPath } from "./lib/navigation";
 import { ConnectScreen } from "./screens/ConnectScreen";
 import { StreaksScreen } from "./screens/StreaksScreen";
 import { TodayScreen } from "./screens/TodayScreen";
 import { WagersScreen } from "./screens/WagersScreen";
-import { type AppRoute, navigateTo, routeFromPath } from "./lib/navigation";
 import { DemoProvider, useDemo } from "./state/DemoStore";
 
 const NAV_ITEMS: { id: AppRoute; label: string; icon: typeof CalendarDays }[] = [
@@ -32,6 +32,7 @@ const Shell = () => {
       </a>
       <header className="app-header">
         <button
+          type="button"
           className="brand"
           onClick={() => navigateTo("today")}
           aria-label="WitnessFitness home"
@@ -41,6 +42,7 @@ const Shell = () => {
         <nav className="desktop-nav" aria-label="Primary navigation">
           {NAV_ITEMS.map((item) => (
             <button
+              type="button"
               key={item.id}
               className={route === item.id ? "nav-link nav-link--active" : "nav-link"}
               onClick={() => navigateTo(item.id)}
@@ -50,7 +52,13 @@ const Shell = () => {
             </button>
           ))}
         </nav>
-        <button className="account-status" onClick={() => navigateTo("account")}>
+        <button
+          type="button"
+          className="account-status"
+          onClick={() => navigateTo("account")}
+          aria-label={ready ? "Open account — setup complete" : "Open account setup"}
+          title={ready ? "Account ready" : "Finish setup"}
+        >
           <span className={`status-dot ${ready ? "status-dot--ready" : ""}`} aria-hidden="true" />
           <span>{ready ? "Ready" : "Setup"}</span>
           <Shield aria-hidden="true" />
@@ -69,6 +77,7 @@ const Shell = () => {
           const Icon = item.icon;
           return (
             <button
+              type="button"
               key={item.id}
               className={
                 route === item.id ? "mobile-nav__item mobile-nav__item--active" : "mobile-nav__item"

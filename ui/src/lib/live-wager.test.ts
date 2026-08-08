@@ -5,7 +5,7 @@
 
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { hexOf, LiveClient, nightToDisplay } from "./live-client";
-import { challengeIdOf, formatCountdown, settleReadyAtMs } from "./wager-countdown";
+import { challengeIdOf, deadlineAtMs, formatCountdown, settleReadyAtMs } from "./wager-countdown";
 
 const NIGHT_BASE = 10n ** 12n;
 const HEX = (v: bigint | number) => "0x" + BigInt(v).toString(16);
@@ -230,6 +230,10 @@ describe("live wager flow (stubbed sidecar)", () => {
 });
 
 describe("wager countdown + challenge-ID helpers", () => {
+  it("treats the legacy deadlineBlock value as a Unix timestamp, not a block height", () => {
+    expect(deadlineAtMs(1_800_000_000n)).toBe(1_800_000_000_000);
+  });
+
   it("settleReadyAtMs = deadlineBlock seconds + 60 s grace", () => {
     const deadlineBlock = BigInt(1_800_000_000);
     expect(settleReadyAtMs(deadlineBlock)).toBe(1_800_000_000_000 + 60_000);

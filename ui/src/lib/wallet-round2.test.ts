@@ -295,6 +295,30 @@ describe("attest — the real browser flow", () => {
     const second = await client.attest();
     expect(second.credential.value).toBe(2426);
   });
+
+  it("restores the holder identity and latest attestation into a fresh session", async () => {
+    const bridge = createStubWalletBridge();
+    localStorageTokenStore.save(stravaTokens());
+    (globalThis as { fetch?: unknown }).fetch = vi.fn(async () => jsonResponse([{ id: 1 }]));
+    attestStravaMock.mockResolvedValue(attestResult(15_000) as never);
+
+    const { client: original, session: originalSession } = await connectClient("alice", bridge);
+    await original.attest();
+    const payload = await original.backupPrivateState("demo-password");
+    await original.resetPrivateState();
+
+    const { client: fresh, session: temporarySession } = await connectClient("alice", bridge);
+    expect(temporarySession.athlete.holderBinding).not.toBe(originalSession.athlete.holderBinding);
+    expect(await fresh.vault()).toHaveLength(0);
+
+    const restoredSession = await fresh.restorePrivateState("demo-password", payload);
+    const restoredVault = await fresh.vault();
+
+    expect(restoredSession.athlete.holderBinding).toBe(originalSession.athlete.holderBinding);
+    expect(restoredVault).toHaveLength(1);
+    expect(restoredVault[0].value).toBe(15_000);
+    expect(restoredVault[0].provableChips).toEqual(["distance ≥ 15.0 km"]);
+  });
 });
 
 describe("two-browser wager flow (create → accept → submit → relay → settle)", () => {
@@ -386,6 +410,17 @@ describe("two-browser wager flow (create → accept → submit → relay → set
     expect(bView.opponent.role).toBe("local");
     expect(bView.opponent.name).toBe("Milo Chen");
     expect(bView.challenger.holderBinding).toBe(sessionA.athlete.holderBinding);
+
+    // A third wallet can see the public wager record, but is neither side and
+    // cannot accept a challenge addressed to B's private holder binding.
+    localStorageTokenStore.save(stravaTokens("Third", "Athlete", 3));
+    const { client: clientC } = await connectClient("charlie");
+    const cView = (await clientC.listWagers()).find((wager) => wager.id === created.id);
+    expect(cView?.challenger.role).toBe("other");
+    expect(cView?.opponent.role).toBe("other");
+    await expect(clientC.acceptWager(created.id)).rejects.toThrow(
+      "only the challenged holder can accept",
+    );
 
     // invalid challenge IDs are rejected up front
     await expect(

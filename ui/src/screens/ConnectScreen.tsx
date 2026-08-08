@@ -3,6 +3,7 @@
 // Two modes: wallet (Lace DApp Connector — the default) and live (demo
 // sidecar :8200, maintainer debug via ?mode=live).
 
+import { ArrowLeft, KeyRound, RotateCcw, ShieldCheck } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Button, Card, Chip, Notice, Stat } from "../components/bits";
 import { StatusLine } from "../components/StatusLine";
@@ -40,10 +41,12 @@ export const ConnectScreen = () => {
     athleteName?: string;
   } | null>(null);
   const [backupPassword, setBackupPassword] = useState("");
-  const [backupPayload, setBackupPayload] = useState<string | null>(null);
   const [backupBusy, setBackupBusy] = useState(false);
-  const [backupNotice, setBackupNotice] = useState<string | null>(null);
-  const [restoreOpen, setRestoreOpen] = useState(false);
+  const [backupNotice, setBackupNotice] = useState<{
+    tone: "error" | "success";
+    message: string;
+  } | null>(null);
+  const [recoveryView, setRecoveryView] = useState<"backup" | "restore">("backup");
   const [restoreMode, setRestoreMode] = useState<"restore" | "resume">("restore");
   const [restorePassword, setRestorePassword] = useState("");
   const [restoreBusy, setRestoreBusy] = useState(false);
@@ -141,23 +144,29 @@ export const ConnectScreen = () => {
     try {
       const payload = await backupPrivateState(backupPassword);
       storeBackupPayload(session?.walletAddress ?? "", payload);
-      setBackupPayload(payload);
-      setBackupNotice(
-        "Private state backed up — the payload is stored in this browser and shown below.",
-      );
+      setBackupPassword("");
+      setRestoreNotice(null);
+      setBackupNotice({
+        tone: "success",
+        message: "Encrypted backup saved in this browser for this wallet.",
+      });
     } catch (err) {
       logError("ConnectScreen.backup", err);
-      setBackupNotice(`Backup failed: ${err instanceof Error ? err.message : "unknown error"}`);
+      setBackupNotice({
+        tone: "error",
+        message: "We couldn’t save the encrypted backup. Try again.",
+      });
     } finally {
       setBackupBusy(false);
     }
   };
 
   const openRestorePrompt = useCallback((mode: "restore" | "resume") => {
+    setBackupNotice(null);
     setRestoreNotice(null);
     setRestorePassword("");
     setRestoreMode(mode);
-    setRestoreOpen(true);
+    setRecoveryView("restore");
   }, []);
 
   const handleRestore = async () => {
@@ -171,13 +180,17 @@ export const ConnectScreen = () => {
         password: restorePassword,
         restorePrivateState,
       });
-      setRestoreNotice("Private state restored — vault is back.");
-      setRestoreOpen(false);
+      setBackupNotice({
+        tone: "success",
+        message: "Private state restored. Your sealed credentials are available again.",
+      });
+      setRestoreNotice(null);
+      setRecoveryView("backup");
       setRestorePassword("");
     } catch (err) {
       // The stored backup is only ever read — a wrong password leaves it intact.
       logError("ConnectScreen.restore", err);
-      setRestoreNotice(`Restore failed: ${err instanceof Error ? err.message : "unknown error"}`);
+      setRestoreNotice("That password didn’t unlock this backup. Check it and try again.");
     } finally {
       setRestoreBusy(false);
     }
@@ -303,123 +316,179 @@ export const ConnectScreen = () => {
               {isWallet && backupPrivateState ? (
                 <>
                   <div className="divider" />
-                  <h3 className="card-title">Private-state backup &amp; resume</h3>
-                  <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
-                    <input
-                      className="input"
-                      type="password"
-                      placeholder="Backup password"
-                      value={backupPassword}
-                      onChange={(e) => setBackupPassword(e.target.value)}
-                      style={{ flex: 1, minWidth: 160 }}
-                    />
-                    <Button
-                      tone="gold"
-                      size="sm"
-                      onClick={() => void handleBackup()}
-                      disabled={backupBusy || !backupPassword}
-                    >
-                      {backupBusy ? <span className="spin" /> : null} Back up
-                    </Button>
-                  </div>
-                  {backupNotice ? (
-                    <div style={{ marginTop: 8 }}>
-                      <Notice tone={backupNotice.startsWith("Backup failed") ? "error" : "success"}>
-                        {backupNotice}
-                      </Notice>
-                    </div>
-                  ) : null}
-                  {backupPayload ? (
-                    <div style={{ marginTop: 8 }}>
-                      <div className="faint" style={{ fontSize: 12, marginBottom: 4 }}>
-                        payload (encrypted) — {backupPayload.length} chars
+                  <section className="private-recovery" aria-labelledby="private-recovery-title">
+                    <header className="private-recovery__heading">
+                      <span className="private-recovery__icon" aria-hidden="true">
+                        {recoveryView === "restore" ? <RotateCcw /> : <ShieldCheck />}
+                      </span>
+                      <div>
+                        <h3 id="private-recovery-title">
+                          {recoveryView === "restore"
+                            ? restoreMode === "resume"
+                              ? "Resume your private account"
+                              : "Restore private progress"
+                            : hasBackup
+                              ? "Your private progress is protected"
+                              : "Protect your private progress"}
+                        </h3>
+                        <p>
+                          {recoveryView === "restore"
+                            ? "Unlock the encrypted backup saved for this wallet. Nothing is uploaded or revealed on-chain."
+                            : hasBackup
+                              ? "Update your encrypted backup after adding new credentials or changing your private progress."
+                              : "Save an encrypted recovery copy of your credentials and holder secret in this browser."}
+                        </p>
                       </div>
-                      <div
-                        className="hash"
-                        style={{
-                          fontSize: 10.5,
-                          lineHeight: 1.4,
-                          wordBreak: "break-all",
+                    </header>
+
+                    {recoveryView === "backup" ? (
+                      <>
+                        <form
+                          className="private-recovery__form"
+                          aria-busy={backupBusy}
+                          onSubmit={(event) => {
+                            event.preventDefault();
+                            void handleBackup();
+                          }}
+                        >
+                          <div className="field">
+                            <label htmlFor="backup-password">
+                              {hasBackup ? "New recovery password" : "Create a recovery password"}
+                            </label>
+                            <input
+                              id="backup-password"
+                              className="input"
+                              type="password"
+                              required
+                              disabled={backupBusy}
+                              autoComplete="new-password"
+                              placeholder="Choose a password"
+                              aria-describedby="backup-password-help"
+                              aria-invalid={backupNotice?.tone === "error"}
+                              value={backupPassword}
+                              onChange={(event) => {
+                                setBackupPassword(event.target.value);
+                                setBackupNotice(null);
+                              }}
+                            />
+                            <small id="backup-password-help">
+                              You’ll need this password to restore your private state.
+                            </small>
+                          </div>
+                          <Button
+                            tone="primary"
+                            block
+                            type="submit"
+                            disabled={backupBusy || !backupPassword}
+                          >
+                            {backupBusy ? (
+                              <span className="spin" />
+                            ) : (
+                              <KeyRound aria-hidden="true" />
+                            )}
+                            {backupBusy
+                              ? "Saving encrypted backup…"
+                              : hasBackup
+                                ? "Update encrypted backup"
+                                : "Save encrypted backup"}
+                          </Button>
+                        </form>
+
+                        {backupNotice ? (
+                          <div className="private-recovery__notice">
+                            <Notice tone={backupNotice.tone}>{backupNotice.message}</Notice>
+                          </div>
+                        ) : null}
+
+                        <footer className="private-recovery__status">
+                          <span>
+                            {hasBackup ? "Backup available for this wallet" : "No backup saved yet"}
+                          </span>
+                          {hasBackup ? (
+                            <button
+                              type="button"
+                              className="text-action private-recovery__switch"
+                              onClick={() => openRestorePrompt("restore")}
+                            >
+                              <RotateCcw aria-hidden="true" /> Restore an existing backup
+                            </button>
+                          ) : null}
+                        </footer>
+                      </>
+                    ) : (
+                      <form
+                        className="private-recovery__form"
+                        aria-busy={restoreBusy}
+                        onSubmit={(event) => {
+                          event.preventDefault();
+                          void handleRestore();
                         }}
                       >
-                        {backupPayload.slice(0, 180)}…
-                      </div>
-                    </div>
-                  ) : null}
-                  <div style={{ marginTop: 10 }}>
-                    <Button
-                      tone="ghost"
-                      size="sm"
-                      block
-                      disabled={!hasBackup || restoreBusy}
-                      title={
-                        hasBackup
-                          ? "Restore the private state from this browser\u2019s stored backup"
-                          : "no backup stored for this wallet"
-                      }
-                      onClick={() => openRestorePrompt("restore")}
-                    >
-                      Restore backup
-                      {!hasBackup ? " — no backup stored for this wallet" : ""}
-                    </Button>
-                  </div>
-                  {restoreOpen ? (
-                    <div
-                      style={{
-                        marginTop: 12,
-                        border: "1px solid var(--hairline-2)",
-                        borderRadius: 10,
-                        padding: 12,
-                      }}
-                    >
-                      <div className="field">
-                        <label htmlFor="restore-password">
-                          {restoreMode === "resume"
-                            ? "Enter password to resume"
-                            : "Enter backup password"}
-                        </label>
-                        <input
-                          id="restore-password"
-                          className="input"
-                          type="password"
-                          value={restorePassword}
-                          onChange={(e) => setRestorePassword(e.target.value)}
-                          onKeyDown={(e) => {
-                            if (e.key === "Enter" && restorePassword && !restoreBusy)
-                              void handleRestore();
-                          }}
-                        />
-                      </div>
-                      <div className="row">
-                        <Button
-                          tone="primary"
-                          size="sm"
-                          disabled={!restorePassword || restoreBusy}
-                          onClick={() => void handleRestore()}
-                        >
-                          {restoreBusy ? <span className="spin" /> : null}
-                          {restoreMode === "resume" ? "Resume" : "Restore"}
-                        </Button>
-                        <Button
-                          tone="ghost"
-                          size="sm"
-                          disabled={restoreBusy}
-                          onClick={() => setRestoreOpen(false)}
-                        >
-                          Cancel
-                        </Button>
-                      </div>
-                      {restoreNotice ? (
-                        <div style={{ marginTop: 8 }}>
-                          <Notice
-                            tone={restoreNotice.startsWith("Restore failed") ? "error" : "success"}
-                          >
-                            {restoreNotice}
-                          </Notice>
+                        <div className="field">
+                          <label htmlFor="restore-password">Recovery password</label>
+                          <input
+                            id="restore-password"
+                            className="input"
+                            type="password"
+                            required
+                            disabled={restoreBusy}
+                            autoComplete="current-password"
+                            placeholder="Enter your backup password"
+                            aria-describedby={
+                              restoreNotice
+                                ? "restore-password-help restore-password-error"
+                                : "restore-password-help"
+                            }
+                            aria-invalid={Boolean(restoreNotice)}
+                            value={restorePassword}
+                            onChange={(event) => {
+                              setRestorePassword(event.target.value);
+                              setRestoreNotice(null);
+                            }}
+                          />
+                          <small id="restore-password-help">
+                            An incorrect password will not overwrite your saved backup.
+                          </small>
                         </div>
-                      ) : null}
-                    </div>
-                  ) : null}
+
+                        {restoreNotice ? (
+                          <div id="restore-password-error">
+                            <Notice tone="error">{restoreNotice}</Notice>
+                          </div>
+                        ) : null}
+
+                        <div className="private-recovery__actions">
+                          <Button
+                            tone="primary"
+                            type="submit"
+                            disabled={!restorePassword || restoreBusy}
+                          >
+                            {restoreBusy ? (
+                              <span className="spin" />
+                            ) : (
+                              <RotateCcw aria-hidden="true" />
+                            )}
+                            {restoreBusy
+                              ? "Restoring…"
+                              : restoreMode === "resume"
+                                ? "Resume private account"
+                                : "Restore private state"}
+                          </Button>
+                          <Button
+                            tone="ghost"
+                            disabled={restoreBusy}
+                            onClick={() => {
+                              setRestoreNotice(null);
+                              setRestorePassword("");
+                              setRecoveryView("backup");
+                            }}
+                          >
+                            <ArrowLeft aria-hidden="true" /> Back to backup
+                          </Button>
+                        </div>
+                      </form>
+                    )}
+                  </section>
                 </>
               ) : null}
             </div>
@@ -499,12 +568,24 @@ export const ConnectScreen = () => {
             </div>
           )}
           {outcome ? (
-            <div style={{ marginTop: 12 }}>
+            <div className="credential-result">
               <Notice tone="success">
-                Credential vaulted — <strong>{outcome.provableChips.join(" · ")}</strong>.
-                {attestOutcome?.replayed
-                  ? " Session replayed from the attested log (identical crypto path)."
-                  : ""}
+                <div className="credential-confirmation">
+                  <div className="credential-confirmation__heading">
+                    <strong>Credential vaulted</strong>
+                    <span>Ready for private wagers and streaks.</span>
+                  </div>
+                  <ul aria-label="Verified workout claims">
+                    {outcome.provableChips.map((claim) => (
+                      <li key={claim}>{claim}</li>
+                    ))}
+                  </ul>
+                  {attestOutcome?.replayed ? (
+                    <small>
+                      Demo fallback used; the cryptographic verification path was unchanged.
+                    </small>
+                  ) : null}
+                </div>
               </Notice>
               <div className="divider" />
               <div className="stat-row" style={{ gap: 20 }}>

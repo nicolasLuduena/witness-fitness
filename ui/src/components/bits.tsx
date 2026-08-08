@@ -9,6 +9,7 @@ export const Button = ({
   size,
   block,
   className = "",
+  type = "button",
   children,
   ...rest
 }: ButtonHTMLAttributes<HTMLButtonElement> & {
@@ -29,7 +30,7 @@ export const Button = ({
     .filter(Boolean)
     .join(" ");
   return (
-    <button className={classes} {...rest}>
+    <button type={type} className={classes} {...rest}>
       {children}
     </button>
   );
@@ -98,7 +99,15 @@ export const Notice = ({
 }: {
   tone: "info" | "warn" | "error" | "success";
   children: ReactNode;
-}) => <div className={`notice notice--${tone}`}>{children}</div>;
+}) => (
+  <div
+    className={`notice notice--${tone}`}
+    role={tone === "error" ? "alert" : "status"}
+    aria-live={tone === "error" ? "assertive" : "polite"}
+  >
+    {children}
+  </div>
+);
 
 export const Modal = ({
   open,

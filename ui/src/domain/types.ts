@@ -101,7 +101,7 @@ export interface WagerView {
   title: string;
   metric: Metric;
   stake: number; // tNIGHT
-  deadlineBlock: bigint;
+  deadlineBlock: bigint; // Unix seconds; legacy ABI name, enforced via Compact blockTimeLt
   createdAt: number; // epoch ms
   status: WagerStatus;
   challenger: Athlete;

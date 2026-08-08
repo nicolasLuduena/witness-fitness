@@ -183,6 +183,29 @@ export class WalletClient implements WfClient {
     return tokens?.athlete ? athleteIdentityFromExchange(tokens) : null;
   }
 
+  private async joinConnectedWallet(): Promise<ClientSession> {
+    const connection = this.requireConnection();
+    const bridge = await this.bridge();
+    const { loadDeployInfo } = await import("./deploy-info");
+    const deploy = await loadDeployInfo();
+    await bridge.initializeProviders(connection.api);
+    this.session = await bridge.joinStrideFromBrowser(
+      connection.api,
+      deploy.contractAddress,
+      this.storeName(),
+    );
+    this.stravaIdentity = this.readStravaIdentity();
+    await this.rehydrateStagedAttestation();
+    return {
+      mode: "wallet",
+      athlete: this.stravaAthlete(),
+      walletConnected: true,
+      walletLabel: `${connection.name} · ${hexShort(connection.shieldedAddress, 8, 6)}`,
+      walletAddress: connection.shieldedAddress,
+      networkId: connection.networkId,
+    };
+  }
+
   private stravaAthlete(): Athlete {
     const identity = this.stravaIdentity ?? this.readStravaIdentity();
     const binding = this.session?.holderBinding ?? ATHLETE_A.holderBinding;
@@ -203,26 +226,8 @@ export class WalletClient implements WfClient {
   }
 
   async connect(rdns?: string): Promise<ClientSession> {
-    const connection = await connectWallet(undefined, rdns);
-    this.connection = connection;
-    const bridge = await this.bridge();
-    const { loadDeployInfo } = await import("./deploy-info");
-    const deploy = await loadDeployInfo();
-    await bridge.initializeProviders(connection.api);
-    this.session = await bridge.joinStrideFromBrowser(
-      connection.api,
-      deploy.contractAddress,
-      this.storeName(),
-    );
-    this.stravaIdentity = this.readStravaIdentity();
-    return {
-      mode: "wallet",
-      athlete: this.stravaAthlete(),
-      walletConnected: true,
-      walletLabel: `${connection.name} · ${hexShort(connection.shieldedAddress, 8, 6)}`,
-      walletAddress: connection.shieldedAddress,
-      networkId: connection.networkId,
-    };
+    this.connection = await connectWallet(undefined, rdns);
+    return this.joinConnectedWallet();
   }
 
   // ------------------------------------------------------------ Strava -----
@@ -344,6 +349,19 @@ export class WalletClient implements WfClient {
     this.shortIdIndex.set(shortId, key);
   }
 
+  private async rehydrateStagedAttestation(): Promise<void> {
+    this.attestations.clear();
+    this.shortIdIndex.clear();
+    const staged = await this.requireSession().stagedAttestation();
+    if (!staged) return;
+    const key = bytesToHex(staged.attestation.vaultKey);
+    this.attestations.set(key, {
+      attestation: staged.attestation,
+      metrics: staged.metrics,
+    });
+    this.shortIdIndex.set(hexShort(key, 12, 8), key);
+  }
+
   private attestationFor(credentialId: string): AttestationRecord | undefined {
     const isFullKey = /^0x[0-9a-f]{64}$/.test(credentialId);
     const key = isFullKey ? credentialId : this.shortIdIndex.get(credentialId);
@@ -426,6 +444,12 @@ export class WalletClient implements WfClient {
 
   async acceptWager(id: number): Promise<WagerView> {
     const session = this.requireSession();
+    const wager = (await session.listWagers()).find((entry) => entry.id === BigInt(id));
+    if (!wager) throw new Error(`wager ${id} not found`);
+    const myBinding = this.myBindingBig();
+    if (myBinding === null || wager.opponent !== myBinding) {
+      throw new Error("only the challenged holder can accept this wager");
+    }
     const routing = await this.myRouting();
     await session.acceptWager(BigInt(id), routing);
     const view = (await this.listWagers()).find((w) => w.id === id);
@@ -630,11 +654,16 @@ export class WalletClient implements WfClient {
     const myBinding = this.session?.holderBinding ?? "";
     const myBig = myBinding ? BigInt(myBinding) : null;
     const amChallenger = myBig !== null && w.challenger === myBig;
+    const amOpponent = myBig !== null && w.opponent === myBig;
     const mine = this.stravaAthlete();
     const challengerHex = bigintToHex(w.challenger);
     const opponentHex = bigintToHex(w.opponent);
-    const challenger: Athlete = amChallenger ? mine : syntheticAthlete(challengerHex, "opponent");
-    const opponent: Athlete = !amChallenger ? mine : syntheticAthlete(opponentHex, "opponent");
+    const challenger: Athlete = amChallenger
+      ? mine
+      : syntheticAthlete(challengerHex, amOpponent ? "opponent" : "other");
+    const opponent: Athlete = amOpponent
+      ? mine
+      : syntheticAthlete(opponentHex, amChallenger ? "opponent" : "other");
 
     const status: WagerStatus = w.settled
       ? "settled"
@@ -845,9 +874,12 @@ export class WalletClient implements WfClient {
     return bridge.exportPrivateState(password, this.storeName());
   }
 
-  async restorePrivateState(password: string, payload: string): Promise<void> {
+  async restorePrivateState(password: string, payload: string): Promise<ClientSession> {
     const bridge = await this.bridge();
     await bridge.importPrivateState(password, this.storeName(), payload);
+    // The old session captured the pre-restore holder secret and binding.
+    // Rejoin so every witness call and vault filter uses the restored identity.
+    return this.joinConnectedWallet();
   }
 
   async resetPrivateState(): Promise<void> {

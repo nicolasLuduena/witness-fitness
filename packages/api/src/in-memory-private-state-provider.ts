@@ -36,7 +36,6 @@ const PBKDF2_ITERATIONS = 100_000;
 const KEY_LENGTH_BITS = 256;
 const IV_LENGTH = 12;
 const SALT_LENGTH = 16;
-const MIN_PASSWORD_LENGTH = 16;
 const CURRENT_EXPORT_VERSION = 1;
 const SUPPORTED_EXPORT_VERSIONS = [1];
 
@@ -170,12 +169,6 @@ const decrypt = async (blob: Uint8Array, password: string, salt: Uint8Array): Pr
   return decoder.decode(plaintext);
 };
 
-const validatePassword = (password: string, what: string): void => {
-  if (password.length < MIN_PASSWORD_LENGTH) {
-    throw new Error(`${what}: password must be at least ${MIN_PASSWORD_LENGTH} characters`);
-  }
-};
-
 export interface InMemoryPrivateStateProvider<
   PSI extends PrivateStateId,
   PS extends Contract.PrivateState<Contract.Any>,
@@ -208,7 +201,6 @@ export const inMemoryPrivateStateProvider = <
     password: string,
     storeName: string,
   ): Promise<{ salt: Uint8Array; iv: Uint8Array; data: Uint8Array; plaintext: string }> => {
-    validatePassword(password, "exportPrivateState");
     if (record.size === 0) {
       throw new Error("No private states to export");
     }
@@ -284,7 +276,6 @@ export const inMemoryPrivateStateProvider = <
     },
 
     async importPrivateState(password: string, storeName: string, payload: string): Promise<void> {
-      validatePassword(password, "importPrivateState");
       let parsed: { salt?: unknown; iv?: unknown; data?: unknown };
       try {
         parsed = JSON.parse(payload) as typeof parsed;
@@ -354,7 +345,6 @@ export const inMemoryPrivateStateProvider = <
       if (!options?.password) {
         throw new PrivateStateExportError("Password is required for in-memory provider export");
       }
-      validatePassword(options.password, "exportPrivateStates");
       if (record.size === 0) {
         throw new PrivateStateExportError("No private states to export");
       }
@@ -400,7 +390,6 @@ export const inMemoryPrivateStateProvider = <
       if (!options?.password) {
         throw new InvalidExportFormatError("Password is required for in-memory provider import");
       }
-      validatePassword(options.password, "importPrivateStates");
       let payload: PrivateStatePayload<PSI>;
       try {
         payload = JSON.parse(
@@ -456,7 +445,6 @@ export const inMemoryPrivateStateProvider = <
       if (!options?.password) {
         throw new SigningKeyExportError("Password is required for in-memory provider export");
       }
-      validatePassword(options.password, "exportSigningKeys");
       if (signingKeys.size === 0) {
         throw new SigningKeyExportError("No signing keys to export");
       }
@@ -499,7 +487,6 @@ export const inMemoryPrivateStateProvider = <
       if (!options?.password) {
         throw new InvalidExportFormatError("Password is required for in-memory provider import");
       }
-      validatePassword(options.password, "importSigningKeys");
       let payload: SigningKeyPayload;
       try {
         payload = JSON.parse(

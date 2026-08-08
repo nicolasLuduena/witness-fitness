@@ -135,6 +135,11 @@ export interface WalletAttestResult {
   attestation: WalletAttestation;
 }
 
+export interface WalletStagedAttestation {
+  attestation: WalletAttestation;
+  metrics: WalletMetric[];
+}
+
 export interface WalletStrideSession {
   contractAddress: string;
   // My on-chain holder binding (0x-hex, 64 chars) — the challenge ID the
@@ -168,6 +173,9 @@ export interface WalletStrideSession {
   // streak/badge circuits can open (persistentCommit(assertion, rand) == key).
   // null when nothing is staged. Never derived from vault iteration order.
   stagedVaultKey(): Promise<Uint8Array | null>;
+  // Restores the latest assertion/signatures/commit rand from the encrypted
+  // private state so a fresh browser session can use the credential again.
+  stagedAttestation(): Promise<WalletStagedAttestation | null>;
   advanceStreak(vaultKey: Uint8Array): Promise<{ streakCount: bigint; lastDay: bigint }>;
   mintBadge(badgeId: number, vaultKey: Uint8Array): Promise<{ minted: boolean }>;
   proveBadge(
@@ -278,7 +286,7 @@ export const createStubWalletBridge = (): WalletBridge => {
       let s = stores.get(storeName);
       if (!s) {
         s = {
-          holderSecretHex: sha256Hex(`witnessfitness:wallet:${lastContractAddress}:${storeName}`),
+          holderSecretHex: hexOf(crypto.getRandomValues(new Uint8Array(32))).slice(2),
           vault: [],
           streakCount: 0,
           lastDay: 0,
@@ -292,9 +300,12 @@ export const createStubWalletBridge = (): WalletBridge => {
 
     let stagedSubmissionRand: Uint8Array = new Uint8Array(32).fill(1);
 
+    const s = state();
+    const holderBinding = "0x" + sha256Hex(s.holderSecretHex).slice(0, 64);
+    const holderBindingBig = BigInt(holderBinding);
     return {
       contractAddress: lastContractAddress,
-      holderBinding: "0x" + sha256Hex(storeName).slice(0, 64),
+      holderBinding,
       attest: async (artifacts, onNotarized) => {
         const s = state();
         const metricsJson = (artifacts.responseText ?? "").match(/"distance"\s*:\s*([0-9.]+)/);
@@ -366,7 +377,7 @@ export const createStubWalletBridge = (): WalletBridge => {
         const id = nextWagerId;
         nextWagerId += 1n;
         wagers.set(id, {
-          challenger: BigInt("0x" + sha256Hex(storeName).slice(0, 64)),
+          challenger: holderBindingBig,
           opponent: opponentBinding,
           metricId,
           stake,
@@ -400,7 +411,7 @@ export const createStubWalletBridge = (): WalletBridge => {
         }
         const w = wagers.get(wagerId);
         if (!w) throw new Error("unknown wager");
-        const mine = BigInt("0x" + sha256Hex(storeName).slice(0, 64));
+        const mine = holderBindingBig;
         const opening = { value, rand: stagedSubmissionRand };
         if (w.challenger === mine) {
           if (w.submissions.challenger) throw new Error("already submitted");
@@ -445,6 +456,25 @@ export const createStubWalletBridge = (): WalletBridge => {
         const s = state();
         const latest = s.attestations[s.attestations.length - 1];
         return latest ? bytesOf(latest.vaultKeyHex) : null;
+      },
+      stagedAttestation: async () => {
+        const s = state();
+        const latest = s.attestations[s.attestations.length - 1];
+        if (!latest) return null;
+        const distance = BigInt(String(latest.metrics[0]?.value ?? 0));
+        const vaultKey = bytesOf(latest.vaultKeyHex);
+        return {
+          metrics: latest.metrics,
+          attestation: {
+            assertion: {
+              provider: 0n,
+              claims: [{ metricId: 1n, value: distance }],
+            },
+            signatures: [],
+            commitRand: bytesOf(latest.commitRandHex),
+            vaultKey,
+          },
+        };
       },
       advanceStreak: async (vaultKey) => {
         const s = state();
@@ -794,6 +824,20 @@ export const adaptStrideSession = async (
       await stage({ submissionRand: rand });
     },
     stagedVaultKey,
+    stagedAttestation: async () => {
+      const vaultKey = await stagedVaultKey();
+      if (!vaultKey) return null;
+      const staged = await stagedAttestation();
+      return {
+        metrics: claimsToMetrics((staged.assertion as { claims?: unknown }).claims),
+        attestation: {
+          assertion: staged.assertion,
+          signatures: staged.signatures,
+          commitRand: staged.commitRand,
+          vaultKey,
+        },
+      };
+    },
     advanceStreak: async (vaultKey) => {
       const staged = await stagedAttestation();
       const ts = (staged.assertion as { timestamp?: bigint }).timestamp ?? 0n;
