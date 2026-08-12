@@ -175,6 +175,9 @@ importers:
       '@midnight-ntwrk/midnight-js-types':
         specifier: 4.1.1
         version: 4.1.1
+      '@midnight-ntwrk/wallet-sdk-address-format':
+        specifier: 3.1.0-rc.0
+        version: 3.1.0-rc.0
       '@midnight-ntwrk/wallet-sdk-dust-wallet':
         specifier: 3.0.0-rc.0
         version: 3.0.0-rc.0(ws@8.21.2)
@@ -190,6 +193,9 @@ importers:
       '@midnight-ntwrk/wallet-sdk-unshielded-wallet':
         specifier: 2.1.0-rc.0
         version: 2.1.0-rc.0(ws@8.21.2)
+      '@scure/bip39':
+        specifier: ^2.0.1
+        version: 2.2.0
       rxjs:
         specifier: ^7.8.2
         version: 7.8.2

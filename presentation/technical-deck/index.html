@@ -1,0 +1,303 @@
+<!doctype html>
+<html lang="en" data-stage="browser">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#f7f7f2" />
+    <title>WitnessFitness — From untrusted input to verified claim</title>
+    <link rel="stylesheet" href="../deck/vendor/reveal/dist/reset.css" />
+    <link rel="stylesheet" href="../deck/vendor/reveal/dist/reveal.css" />
+    <link rel="stylesheet" href="theme.css" />
+  </head>
+  <body>
+    <div class="reveal">
+      <div class="slides">
+        <section data-cue="0:00" data-stage="browser" class="slide-title">
+          <div class="slide-index">01</div>
+          <p class="context">A real-world input problem</p>
+          <h1>The contract never saw the request.</h1>
+          <p class="question">So why should it trust the result?</p>
+          <div class="signal signal--hero" aria-label="Untrusted browser input">
+            <span class="signal__origin">browser</span>
+            <span class="signal__line"></span>
+            <span class="signal__status signal__status--bad">untrusted</span>
+          </div>
+          <aside class="notes">
+            Hello. Imagine a Midnight contract whose decision depends on an external API—for example, a fitness application reading a Strava workout. Making the request is easy. The difficult question is: why should the contract trust the result?
+          </aside>
+        </section>
+
+        <section data-cue="0:25" data-stage="https">
+          <div class="slide-index">02</div>
+          <div class="split-statement">
+            <div>
+              <p class="context">HTTPS solves transport</p>
+              <h2>Secure connection.</h2>
+              <ul class="checks">
+                <li><span>✓</span> Server authenticated</li>
+                <li><span>✓</span> Response encrypted</li>
+                <li><span>✓</span> Transit integrity</li>
+              </ul>
+            </div>
+            <div class="contrast-block">
+              <p>But the contract has</p>
+              <strong>zero evidence.</strong>
+            </div>
+          </div>
+          <div class="pipeline pipeline--compact" aria-label="Browser connected to HTTPS">
+            <div class="node node--done"><b>Browser</b><span>client-controlled</span></div>
+            <div class="edge edge--coral"></div>
+            <div class="node node--active"><b>HTTPS</b><span>secure transport</span></div>
+            <div class="edge"></div>
+            <div class="node"><b>Reclaim</b><span>not reached</span></div>
+            <div class="edge"></div>
+            <div class="node"><b>2 of 3</b><span>not reached</span></div>
+            <div class="edge"></div>
+            <div class="node"><b>Midnight</b><span>not reached</span></div>
+          </div>
+          <aside class="notes">
+            Let us start with HTTPS: HTTP over TLS. TLS encrypts the connection, protects its integrity, and authenticates the server. It tells the client that it reached the real API and received an unmodified response.
+
+            But HTTPS does not solve our smart-contract problem.
+          </aside>
+        </section>
+
+        <section data-cue="0:55" data-stage="browser">
+          <div class="slide-index">03</div>
+          <p class="context">The browser is not a trust boundary</p>
+          <h2>A genuine response and an invented value can look identical.</h2>
+          <div class="comparison" role="img" aria-label="Genuine API response and fabricated browser value both appear identical to the contract">
+            <div class="comparison__source">
+              <span class="source-mark source-mark--real">API</span>
+              <p>genuine response</p>
+            </div>
+            <div class="comparison__source">
+              <span class="source-mark source-mark--fake">{ }</span>
+              <p>invented value</p>
+            </div>
+            <div class="comparison__merge">?</div>
+            <div class="comparison__contract">
+              <span>Compact</span>
+              <strong>cannot tell</strong>
+            </div>
+          </div>
+          <p class="punchline">The problem is provenance, not transport.</p>
+          <aside class="notes">
+            The user controls both the browser and the values it submits. They can modify the application, bypass the interface, or construct a transaction directly. The Strava connection may have been secure, but the contract never participated in it. To the contract, a genuine response and an invented value can look identical.
+
+            So our real problem is not transporting data securely. It is turning an HTTPS response into a claim that another system can verify.
+          </aside>
+        </section>
+
+        <section data-cue="1:40" data-stage="reclaim">
+          <div class="slide-index">04</div>
+          <p class="context">zkFetch + self-hosted Reclaim attestor</p>
+          <h2>Make the interaction verifiable.</h2>
+          <div class="proof-flow">
+            <div class="proof-flow__request">
+              <span class="protocol">GET</span>
+              <b>strava.com</b>
+              <small>real HTTPS request</small>
+            </div>
+            <div class="proof-flow__witness">
+              <span class="pulse"></span>
+              <b>Reclaim</b>
+              <small>witnesses the TLS interaction</small>
+            </div>
+            <div class="proof-flow__artifact">
+              <span class="protocol">PROOF</span>
+              <b>server + response</b>
+              <small>independently verifiable</small>
+            </div>
+          </div>
+          <div class="pipeline pipeline--compact" aria-label="Reclaim verifies the HTTPS interaction">
+            <div class="node node--done"><b>Browser</b><span>request</span></div>
+            <div class="edge edge--blue"></div>
+            <div class="node node--done"><b>HTTPS</b><span>authenticated</span></div>
+            <div class="edge edge--blue"></div>
+            <div class="node node--active"><b>Reclaim</b><span>proof artifacts</span></div>
+            <div class="edge"></div>
+            <div class="node"><b>2 of 3</b><span>next</span></div>
+            <div class="edge"></div>
+            <div class="node"><b>Midnight</b><span>later</span></div>
+          </div>
+          <aside class="notes">
+            For that, we use zkFetch from Reclaim Protocol with a self-hosted attestor. The client makes a real Strava request through the attestation flow. Reclaim produces proof artifacts showing that the interaction occurred with the expected server and that the claimed data came from its authenticated response, not from the browser.
+
+            That gets us much closer, but it creates a second compatibility problem.
+          </aside>
+        </section>
+
+        <section data-cue="2:20" data-stage="gap" class="slide-gap">
+          <div class="slide-index">05</div>
+          <p class="context">The compatibility gap</p>
+          <h2>Two proof systems.<br />No native verifier.</h2>
+          <div class="systems" role="img" aria-label="Reclaim proof system cannot be verified natively by Compact">
+            <div class="system system--reclaim">
+              <span>Reclaim</span>
+              <strong>external proof</strong>
+            </div>
+            <div class="system-gap">
+              <span>≠</span>
+              <small>not natively<br />verifiable</small>
+            </div>
+            <div class="system system--compact">
+              <span>Compact</span>
+              <strong>Midnight circuit</strong>
+            </div>
+          </div>
+          <p class="decision">We need a translation layer.</p>
+          <aside class="notes">
+            Reclaim and Compact use different proof systems, so a Compact contract cannot verify a Reclaim proof natively. Implementing that external verifier inside our circuit was not a practical path for this project.
+
+            Our solution is an explicit verification bridge made from three independent notary signers.
+          </aside>
+        </section>
+
+        <section data-cue="2:50" data-stage="notaries">
+          <div class="slide-index">06</div>
+          <p class="context">The verification bridge</p>
+          <h2>Verify once per notary.<br />Sign one typed assertion.</h2>
+          <div class="notary-flow">
+            <div class="artifact-stack">
+              <span class="protocol">RECLAIM ARTIFACT</span>
+              <b>captured Strava response</b>
+              <small>proof · host · required fields</small>
+            </div>
+            <div class="notary-trio" aria-label="Three independent notaries">
+              <div class="notary"><span>N1</span><b>verify</b><small>sign</small></div>
+              <div class="notary"><span>N2</span><b>verify</b><small>sign</small></div>
+              <div class="notary"><span>N3</span><b>verify</b><small>sign</small></div>
+            </div>
+            <div class="assertion">
+              <span class="protocol">ASSERTION v1</span>
+              <code>distance · moving_time<br />timestamp · nonce</code>
+            </div>
+          </div>
+          <div class="privacy-note">
+            <b>Today:</b> notaries temporarily see the captured response.
+            <span><b>Next:</b> Reclaim redaction reveals only required fields.</span>
+          </div>
+          <aside class="notes">
+            Each notary receives the current Reclaim artifact, including the captured Strava response, and independently verifies it using Reclaim's own code. It checks the proof, the expected host, and the required fields. It then extracts only the permitted metrics, such as distance or moving time, into a small, versioned assertion with a timestamp and a unique nonce.
+
+            Today, the notaries can temporarily see that API response. Reclaim also supports client-side response redaction, so we can reveal only the fields the assertion requires instead of the full response. Wiring that selective-disclosure path into our notary flow is privacy-hardening work we plan to complete in the coming weeks. The notaries would still see the exact claims they sign, but not unrelated user data. Until then, this is an oracle-style trust boundary, and we make that boundary explicit.
+          </aside>
+        </section>
+
+        <section data-cue="3:55" data-stage="threshold">
+          <div class="slide-index">07</div>
+          <p class="context">Compact-compatible signatures</p>
+          <h2>Two signatures cross the boundary.</h2>
+          <div class="threshold">
+            <div class="threshold__keys" aria-label="Three registered notary signatures">
+              <div class="signature signature--valid"><span>N1</span><b>valid</b></div>
+              <div class="signature signature--valid"><span>N2</span><b>valid</b></div>
+              <div class="signature"><span>N3</span><b>optional</b></div>
+            </div>
+            <div class="threshold__gate">
+              <span>≥ 2</span>
+              <b>Jubjub-Schnorr</b>
+              <small>exact Compact encoding</small>
+            </div>
+            <div class="threshold__result">
+              <span>✓</span>
+              <b>accepted</b>
+            </div>
+          </div>
+          <div class="trust-line">
+            <span>1 compromised signer</span>
+            <b>cannot forge</b>
+            <span>2 colluding signers</span>
+            <b>can forge</b>
+          </div>
+          <aside class="notes">
+            Each notary signs the same typed assertion using Jubjub-Schnorr. Its field order, widths, challenge hashing, and truncation must match the Compact circuit byte for byte. We test that parity by signing off-chain, verifying in the simulator, and changing one byte to confirm that verification fails.
+
+            The client collects the signatures and submits the assertion to the Midnight contract. The contract has three registered public keys and requires at least two valid signatures. One compromised signer is therefore not enough to forge a credential. Two signers colluding could still do so, which is the trust assumption of this design—not something zero knowledge magically removes.
+          </aside>
+        </section>
+
+        <section data-cue="4:45" data-stage="recap" class="slide-recap">
+          <div class="slide-index">08</div>
+          <p class="context">Checkpoint</p>
+          <h2>What we have now</h2>
+          <div class="recap">
+            <div data-step="1"><b>Real HTTPS response</b><small>the browser made the request</small></div>
+            <div data-step="2"><b>Reclaim-verified</b><small>the interaction is independently checkable</small></div>
+            <div data-step="3"><b>Threshold-signed</b><small>at least two notaries agree</small></div>
+            <div data-step="4"><b>Ready for Compact</b><small>no workout on-chain yet</small></div>
+          </div>
+          <div class="recap-pipeline" aria-hidden="true">
+            <i></i><i></i><i></i><i></i>
+          </div>
+          <aside class="notes">
+            Let us quickly recap what we have at this point. The browser produced evidence of a real HTTPS response. Reclaim made that interaction independently verifiable. At least two notaries verified the evidence and signed the same Compact-compatible assertion. We have not put the workout on-chain yet; we have transformed an untrusted browser input into a threshold-attested claim that Midnight can verify.
+          </aside>
+        </section>
+
+        <section data-cue="5:10" data-stage="midnight">
+          <div class="slide-index">09</div>
+          <p class="context">What Midnight adds</p>
+          <h2>A private, replay-resistant credential.</h2>
+          <div class="midnight-checks">
+            <div><span>01</span><b>Threshold</b><small>≥2 registered signatures</small></div>
+            <div><span>02</span><b>Freshness</b><small>timestamp window</small></div>
+            <div><span>03</span><b>Nullifier</b><small>no replay</small></div>
+            <div><span>04</span><b>Holder binding</b><small>pseudonymous ownership</small></div>
+            <div><span>05</span><b>Commitment</b><small>raw response stays off-ledger</small></div>
+          </div>
+          <div class="boundary-line">
+            <div><b>Public</b><span>commitment · nullifier · timestamp · disclosed result</span></div>
+            <div><b>Private</b><span>assertion · workout values · holder secret</span></div>
+          </div>
+          <aside class="notes">
+            Once the threshold is satisfied, the Compact circuit checks freshness and consumes the assertion nonce as a nullifier, preventing the same attestation from being registered twice. It derives a pseudonymous holder binding from a private holder secret and stores a persistent commitment to the assertion. The raw Strava response is never written to the ledger.
+
+            This is where Midnight becomes more than storage. Later circuits can open that committed credential privately, prove that it belongs to the same holder, and evaluate predicates over its claims. Public state contains the commitment, nullifiers, timestamps, and whatever result the circuit deliberately discloses. The underlying witness data remains private unless the circuit explicitly reveals it.
+          </aside>
+        </section>
+
+        <section data-cue="5:50" data-stage="complete" class="slide-demo">
+          <div class="slide-index">10</div>
+          <p class="context">WitnessFitness</p>
+          <h2>Authenticated web data.<br />Private contract logic.</h2>
+          <div class="use-cases">
+            <div><b>Wager</b><span>sealed until settlement</span></div>
+            <div><b>Badge</b><span>prove a threshold, hide the metric</span></div>
+            <div><b>Streak</b><span>prove continuity, hide the dates</span></div>
+          </div>
+          <div class="pipeline pipeline--final" aria-label="Complete verification pipeline">
+            <div class="node node--done"><b>Browser</b></div>
+            <div class="edge edge--blue"></div>
+            <div class="node node--done"><b>HTTPS</b></div>
+            <div class="edge edge--blue"></div>
+            <div class="node node--done"><b>Reclaim</b></div>
+            <div class="edge edge--blue"></div>
+            <div class="node node--done"><b>2 of 3</b></div>
+            <div class="edge edge--green"></div>
+            <div class="node node--success"><b>Midnight</b></div>
+          </div>
+          <p class="demo-line">Now let us show the complete path with a real Strava workout.</p>
+          <aside class="notes">
+            WitnessFitness is our concrete demonstration of this pipeline. A user authorizes Strava, attests a real workout, obtains signatures from at least two notaries, and registers a holder-bound fitness credential on Midnight.
+
+            That credential can drive different mechanics. A wager accepts sealed submissions and prevents one credential from being counted twice. In the current implementation, values remain sealed until settlement, when the public payout branch discloses both openings. Badges demonstrate stronger selective disclosure: the circuit proves a distance threshold or streak requirement without revealing the distance, streak count, or workout dates. A user can prove badge ownership to a specific verifier while remaining pseudonymous.
+
+            The important idea is broader than fitness. We now have a reusable path from authenticated web data to private contract logic: HTTPS establishes the server interaction, Reclaim makes that interaction independently verifiable, the notary threshold translates it into a signature scheme Compact can verify, and Midnight turns the signed claim into a private, replay-resistant credential.
+
+            In short: do not trust the browser, verify the external interaction, make the trust boundary explicit, and disclose only what the application actually needs.
+
+            Now let us show that complete path with a real Strava workout.
+          </aside>
+        </section>
+      </div>
+    </div>
+
+    <div class="deck-brand" aria-hidden="true">WF</div>
+    <div class="cue" aria-live="polite"></div>
+
+    <script src="../deck/vendor/reveal/dist/reveal.js"></script>
+    <script src="deck.js"></script>
+  </body>
+</html>

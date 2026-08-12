@@ -7,6 +7,11 @@ import wasm from "vite-plugin-wasm";
 
 export default defineConfig({
   plugins: [react(), wasm(), topLevelAwait(), nodePolyfills({ exclude: ["crypto"] })],
+  server: {
+    host: "127.0.0.1",
+    port: 5173,
+    strictPort: true,
+  },
   resolve: {
     alias: {
       "vite-plugin-node-polyfills/shims/buffer": path.resolve(

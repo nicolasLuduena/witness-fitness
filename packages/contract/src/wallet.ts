@@ -80,7 +80,7 @@ const buildInitConfig = (config: WalletConfig) => ({
   relayURL: new URL(config.node.replace(/^http/, "ws")),
 });
 
-export const buildWallet = async (config: WalletConfig, seed: string): Promise<WalletContext> => {
+export const constructWallet = async (config: WalletConfig, seed: string): Promise<WalletContext> => {
   setNetworkId(config.networkId ?? "undeployed");
   const keys = deriveKeysFromSeed(seed);
   const shieldedSecretKeys = ledger.ZswapSecretKeys.fromSeed(keys[Roles.Zswap]);
@@ -102,13 +102,18 @@ export const buildWallet = async (config: WalletConfig, seed: string): Promise<W
   await wallet.start(shieldedSecretKeys, dustSecretKey);
   await waitForSync(wallet);
 
+  return { wallet, shieldedSecretKeys, dustSecretKey, unshieldedKeystore };
+};
+
+export const buildWallet = async (config: WalletConfig, seed: string): Promise<WalletContext> => {
+  const ctx = await constructWallet(config, seed);
   const balance =
-    (await Rx.firstValueFrom(wallet.state())).unshielded.balances[ledger.unshieldedToken().raw] ??
+    (await Rx.firstValueFrom(ctx.wallet.state())).unshielded.balances[ledger.unshieldedToken().raw] ??
     0n;
   if (balance === 0n) {
-    await waitForFunds(wallet);
+    await waitForFunds(ctx.wallet);
   }
-  return { wallet, shieldedSecretKeys, dustSecretKey, unshieldedKeystore };
+  return ctx;
 };
 
 export const registerForDustGeneration = async (
